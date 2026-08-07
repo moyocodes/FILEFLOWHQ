@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --void: #f4f6f5;
+  --panel: #ffffff;
+  --panel-raised: #fbfcfb;
+  --signal: #0e8f5c;
+  --signal-dim: #0e8f5c1a;
+  --text: #10151a;
+  --text-dim: #5b6670;
+  --border: #dbe1de;
+  --border-strong: #c3ccc7;
+  --mono-text: #3e7a5b;
+}
+
+/* Dark mode is class-based (toggled + persisted via ThemeToggle.jsx),
+   so retarget the same tokens under html.dark rather than only a media query. */
+html.dark {
+  --void: #0b0d10;
+  --panel: #12151a;
+  --panel-raised: #171b21;
+  --signal: #39ff9e;
+  --signal-dim: #39ff9e17;
+  --text: #e8ecef;
+  --text-dim: #7c8792;
+  --border: #1e232a;
+  --border-strong: #2a313a;
+  --mono-text: #39ff9e;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-void text-text font-body antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::selection {
+  background-color: var(--signal);
+  color: var(--void);
+}
+
+/* focus visibility for a11y */
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.4);
+  border-radius: 999px;
+}
+
+@keyframes signal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.signal-dot {
+  animation: signal-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-dot {
+    animation: none;
+  }
+}
