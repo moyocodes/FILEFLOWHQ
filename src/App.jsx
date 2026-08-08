@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { track } from '@vercel/analytics'
 import Rail, { MobileMenuButton } from './components/Rail.jsx'
 import Home from './pages/Home.jsx'
 import ToolPage from './pages/ToolPage.jsx'
@@ -67,6 +68,10 @@ function Shell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const activeTool = activeToolFromPath(location.pathname)
+
+  useEffect(() => {
+    track('pageview', { path: location.pathname })
+  }, [location.pathname])
 
   return (
     <div className="flex w-full flex-col md:h-[100dvh] md:flex-row md:overflow-hidden">
