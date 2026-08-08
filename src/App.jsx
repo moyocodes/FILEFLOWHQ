@@ -69,13 +69,13 @@ function Shell() {
   const activeTool = activeToolFromPath(location.pathname)
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden">
+    <div className="flex w-full flex-col md:h-[100dvh] md:flex-row md:overflow-hidden">
       <Rail isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
 
-      <div className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col md:h-[100dvh] md:overflow-hidden">
         <WsHeader activeTool={activeTool} onOpenMenu={() => setMenuOpen(true)} />
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 md:overflow-y-auto">
           <Routes>
             <Route path="/" element={<Home />} />
             {tools.map((tool) => (
