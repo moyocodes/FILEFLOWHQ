@@ -55,7 +55,7 @@ export default function Home() {
           </h1>
 
           <p className="mb-5 max-w-[52ch] font-body text-[0.92rem] normal-case text-text-dim">
-            Convertly reads, decodes, and re-writes images, PDFs, and data files entirely in your
+            FileFlowHQ reads, decodes, and re-writes images, PDFs, and data files entirely in your
             browser. No upload, no server, no trace.
           </p>
 

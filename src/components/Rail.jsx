@@ -42,10 +42,10 @@ export default function Rail({ isOpen, onClose }) {
             className="flex flex-1 items-center gap-2.5 rounded py-0 text-left"
           >
             <span className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[3px] bg-signal font-mono text-[0.78rem] font-bold text-void">
-              C
+              F
             </span>
             <span className="font-display text-[0.92rem] font-semibold tracking-wide text-text">
-              Convertly
+              FileFlowHQ
             </span>
           </button>
           <button

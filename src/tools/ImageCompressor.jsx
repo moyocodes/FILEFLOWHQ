@@ -147,7 +147,7 @@ export default function useImageCompressor() {
     () => (
     <div className="space-y-6">
       <p className="text-sm text-text-dim">
-        Pick a target output size and Convertly finds a JPEG/WebP quality level that gets each image under it.
+        Pick a target output size and FileFlowHQ finds a JPEG/WebP quality level that gets each image under it.
       </p>
 
       <Dropzone accept="image/*" multiple onFiles={handleFiles} hint="PNG, JPG, WebP" />

@@ -1,4 +1,4 @@
-# Convertly — free, client-side file conversion
+# FileFlowHQ — free, client-side file conversion
 
 A single-page React + Tailwind app that converts images, PDFs, and data files
 entirely **in the browser**. No backend, no file upload, no server costs —
@@ -22,7 +22,7 @@ libraries directly on the user's device. Nothing is ever sent to a server.
 ## Project structure
 
 ```
-file-convert-hub/
+fileflowhq/
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -36,7 +36,7 @@ file-convert-hub/
     ├── index.css           # Tailwind directives + small globals
     ├── toolsConfig.js       # Single source of truth for all tools
     ├── components/
-    │   ├── Sidebar.jsx
+    │   ├── Rail.jsx
     │   ├── Dropzone.jsx      # Drag-and-drop + browse button
     │   ├── ProgressBar.jsx
     │   ├── ErrorBanner.jsx
@@ -96,7 +96,11 @@ and `vercel.json` both already include that rewrite/redirect rule.
 2. In Vercel, click **New Project** → import the repo.
 3. Framework preset: **Vite**. Build command `npm run build`, output
    directory `dist` (already set in `vercel.json`).
-4. Deploy — no environment variables needed.
+4. Add `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`, and `MJ_SENDER_EMAIL` as
+   environment variables (see `.env.example`) — required by the
+   `api/send-confirmation.js` function that emails users a download
+   confirmation via Mailjet.
+5. Deploy.
 
 Or via CLI:
 

@@ -20,8 +20,8 @@ export default async function handler(req, res) {
 
   const subject = fileName ? `Your file "${fileName}" is ready` : 'Your file conversion is ready'
   const textPart = fileName
-    ? `Your file "${fileName}" was converted successfully on Convertly.`
-    : 'Your file was converted successfully on Convertly.'
+    ? `Your file "${fileName}" was converted successfully on FileFlowHQ.`
+    : 'Your file was converted successfully on FileFlowHQ.'
 
   try {
     const mjResponse = await fetch('https://api.mailjet.com/v3.1/send', {
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         Messages: [
           {
-            From: { Email: MJ_SENDER_EMAIL, Name: 'Convertly' },
+            From: { Email: MJ_SENDER_EMAIL, Name: 'FileFlowHQ' },
             To: [{ Email: email }],
             Subject: subject,
             TextPart: textPart,

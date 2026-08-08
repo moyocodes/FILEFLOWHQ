@@ -15,7 +15,7 @@ function activeToolFromPath(pathname) {
 
 function WsHeader({ activeTool, onOpenMenu }) {
   const navigate = useNavigate()
-  const coords = activeTool ? `FMT.CONV / ${activeTool.id.toUpperCase().replace(/-/g, '_')}` : 'FMT.CONV / HOME'
+  const coords = activeTool ? `FILEFLOWHQ / ${activeTool.id.toUpperCase().replace(/-/g, '_')}` : 'FILEFLOWHQ / HOME'
 
   return (
     <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-6 py-[0.85rem] sm:px-9">
@@ -23,7 +23,7 @@ function WsHeader({ activeTool, onOpenMenu }) {
         <MobileMenuButton onClick={onOpenMenu} />
         <div className="flex items-center gap-2 font-mono text-[0.7rem] text-text-dim">
           <button onClick={() => navigate('/')} className="transition-colors hover:text-signal">
-            Convertly
+            FileFlowHQ
           </button>
           {activeTool && (
             <>
