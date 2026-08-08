@@ -19,11 +19,11 @@ export default {
         'mono-text': 'var(--mono-text)'
       },
       fontFamily: {
-        // A softer, rounder-leaning display face than the previous Futura/
-        // Century Gothic stack — "Avenir Next" reads friendlier while still
-        // carrying enough weight/size distinction from body text on macOS.
-        display: ['"Avenir Next"', 'Avenir', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
-        body: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Helvetica', 'Arial', 'sans-serif'],
+        // Rounded, bubbly pairing for a playful feel: Fredoka for display/
+        // headings (chunky, friendly), Quicksand for body (rounded but
+        // still readable at small sizes). Both loaded via Google Fonts.
+        display: ['Fredoka', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        body: ['Quicksand', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Helvetica', 'Arial', 'sans-serif'],
         mono: ['"SF Mono"', '"JetBrains Mono"', 'Menlo', 'Consolas', 'monospace']
       },
       borderRadius: {
