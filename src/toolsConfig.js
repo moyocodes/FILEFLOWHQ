@@ -5,6 +5,7 @@ import {
   Images,
   Combine,
   FileText,
+  FileType,
   Table2
 } from 'lucide-react'
 
@@ -14,6 +15,7 @@ import useImagesToPdf from './tools/ImagesToPdf.jsx'
 import usePdfToImages from './tools/PdfToImages.jsx'
 import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
 import usePdfToWord from './tools/PdfToWord.jsx'
+import usePdfToText from './tools/PdfToText.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
 
 // Single source of truth: order here controls sidebar order, home page
@@ -78,6 +80,16 @@ export const tools = [
     icon: FileText,
     component: usePdfToWord,
     formats: ['PDF', 'DOCX']
+  },
+  {
+    id: 'pdf-to-text',
+    path: '/tools/pdf-to-text',
+    name: 'PDF to Text',
+    tagline: 'Plain text extraction, reading order preserved',
+    description: 'Pull the plain text out of a PDF, in reading order, as a .txt file — no formatting, no surprises.',
+    icon: FileType,
+    component: usePdfToText,
+    formats: ['PDF', 'TXT']
   },
   {
     id: 'csv-json',

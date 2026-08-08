@@ -1,0 +1,1 @@
+add a payemnt integration usingh paystack so when they use any tool collectively with 5 counts prompt them to pay and i dont want this to be browser based it should be based off laptop ip idk so they can not use multiple broswer to access the free trial , state that it is free , and the payment is charged per tool usage , 5 convert pay for 5 times usage for next
