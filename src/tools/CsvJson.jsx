@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { Download, Copy, ArrowLeftRight } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
-import { validateFiles, readAsText, downloadBlob } from '../utils/fileHelpers.js'
+import { validateFiles, readAsText, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 /** Minimal RFC-4180-ish CSV parser that handles quoted fields and commas/newlines inside quotes. */
@@ -91,6 +91,7 @@ export default function useCsvJson() {
   const [direction, setDirection] = useState('csv-to-json') // 'csv-to-json' | 'json-to-csv'
   const [input, setInput] = useState('')
   const [output, setOutput] = useState('')
+  const [outputName, setOutputName] = useState('converted')
   const [errors, setErrors] = useState([])
   const [copied, setCopied] = useState(false)
 
@@ -126,6 +127,7 @@ export default function useCsvJson() {
       try {
         const text = await readAsText(valid[0])
         setInput(text)
+        setOutputName(stripExtension(valid[0].name))
         runConvert(text)
       } catch (err) {
         setErrors((prev) => [...prev, err.message])
@@ -146,9 +148,10 @@ export default function useCsvJson() {
     const ext = direction === 'csv-to-json' ? 'json' : 'csv'
     const type = direction === 'csv-to-json' ? 'application/json' : 'text/csv'
     const blob = new Blob([output], { type })
-    const filename = `converted.${ext}`
-    gatedDownload(() => downloadBlob(blob, filename), filename)
-  }, [output, direction, gatedDownload])
+    const trimmedName = outputName.trim() || 'converted'
+    const filename = trimmedName.endsWith(`.${ext}`) ? trimmedName : `${trimmedName}.${ext}`
+    gatedDownload(() => downloadBlob(blob, filename), filename, 'CSV ⇄ JSON')
+  }, [output, direction, outputName, gatedDownload])
 
   const copy = useCallback(async () => {
     if (!output) return
@@ -230,6 +233,20 @@ export default function useCsvJson() {
       >
         Convert
       </button>
+
+      {output && (
+        <div className="field">
+          <label className="mb-2.5 block font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim">
+            File name
+          </label>
+          <input
+            value={outputName}
+            onChange={(e) => setOutputName(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm"
+          />
+        </div>
+      )}
+
       <button
         onClick={download}
         disabled={!output}
@@ -248,7 +265,7 @@ export default function useCsvJson() {
       </button>
     </>
     ),
-    [runConvert, download, output, copy, copied]
+    [runConvert, download, output, outputName, copy, copied]
   )
 
   return { workspace, settings }

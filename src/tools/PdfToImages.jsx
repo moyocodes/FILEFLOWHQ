@@ -13,6 +13,7 @@ export default function usePdfToImages() {
   const [file, setFile] = useState(null)
   const [pages, setPages] = useState([]) // { id, index, thumb, blob }
   const [scale, setScale] = useState(2)
+  const [baseName, setBaseName] = useState('')
   const [errors, setErrors] = useState([])
   const [isConverting, setIsConverting] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -22,6 +23,7 @@ export default function usePdfToImages() {
     setErrors(fileErrors)
     if (valid.length > 0) {
       setFile(valid[0])
+      setBaseName(stripExtension(valid[0].name))
       setPages([])
     }
   }, [])
@@ -62,19 +64,21 @@ export default function usePdfToImages() {
 
   const downloadPage = useCallback(
     (page) => {
-      const name = `${stripExtension(file.name)}-page-${page.index}.png`
-      gatedDownload(() => downloadBlob(page.blob, name), name)
+      const prefix = baseName.trim() || stripExtension(file.name)
+      const name = `${prefix}-page-${page.index}.png`
+      gatedDownload(() => downloadBlob(page.blob, name), name, 'PDF to Images')
     },
-    [file, gatedDownload]
+    [file, baseName, gatedDownload]
   )
 
   const downloadAllZip = useCallback(async () => {
+    const prefix = baseName.trim() || stripExtension(file.name)
     const zip = new JSZip()
-    pages.forEach((p) => zip.file(`${stripExtension(file.name)}-page-${p.index}.png`, p.blob))
+    pages.forEach((p) => zip.file(`${prefix}-page-${p.index}.png`, p.blob))
     const content = await zip.generateAsync({ type: 'blob' })
-    const name = `${stripExtension(file.name)}-pages.zip`
-    gatedDownload(() => downloadBlob(content, name), name)
-  }, [pages, file, gatedDownload])
+    const name = `${prefix}-pages.zip`
+    gatedDownload(() => downloadBlob(content, name), name, 'PDF to Images')
+  }, [pages, file, baseName, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -145,6 +149,20 @@ export default function usePdfToImages() {
         </div>
       </div>
 
+      {file && (
+        <div className="field">
+          <label className="mb-2.5 block font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim">
+            File name prefix
+          </label>
+          <input
+            value={baseName}
+            onChange={(e) => setBaseName(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm"
+          />
+          <p className="mt-1.5 text-xs text-text-dim">Pages download as "{baseName || 'name'}-page-1.png", etc.</p>
+        </div>
+      )}
+
       <button
         onClick={convert}
         disabled={isConverting || !file}
@@ -154,7 +172,7 @@ export default function usePdfToImages() {
       </button>
     </>
     ),
-    [scale, convert, isConverting, file]
+    [scale, baseName, convert, isConverting, file]
   )
 
   return { workspace, settings }
