@@ -6,6 +6,7 @@ import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 // Twips per point/pixel (docx uses twentieths of a point for spacing/indent).
 const TWIPS_PER_PT = 20
@@ -186,10 +187,17 @@ async function extractPageLines(page) {
     }
   })
 
+  // getTextContent() returns items in content-stream order, which for
+  // multi-column layouts, tables, or interleaved graphics state is often NOT
+  // top-to-bottom reading order. Sort by position first (pdf.js y grows
+  // upward, so descending y = top to bottom) so line-grouping below sees
+  // visually adjacent runs consecutively instead of jumbled stream order.
+  const orderedRuns = [...runs].sort((a, b) => b.y - a.y || a.x - b.x)
+
   // Group into visual lines by y-position (within a fraction of the line's font size).
   const lines = []
   let current = null
-  for (const run of runs) {
+  for (const run of orderedRuns) {
     if (current && Math.abs(run.y - current.y) <= Math.max(2, current.maxSize * 0.35)) {
       current.runs.push(run)
       current.maxSize = Math.max(current.maxSize, run.sizePt)
@@ -256,22 +264,23 @@ function estimateBodyFontSize(lines) {
 }
 
 export default function usePdfToWord() {
+  const { gatedDownload } = useEmailGate()
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
   const [progress, setProgress] = useState(0)
   const [preview, setPreview] = useState('')
 
-  const handleFiles = (files) => {
+  const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, { accept: ['.pdf', 'application/pdf'] })
     setErrors(fileErrors)
     if (valid.length > 0) {
       setFile(valid[0])
       setPreview('')
     }
-  }
+  }, [])
 
-  const convert = async () => {
+  const convert = useCallback(async () => {
     if (!file) return
     setIsWorking(true)
     setErrors([])
@@ -341,7 +350,8 @@ export default function usePdfToWord() {
       setProgress(95)
       const doc = new Document({ sections: [{ children }] })
       const blob = await Packer.toBlob(doc)
-      downloadBlob(blob, `${stripExtension(file.name)}.docx`)
+      const resultName = `${stripExtension(file.name)}.docx`
+      gatedDownload(() => downloadBlob(blob, resultName), resultName)
       setProgress(100)
 
       setPreview(
@@ -354,16 +364,19 @@ export default function usePdfToWord() {
       setErrors([`Couldn't read "${file.name}". It may be corrupted or not a valid PDF.`])
     }
     setIsWorking(false)
-  }
+  }, [file, gatedDownload])
 
-  const workspace = (
+  const clearErrors = useCallback(() => setErrors([]), [])
+
+  const workspace = useMemo(
+    () => (
     <div className="space-y-6">
       <p className="text-sm text-text-dim">
         Convert a PDF into an editable Word document, preserving text, font styling, and images.
       </p>
 
       <div className="flex items-start gap-2 rounded-card border border-signal-dim bg-signal-dim px-4 py-3 text-sm text-text">
-        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" />
+        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" strokeWidth={2} />
         <p>
           <strong>Close, not pixel-perfect.</strong> Text, font size/bold/italic, indentation, and images are
           reconstructed from the PDF, but multi-column layouts, tables, and exact positioning are approximated —
@@ -372,7 +385,7 @@ export default function usePdfToWord() {
       </div>
 
       <Dropzone accept="application/pdf,.pdf" onFiles={handleFiles} hint="One PDF at a time" />
-      <ErrorBanner messages={errors} onDismiss={() => setErrors([])} />
+      <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
       {file && (
         <div className="rounded-card border border-border bg-panel p-4">
@@ -394,9 +407,12 @@ export default function usePdfToWord() {
         </div>
       )}
     </div>
+    ),
+    [handleFiles, clearErrors, errors, file, isWorking, progress, preview]
   )
 
-  const settings = (
+  const settings = useMemo(
+    () => (
     <button
       onClick={convert}
       disabled={isWorking || !file}
@@ -404,6 +420,8 @@ export default function usePdfToWord() {
     >
       Convert to .docx
     </button>
+    ),
+    [convert, isWorking, file]
   )
 
   return { workspace, settings }

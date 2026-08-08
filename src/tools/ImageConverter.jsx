@@ -5,10 +5,11 @@ import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
 import { validateFiles, loadImage, canvasToBlob, downloadBlob, stripExtension, uid } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 const FORMATS = [
   { id: 'png', label: 'PNG', mime: 'image/png' },
-  { id: 'jpg', label: 'JPG', mime: 'image/jpeg' },
+  { id: 'jpg', label: 'JPEG', mime: 'image/jpeg' },
   { id: 'webp', label: 'WebP', mime: 'image/webp' }
 ]
 
@@ -24,6 +25,7 @@ const FORMATS = [
  * underlying state actually changed.
  */
 export default function useImageConverter() {
+  const { gatedDownload } = useEmailGate()
   const [items, setItems] = useState([]) // { id, file, thumb, status, resultBlob, resultName }
   const [targetFormat, setTargetFormat] = useState('webp')
   const [quality, setQuality] = useState(0.9)
@@ -89,13 +91,21 @@ export default function useImageConverter() {
     setIsConverting(false)
   }, [items, targetFormat, quality])
 
-  const downloadOne = useCallback((item) => {
-    if (item.resultBlob) downloadBlob(item.resultBlob, item.resultName)
-  }, [])
+  const downloadOne = useCallback(
+    (item) => {
+      if (item.resultBlob) gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName)
+    },
+    [gatedDownload]
+  )
 
   const downloadAll = useCallback(() => {
-    items.forEach((item) => item.resultBlob && downloadBlob(item.resultBlob, item.resultName))
-  }, [items])
+    const ready = items.filter((item) => item.resultBlob)
+    if (ready.length === 0) return
+    gatedDownload(
+      () => ready.forEach((item) => downloadBlob(item.resultBlob, item.resultName)),
+      ready.length === 1 ? ready[0].resultName : `${ready.length} files`
+    )
+  }, [items, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -108,7 +118,7 @@ export default function useImageConverter() {
           Convert PNG, JPG, and WebP images. Everything happens on your device using the Canvas API — no upload.
         </p>
 
-        <Dropzone accept="image/*" multiple onFiles={handleFiles} hint="PNG, JPG, WebP, GIF, BMP" />
+        <Dropzone accept="image/*" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP" />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
 

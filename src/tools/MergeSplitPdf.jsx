@@ -5,6 +5,7 @@ import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import { validateFiles, readAsArrayBuffer, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 /**
  * Merge/Split PDF has two sub-modes with entirely different state, so the
@@ -64,6 +65,7 @@ export default function useMergeSplitPdf() {
 }
 
 function useMergePanel() {
+  const { gatedDownload } = useEmailGate()
   const [items, setItems] = useState([])
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
@@ -104,12 +106,14 @@ function useMergePanel() {
         setProgress(((i + 1) / items.length) * 100)
       }
       const bytes = await outDoc.save()
-      downloadBlob(new Blob([bytes], { type: 'application/pdf' }), outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
+      gatedDownload(() => downloadBlob(blob, name), name)
     } catch (err) {
       setErrors(['One of the selected files could not be read as a PDF. It may be corrupted or encrypted.'])
     }
     setIsWorking(false)
-  }, [items, outputName])
+  }, [items, outputName, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -185,6 +189,7 @@ function useMergePanel() {
 }
 
 function useSplitPanel() {
+  const { gatedDownload } = useEmailGate()
   const [file, setFile] = useState(null)
   const [pageCount, setPageCount] = useState(null)
   const [start, setStart] = useState(1)
@@ -224,12 +229,14 @@ function useSplitPanel() {
       const copiedPages = await outDoc.copyPages(srcDoc, indices)
       copiedPages.forEach((p) => outDoc.addPage(p))
       const bytes = await outDoc.save()
-      downloadBlob(new Blob([bytes], { type: 'application/pdf' }), `pages-${s}-${e}.pdf`)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const name = `pages-${s}-${e}.pdf`
+      gatedDownload(() => downloadBlob(blob, name), name)
     } catch {
       setErrors(['Something went wrong while extracting those pages.'])
     }
     setIsWorking(false)
-  }, [file, start, end, pageCount])
+  }, [file, start, end, pageCount, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
