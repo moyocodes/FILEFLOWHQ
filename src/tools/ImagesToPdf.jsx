@@ -84,7 +84,7 @@ export default function useImagesToPdf() {
 
       const blob = doc.output('blob')
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name)
+      gatedDownload(() => downloadBlob(blob, name), name, 'Images to PDF')
     } catch (err) {
       setErrors([err.message || 'Something went wrong while building the PDF.'])
     }

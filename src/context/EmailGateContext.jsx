@@ -2,9 +2,13 @@ import { createContext, useContext, useState, useCallback } from 'react'
 
 /**
  * Gates every file download behind a one-time-per-session email prompt.
- * Tools call `gatedDownload(perform, filename)` instead of `downloadBlob`
- * directly, where `perform` is a zero-arg function that does the actual
- * download(s) (one blob, or several for a "download all" button).
+ * Tools call `gatedDownload(perform, filename, toolName)` instead of
+ * `downloadBlob` directly, where `perform` is a zero-arg function that does
+ * the actual download(s) (one blob, or several for a "download all" button)
+ * and `toolName` is the tool's display name (e.g. "PDF to Word") so the
+ * confirmation email can say which tool did the conversion. Captured at
+ * call time rather than read from "current route" at submit time, since the
+ * user could navigate away before submitting the email.
  * The first call of the session opens a modal; once the user submits a
  * valid email, `perform` runs, a confirmation is sent (best-effort), and
  * every gatedDownload call for the rest of the session runs immediately.
@@ -13,15 +17,15 @@ const EmailGateContext = createContext(null)
 
 export function EmailGateProvider({ children }) {
   const [email, setEmail] = useState(null)
-  const [pending, setPending] = useState(null) // { perform, filename } awaiting email submission
+  const [pending, setPending] = useState(null) // { perform, filename, toolName } awaiting email submission
 
   const gatedDownload = useCallback(
-    (perform, filename) => {
+    (perform, filename, toolName) => {
       if (email) {
         perform()
         return
       }
-      setPending({ perform, filename })
+      setPending({ perform, filename, toolName })
     },
     [email]
   )
@@ -34,7 +38,7 @@ export function EmailGateProvider({ children }) {
         fetch('/api/send-confirmation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: submittedEmail, fileName: pending.filename }),
+          body: JSON.stringify({ email: submittedEmail, fileName: pending.filename, toolName: pending.toolName }),
         }).catch(() => {
           // Confirmation email is best-effort; the download already succeeded.
         })

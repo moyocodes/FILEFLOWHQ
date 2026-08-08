@@ -78,3 +78,31 @@ body {
     animation: none;
   }
 }
+
+/* Slowly drifting gradient blobs used as an ambient background inside the
+   email-gate drawer — a GIF-like looping motion built in pure CSS so it
+   works offline, in dark mode, and without shipping an image asset. */
+@keyframes drift-a {
+  0% { transform: translate(-10%, -10%) scale(1); }
+  50% { transform: translate(15%, 10%) scale(1.15); }
+  100% { transform: translate(-10%, -10%) scale(1); }
+}
+@keyframes drift-b {
+  0% { transform: translate(10%, 15%) scale(1); }
+  50% { transform: translate(-15%, -5%) scale(1.2); }
+  100% { transform: translate(10%, 15%) scale(1); }
+}
+
+.gate-blob-a {
+  animation: drift-a 14s ease-in-out infinite;
+}
+.gate-blob-b {
+  animation: drift-b 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-blob-a,
+  .gate-blob-b {
+    animation: none;
+  }
+}

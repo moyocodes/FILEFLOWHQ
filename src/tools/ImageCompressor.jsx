@@ -47,18 +47,18 @@ export default function useImageCompressor() {
   const { gatedDownload } = useEmailGate()
   const [items, setItems] = useState([])
   const [targetPreset, setTargetPreset] = useState('1mb')
-  const [customTargetMb, setCustomTargetMb] = useState('')
+  const [customTargetKb, setCustomTargetKb] = useState('')
   const [keepFormat, setKeepFormat] = useState(true)
   const [errors, setErrors] = useState([])
   const [isConverting, setIsConverting] = useState(false)
   const [progress, setProgress] = useState(0)
 
-  const targetBytes = customTargetMb && Number(customTargetMb) > 0
-    ? Math.round(Number(customTargetMb) * 1024 * 1024)
+  const targetBytes = customTargetKb && Number(customTargetKb) > 0
+    ? Math.round(Number(customTargetKb) * 1024)
     : TARGET_PRESETS.find((p) => p.id === targetPreset)?.bytes ?? 1024 * 1024
 
-  const targetLabel = customTargetMb && Number(customTargetMb) > 0
-    ? `${Number(customTargetMb)} MB`
+  const targetLabel = customTargetKb && Number(customTargetKb) > 0
+    ? `${Number(customTargetKb)} KB`
     : TARGET_PRESETS.find((p) => p.id === targetPreset)?.label ?? '1 MB'
 
   const handleFiles = useCallback((files) => {
@@ -76,6 +76,17 @@ export default function useImageCompressor() {
   }, [])
 
   const removeItem = useCallback((id) => setItems((prev) => prev.filter((i) => i.id !== id)), [])
+
+  const renameItem = useCallback((id, newName) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id || !i.resultName) return i
+        const ext = i.resultName.includes('.') ? i.resultName.split('.').pop() : ''
+        const base = newName.includes('.') ? newName.slice(0, newName.lastIndexOf('.')) : newName
+        return { ...i, resultName: ext ? `${base}.${ext}` : base }
+      })
+    )
+  }, [])
 
   const convertAll = useCallback(async () => {
     if (items.length === 0) return
@@ -138,7 +149,8 @@ export default function useImageCompressor() {
     if (ready.length === 0) return
     gatedDownload(
       () => ready.forEach((i) => downloadBlob(i.resultBlob, i.resultName)),
-      ready.length === 1 ? ready[0].resultName : `${ready.length} files`
+      ready.length === 1 ? ready[0].resultName : `${ready.length} files`,
+      'Image Compressor'
     )
   }, [items, gatedDownload])
   const clearErrors = useCallback(() => setErrors([]), [])
@@ -166,6 +178,7 @@ export default function useImageCompressor() {
                 thumbnail={item.thumb}
                 status={item.status}
                 onRemove={() => removeItem(item.id)}
+                onRename={item.resultName ? (newName) => renameItem(item.id, newName) : undefined}
                 rightSlot={
                   <div className="flex items-center gap-2">
                     {item.status === 'done' && (
@@ -175,7 +188,13 @@ export default function useImageCompressor() {
                     )}
                     {item.status === 'done' && (
                       <button
-                        onClick={() => gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName)}
+                        onClick={() =>
+                          gatedDownload(
+                            () => downloadBlob(item.resultBlob, item.resultName),
+                            item.resultName,
+                            'Image Compressor'
+                          )
+                        }
                         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
                         aria-label={`Download ${item.resultName}`}
                       >
@@ -197,7 +216,7 @@ export default function useImageCompressor() {
       )}
     </div>
     ),
-    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, anyDone, downloadAll, gatedDownload]
+    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, renameItem, anyDone, downloadAll, gatedDownload]
   )
 
   const settings = useMemo(
@@ -213,11 +232,11 @@ export default function useImageCompressor() {
               key={p.id}
               onClick={() => {
                 setTargetPreset(p.id)
-                setCustomTargetMb('')
+                setCustomTargetKb('')
               }}
               className={[
                 'rounded px-3 py-1.5 text-sm font-medium transition-colors',
-                targetPreset === p.id && !customTargetMb
+                targetPreset === p.id && !customTargetKb
                   ? 'bg-signal text-void'
                   : 'bg-panel-raised text-text-dim hover:text-text'
               ].join(' ')}
@@ -227,14 +246,14 @@ export default function useImageCompressor() {
           ))}
         </div>
         <div className="mt-2.5">
-          <label className="mb-1 block text-xs text-text-dim">Or enter a custom size (MB)</label>
+          <label className="mb-1 block text-xs text-text-dim">Or enter a custom size (KB)</label>
           <input
             type="number"
-            min="0.05"
-            step="0.1"
-            value={customTargetMb}
-            onChange={(e) => setCustomTargetMb(e.target.value)}
-            placeholder="e.g. 1.5"
+            min="10"
+            step="10"
+            value={customTargetKb}
+            onChange={(e) => setCustomTargetKb(e.target.value)}
+            placeholder="e.g. 500"
             className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm"
           />
         </div>
@@ -262,7 +281,7 @@ export default function useImageCompressor() {
       </button>
     </>
     ),
-    [targetPreset, customTargetMb, targetLabel, keepFormat, convertAll, isConverting, items.length]
+    [targetPreset, customTargetKb, targetLabel, keepFormat, convertAll, isConverting, items.length]
   )
 
   return { workspace, settings }

@@ -266,6 +266,7 @@ function estimateBodyFontSize(lines) {
 export default function usePdfToWord() {
   const { gatedDownload } = useEmailGate()
   const [file, setFile] = useState(null)
+  const [outputName, setOutputName] = useState('')
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -276,6 +277,7 @@ export default function usePdfToWord() {
     setErrors(fileErrors)
     if (valid.length > 0) {
       setFile(valid[0])
+      setOutputName(`${stripExtension(valid[0].name)}.docx`)
       setPreview('')
     }
   }, [])
@@ -350,8 +352,9 @@ export default function usePdfToWord() {
       setProgress(95)
       const doc = new Document({ sections: [{ children }] })
       const blob = await Packer.toBlob(doc)
-      const resultName = `${stripExtension(file.name)}.docx`
-      gatedDownload(() => downloadBlob(blob, resultName), resultName)
+      const trimmedName = outputName.trim() || stripExtension(file.name)
+      const resultName = trimmedName.endsWith('.docx') ? trimmedName : `${trimmedName}.docx`
+      gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Word')
       setProgress(100)
 
       setPreview(
@@ -364,7 +367,7 @@ export default function usePdfToWord() {
       setErrors([`Couldn't read "${file.name}". It may be corrupted or not a valid PDF.`])
     }
     setIsWorking(false)
-  }, [file, gatedDownload])
+  }, [file, outputName, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -413,15 +416,30 @@ export default function usePdfToWord() {
 
   const settings = useMemo(
     () => (
-    <button
-      onClick={convert}
-      disabled={isWorking || !file}
-      className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
-    >
-      Convert to .docx
-    </button>
+    <>
+      {file && (
+        <div className="field">
+          <label className="mb-2.5 block font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim">
+            File name
+          </label>
+          <input
+            value={outputName}
+            onChange={(e) => setOutputName(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm"
+          />
+        </div>
+      )}
+
+      <button
+        onClick={convert}
+        disabled={isWorking || !file}
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        Convert to .docx
+      </button>
+    </>
     ),
-    [convert, isWorking, file]
+    [convert, isWorking, file, outputName]
   )
 
   return { workspace, settings }

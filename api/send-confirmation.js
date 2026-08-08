@@ -8,41 +8,49 @@ function escapeHtml(str) {
 }
 
 // Table-based, inline-styled markup — Gmail/Outlook/Apple Mail strip <style>
-// blocks and mishandle flexbox/grid, so this can't reuse the app's Tailwind
-// classes. No external images (unreliable across clients/proxies) — the
-// hero graphic is built entirely from nested tables/CSS shapes.
-function buildConfirmationHtml(fileName) {
+// blocks, mishandle flexbox/grid, and routinely drop @font-face/Google Fonts
+// links, so this reuses neither the app's Tailwind classes nor its Fredoka/
+// Quicksand pairing — only its exact light-theme color tokens (see
+// src/index.css :root) and a rounder, friendlier shape language to match the
+// in-app redesign. No external images (unreliable across clients/proxies) —
+// the hero graphic is built entirely from nested tables/CSS shapes.
+function buildConfirmationHtml(fileName, toolName) {
   const safeName = fileName ? escapeHtml(fileName) : null
+  const safeToolName = toolName ? escapeHtml(toolName) : null
   const displayName = safeName || 'your file'
   const ext = safeName && safeName.includes('.') ? safeName.split('.').pop().slice(0, 4).toUpperCase() : 'FILE'
+  const sysFont = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 
-  const signal = '#39ff9e'
-  const void_ = '#0b0d10'
-  const panel = '#171b21'
-  const ink = '#10151a'
-  const inkDim = '#5b6670'
+  // Exact light-theme tokens from src/index.css :root
+  const outerBg = '#e4e9e4'
+  const panel = '#ffffff'
+  const panelRaised = '#fbfcfb'
+  const signal = '#0e8f5c'
+  const signalDim = '#eaf6f0'
+  const text = '#10151a'
+  const textDim = '#5b6670'
   const border = '#dbe1de'
 
   return `<!doctype html>
 <html>
-  <body style="margin:0; padding:0; background-color:#e9ece9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#e9ece9; padding:32px 16px;">
+  <body style="margin:0; padding:0; background-color:${outerBg}; font-family:${sysFont};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${outerBg}; padding:32px 16px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px; width:100%; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px -20px rgba(11,13,16,0.35);">
+          <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px; width:100%; background-color:${panel}; border-radius:28px; overflow:hidden; box-shadow:0 24px 48px -24px rgba(16,21,26,0.22);">
 
-            <!-- Dark hero band -->
+            <!-- Hero: signal-green band, rounded shapes echoing the app's redesign -->
             <tr>
-              <td style="background-color:${void_}; padding:40px 32px 36px 32px;">
+              <td style="background-color:${signal}; padding:36px 32px 34px 32px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td style="padding-bottom:28px;">
+                    <td style="padding-bottom:26px;">
                       <table role="presentation" cellpadding="0" cellspacing="0">
                         <tr>
-                          <td style="width:32px; height:32px; border-radius:9px; background-color:${signal}; font-size:16px; font-weight:700; color:${void_}; text-align:center; vertical-align:middle; font-family:-apple-system,sans-serif;">
+                          <td style="width:34px; height:34px; border-radius:11px; background-color:#ffffff; font-size:17px; font-weight:700; color:${signal}; text-align:center; vertical-align:middle; font-family:${sysFont};">
                             F
                           </td>
-                          <td style="padding-left:10px; font-size:13px; font-weight:700; letter-spacing:0.02em; color:#ffffff;">
+                          <td style="padding-left:10px; font-size:14px; font-weight:700; letter-spacing:0.01em; color:#ffffff; font-family:${sysFont};">
                             FileFlowHQ
                           </td>
                         </tr>
@@ -52,17 +60,17 @@ function buildConfirmationHtml(fileName) {
 
                   <!-- File-transform graphic: document card -> arrow -> checkmark badge -->
                   <tr>
-                    <td align="center" style="padding-bottom:26px;">
+                    <td align="center" style="padding-bottom:24px;">
                       <table role="presentation" cellpadding="0" cellspacing="0">
                         <tr>
-                          <td valign="middle" style="width:84px; height:100px; border-radius:12px; background-color:${panel}; border:1px solid #262c34; text-align:center;">
-                            <div style="font-size:10px; font-weight:700; letter-spacing:0.04em; color:${signal}; margin-top:34px;">${ext}</div>
+                          <td valign="middle" style="width:80px; height:96px; border-radius:20px; background-color:#ffffff; text-align:center;">
+                            <div style="font-size:11px; font-weight:700; letter-spacing:0.04em; color:${signal}; margin-top:32px; font-family:${sysFont};">${ext}</div>
                           </td>
-                          <td style="width:36px; text-align:center; font-size:20px; color:#3a4048;">
+                          <td style="width:32px; text-align:center; font-size:20px; color:#ffffff;">
                             &#8594;
                           </td>
-                          <td valign="middle" style="width:84px; height:100px; border-radius:12px; background-color:${signal}; text-align:center;">
-                            <div style="font-size:30px; line-height:100px; color:${void_};">&#10003;</div>
+                          <td valign="middle" style="width:80px; height:96px; border-radius:20px; background-color:#ffffff; text-align:center;">
+                            <div style="font-size:30px; line-height:96px; color:${signal};">&#10003;</div>
                           </td>
                         </tr>
                       </table>
@@ -71,8 +79,8 @@ function buildConfirmationHtml(fileName) {
 
                   <tr>
                     <td align="center">
-                      <h1 style="margin:0; font-size:24px; line-height:1.3; color:#ffffff; font-weight:700; text-align:center;">
-                        Your file is ready
+                      <h1 style="margin:0; font-size:23px; line-height:1.3; color:#ffffff; font-weight:700; text-align:center; font-family:${sysFont};">
+                        Your file is ready! 🎉
                       </h1>
                     </td>
                   </tr>
@@ -83,17 +91,24 @@ function buildConfirmationHtml(fileName) {
             <!-- Content -->
             <tr>
               <td style="padding:32px 32px 8px 32px; text-align:center;">
-                <p style="margin:0; font-size:15px; line-height:1.6; color:${ink};">
+                <p style="margin:0; font-size:15px; line-height:1.6; color:${text}; font-family:${sysFont};">
                   <strong>${displayName}</strong> was converted successfully and downloaded straight to your device.
                 </p>
+                ${
+                  safeToolName
+                    ? `<p style="margin:8px 0 0 0; font-size:13px; color:${textDim}; font-family:${sysFont};">
+                  Converted with <strong style="color:${text};">${safeToolName}</strong>
+                </p>`
+                    : ''
+                }
               </td>
             </tr>
             <tr>
               <td style="padding:20px 32px 0 32px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f9f6; border:1px solid #d7ecdf; border-radius:12px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${signalDim}; border-radius:16px;">
                   <tr>
-                    <td style="padding:16px 20px; font-size:13px; line-height:1.6; color:${inkDim};">
-                      🔒&nbsp; Everything happened locally in your browser — nothing was uploaded to a server. This email is just a receipt.
+                    <td style="padding:16px 20px; font-size:13px; line-height:1.6; color:${textDim}; font-family:${sysFont};">
+                      <strong style="color:${text};">Private by design.</strong> Everything happened locally in your browser — nothing was uploaded to a server. This email is just a receipt.
                     </td>
                   </tr>
                 </table>
@@ -101,14 +116,14 @@ function buildConfirmationHtml(fileName) {
             </tr>
             <tr>
               <td style="padding:24px 32px 32px 32px; text-align:center;">
-                <a href="https://fileflowhq.com" style="display:inline-block; padding:13px 30px; background-color:${void_}; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; border-radius:10px;">
+                <a href="https://fileflowhq.com" style="display:inline-block; padding:13px 32px; background-color:${signal}; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; border-radius:999px; font-family:${sysFont};">
                   Convert another file
                 </a>
               </td>
             </tr>
             <tr>
-              <td style="padding:20px 32px; border-top:1px solid ${border}; text-align:center;">
-                <p style="margin:0; font-size:12px; color:${inkDim};">
+              <td style="padding:20px 32px; background-color:${panelRaised}; border-top:1px solid ${border}; text-align:center;">
+                <p style="margin:0; font-size:12px; color:${textDim}; font-family:${sysFont};">
                   Sent by FileFlowHQ · fileflowhq.com
                 </p>
               </td>
@@ -129,7 +144,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { email, fileName } = req.body || {}
+  const { email, fileName, toolName } = req.body || {}
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (typeof email !== 'string' || !emailPattern.test(email)) {
     return res.status(400).json({ error: 'A valid email is required.' })
@@ -142,10 +157,11 @@ export default async function handler(req, res) {
   }
 
   const subject = fileName ? `"${fileName}" is ready 🎉` : 'Your file conversion is ready 🎉'
+  const toolSuffix = toolName ? ` with ${toolName}` : ''
   const textPart = fileName
-    ? `Your file "${fileName}" was converted successfully on FileFlowHQ.`
-    : 'Your file was converted successfully on FileFlowHQ.'
-  const htmlPart = buildConfirmationHtml(fileName)
+    ? `Your file "${fileName}" was converted successfully${toolSuffix} on FileFlowHQ.`
+    : `Your file was converted successfully${toolSuffix} on FileFlowHQ.`
+  const htmlPart = buildConfirmationHtml(fileName, toolName)
 
   try {
     const mjResponse = await fetch('https://api.mailjet.com/v3.1/send', {

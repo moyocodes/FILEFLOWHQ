@@ -49,6 +49,17 @@ export default function useImageConverter() {
 
   const removeItem = useCallback((id) => setItems((prev) => prev.filter((i) => i.id !== id)), [])
 
+  const renameItem = useCallback((id, newName) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id || !i.resultName) return i
+        const ext = i.resultName.includes('.') ? i.resultName.split('.').pop() : ''
+        const base = newName.includes('.') ? newName.slice(0, newName.lastIndexOf('.')) : newName
+        return { ...i, resultName: ext ? `${base}.${ext}` : base }
+      })
+    )
+  }, [])
+
   const convertAll = useCallback(async () => {
     if (items.length === 0) return
     setIsConverting(true)
@@ -93,7 +104,8 @@ export default function useImageConverter() {
 
   const downloadOne = useCallback(
     (item) => {
-      if (item.resultBlob) gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName)
+      if (item.resultBlob)
+        gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName, 'Image Converter')
     },
     [gatedDownload]
   )
@@ -103,7 +115,8 @@ export default function useImageConverter() {
     if (ready.length === 0) return
     gatedDownload(
       () => ready.forEach((item) => downloadBlob(item.resultBlob, item.resultName)),
-      ready.length === 1 ? ready[0].resultName : `${ready.length} files`
+      ready.length === 1 ? ready[0].resultName : `${ready.length} files`,
+      'Image Converter'
     )
   }, [items, gatedDownload])
 
@@ -135,6 +148,7 @@ export default function useImageConverter() {
                   thumbnail={item.thumb}
                   status={item.status}
                   onRemove={() => removeItem(item.id)}
+                  onRename={item.resultName ? (newName) => renameItem(item.id, newName) : undefined}
                   rightSlot={
                     item.status === 'done' ? (
                       <button
@@ -159,7 +173,7 @@ export default function useImageConverter() {
         )}
       </div>
     ),
-    [items, errors, isConverting, progress, anyDone, handleFiles, removeItem, downloadOne, downloadAll, clearErrors]
+    [items, errors, isConverting, progress, anyDone, handleFiles, removeItem, renameItem, downloadOne, downloadAll, clearErrors]
   )
 
   const settings = useMemo(

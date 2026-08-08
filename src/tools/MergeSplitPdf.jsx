@@ -108,7 +108,7 @@ function useMergePanel() {
       const bytes = await outDoc.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name)
+      gatedDownload(() => downloadBlob(blob, name), name, 'Merge PDF')
     } catch (err) {
       setErrors(['One of the selected files could not be read as a PDF. It may be corrupted or encrypted.'])
     }
@@ -194,6 +194,8 @@ function useSplitPanel() {
   const [pageCount, setPageCount] = useState(null)
   const [start, setStart] = useState(1)
   const [end, setEnd] = useState(1)
+  const [outputName, setOutputName] = useState('')
+  const [nameEdited, setNameEdited] = useState(false)
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
 
@@ -209,10 +211,28 @@ function useSplitPanel() {
       setPageCount(doc.getPageCount())
       setStart(1)
       setEnd(doc.getPageCount())
+      setOutputName(`pages-1-${doc.getPageCount()}.pdf`)
+      setNameEdited(false)
     } catch {
       setErrors([`Couldn't read "${chosen.name}". It may be corrupted or encrypted.`])
     }
   }, [])
+
+  const updateStart = useCallback(
+    (value) => {
+      setStart(value)
+      if (!nameEdited) setOutputName(`pages-${value}-${end}.pdf`)
+    },
+    [end, nameEdited]
+  )
+
+  const updateEnd = useCallback(
+    (value) => {
+      setEnd(value)
+      if (!nameEdited) setOutputName(`pages-${start}-${value}.pdf`)
+    },
+    [start, nameEdited]
+  )
 
   const split = useCallback(async () => {
     if (!file) return
@@ -230,13 +250,14 @@ function useSplitPanel() {
       copiedPages.forEach((p) => outDoc.addPage(p))
       const bytes = await outDoc.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
-      const name = `pages-${s}-${e}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name)
+      const trimmedName = outputName.trim() || `pages-${s}-${e}.pdf`
+      const name = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
+      gatedDownload(() => downloadBlob(blob, name), name, 'Split PDF')
     } catch {
       setErrors(['Something went wrong while extracting those pages.'])
     }
     setIsWorking(false)
-  }, [file, start, end, pageCount, gatedDownload])
+  }, [file, start, end, pageCount, outputName, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -272,7 +293,7 @@ function useSplitPanel() {
           max={pageCount || 1}
           value={start}
           disabled={!pageCount}
-          onChange={(e) => setStart(Number(e.target.value))}
+          onChange={(e) => updateStart(Number(e.target.value))}
           className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm disabled:opacity-50"
         />
       </div>
@@ -286,10 +307,26 @@ function useSplitPanel() {
           max={pageCount || 1}
           value={end}
           disabled={!pageCount}
-          onChange={(e) => setEnd(Number(e.target.value))}
+          onChange={(e) => updateEnd(Number(e.target.value))}
           className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm disabled:opacity-50"
         />
       </div>
+
+      {file && (
+        <div className="field">
+          <label className="mb-2.5 block font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim">
+            File name
+          </label>
+          <input
+            value={outputName}
+            onChange={(e) => {
+              setOutputName(e.target.value)
+              setNameEdited(true)
+            }}
+            className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm"
+          />
+        </div>
+      )}
 
       <button
         onClick={split}
@@ -300,7 +337,7 @@ function useSplitPanel() {
       </button>
     </>
     ),
-    [start, end, pageCount, split, isWorking, file]
+    [start, end, pageCount, outputName, updateStart, updateEnd, split, isWorking, file]
   )
 
   return { workspace, settings }
