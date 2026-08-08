@@ -79,7 +79,8 @@ export const tools = [
     description: 'Pull the text out of a PDF and drop it into an editable Word file.',
     icon: FileText,
     component: usePdfToWord,
-    formats: ['PDF', 'DOCX']
+    formats: ['PDF', 'DOCX'],
+    comingSoon: true
   },
   {
     id: 'pdf-to-text',
