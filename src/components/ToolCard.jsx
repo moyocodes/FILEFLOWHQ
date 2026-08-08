@@ -10,6 +10,29 @@ export default function ToolCard({ tool }) {
   const Icon = tool.icon
   const tag = tool.formats?.[0] || ''
 
+  if (tool.comingSoon) {
+    return (
+      <motion.div variants={cardVariants}>
+        <div
+          aria-disabled="true"
+          className="group relative flex h-full cursor-not-allowed flex-col overflow-hidden rounded-card border border-border bg-panel p-4 opacity-60"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex h-[30px] w-[30px] items-center justify-center rounded bg-signal-dim text-signal">
+              <Icon className="h-4 w-4" strokeWidth={2} />
+            </div>
+            <span className="font-mono text-[0.62rem] text-text-dim">{tag}</span>
+          </div>
+
+          <h3 className="font-display mb-1 text-[0.8rem] font-semibold tracking-wide">{tool.name}</h3>
+          <p className="flex-1 text-[0.74rem] leading-snug text-text-dim">{tool.description}</p>
+
+          <span className="mt-2.5 font-mono text-[0.65rem] text-signal">Under construction</span>
+        </div>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div variants={cardVariants}>
       <Link

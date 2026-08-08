@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { tools } from '../toolsConfig.js'
 import ToolCard from '../components/ToolCard.jsx'
+import { applySeo } from '../utils/useSeo.js'
 
 const stats = [
   { n: '7', l: 'Conversion tools, one page' },
@@ -10,6 +12,15 @@ const stats = [
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion()
+
+  useEffect(() => {
+    applySeo({
+      title: null,
+      description:
+        'Convert images, PDFs, and data files for free, right in your browser. PNG/JPG/WebP conversion, image compression, PDF to images, merge/split PDF, CSV to JSON and back. No uploads, no tracking.',
+      path: '/'
+    })
+  }, [])
 
   const heroVariants = {
     hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 14 },

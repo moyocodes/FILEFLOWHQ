@@ -89,6 +89,11 @@ export default function Rail({ isOpen, onClose }) {
                     )}
                     <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
                     <span className="flex-1 truncate text-[0.78rem] font-medium">{tool.name}</span>
+                    {tool.comingSoon && (
+                      <span className="flex-shrink-0 font-mono text-[0.55rem] uppercase tracking-wide text-text-dim">
+                        Soon
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>
