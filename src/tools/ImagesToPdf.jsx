@@ -5,8 +5,10 @@ import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import { validateFiles, loadImage, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 export default function useImagesToPdf() {
+  const { gatedDownload } = useEmailGate()
   const [items, setItems] = useState([]) // { id, file, thumb }
   const [pageSize, setPageSize] = useState('fit') // 'fit' | 'a4'
   const [errors, setErrors] = useState([])
@@ -81,12 +83,13 @@ export default function useImagesToPdf() {
       }
 
       const blob = doc.output('blob')
-      downloadBlob(blob, outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`)
+      const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
+      gatedDownload(() => downloadBlob(blob, name), name)
     } catch (err) {
       setErrors([err.message || 'Something went wrong while building the PDF.'])
     }
     setIsConverting(false)
-  }, [items, pageSize, outputName])
+  }, [items, pageSize, outputName, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 

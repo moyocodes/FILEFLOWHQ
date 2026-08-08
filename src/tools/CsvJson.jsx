@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Download, Copy, ArrowLeftRight } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import { validateFiles, readAsText, downloadBlob } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 /** Minimal RFC-4180-ish CSV parser that handles quoted fields and commas/newlines inside quotes. */
 function parseCsv(text) {
@@ -86,6 +87,7 @@ function jsonToCsv(text) {
 }
 
 export default function useCsvJson() {
+  const { gatedDownload } = useEmailGate()
   const [direction, setDirection] = useState('csv-to-json') // 'csv-to-json' | 'json-to-csv'
   const [input, setInput] = useState('')
   const [output, setOutput] = useState('')
@@ -94,60 +96,71 @@ export default function useCsvJson() {
 
   const accept = direction === 'csv-to-json' ? ['.csv', 'text/csv'] : ['.json', 'application/json']
 
-  const handleFiles = async (files) => {
-    const { valid, errors: fileErrors } = validateFiles(files, { accept })
-    setErrors(fileErrors)
-    if (valid.length === 0) return
-    try {
-      const text = await readAsText(valid[0])
-      setInput(text)
-      runConvert(text)
-    } catch (err) {
-      setErrors((prev) => [...prev, err.message])
-    }
-  }
-
-  const runConvert = (sourceText) => {
-    const text = sourceText ?? input
-    setErrors([])
-    setOutput('')
-    if (!text.trim()) {
-      setErrors(['Paste some data or upload a file first.'])
-      return
-    }
-    try {
-      if (direction === 'csv-to-json') {
-        setOutput(JSON.stringify(csvToJson(text), null, 2))
-      } else {
-        setOutput(jsonToCsv(text))
+  const runConvert = useCallback(
+    (sourceText) => {
+      const text = sourceText ?? input
+      setErrors([])
+      setOutput('')
+      if (!text.trim()) {
+        setErrors(['Paste some data or upload a file first.'])
+        return
       }
-    } catch (err) {
-      setErrors([`Couldn't convert that: ${err.message}`])
-    }
-  }
+      try {
+        if (direction === 'csv-to-json') {
+          setOutput(JSON.stringify(csvToJson(text), null, 2))
+        } else {
+          setOutput(jsonToCsv(text))
+        }
+      } catch (err) {
+        setErrors([`Couldn't convert that: ${err.message}`])
+      }
+    },
+    [input, direction]
+  )
 
-  const swapDirection = () => {
+  const handleFiles = useCallback(
+    async (files) => {
+      const { valid, errors: fileErrors } = validateFiles(files, { accept })
+      setErrors(fileErrors)
+      if (valid.length === 0) return
+      try {
+        const text = await readAsText(valid[0])
+        setInput(text)
+        runConvert(text)
+      } catch (err) {
+        setErrors((prev) => [...prev, err.message])
+      }
+    },
+    [accept, runConvert]
+  )
+
+  const swapDirection = useCallback(() => {
     setDirection((d) => (d === 'csv-to-json' ? 'json-to-csv' : 'csv-to-json'))
     setInput('')
     setOutput('')
     setErrors([])
-  }
+  }, [])
 
-  const download = () => {
+  const download = useCallback(() => {
     if (!output) return
     const ext = direction === 'csv-to-json' ? 'json' : 'csv'
     const type = direction === 'csv-to-json' ? 'application/json' : 'text/csv'
-    downloadBlob(new Blob([output], { type }), `converted.${ext}`)
-  }
+    const blob = new Blob([output], { type })
+    const filename = `converted.${ext}`
+    gatedDownload(() => downloadBlob(blob, filename), filename)
+  }, [output, direction, gatedDownload])
 
-  const copy = async () => {
+  const copy = useCallback(async () => {
     if (!output) return
     await navigator.clipboard.writeText(output)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
-  }
+  }, [output])
 
-  const workspace = (
+  const clearErrors = useCallback(() => setErrors([]), [])
+
+  const workspace = useMemo(
+    () => (
     <div className="space-y-6">
       <p className="text-sm text-text-dim">
         Convert tabular CSV data to JSON, or JSON back to CSV. Paste data directly or upload a file.
@@ -162,7 +175,7 @@ export default function useCsvJson() {
           className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-dim hover:border-signal hover:text-signal"
           aria-label="Swap direction"
         >
-          <ArrowLeftRight className="h-4 w-4" />
+          <ArrowLeftRight className="h-4 w-4" strokeWidth={2} />
         </button>
         <span className={['text-sm font-medium', direction === 'json-to-csv' ? 'text-signal' : 'text-text-dim'].join(' ')}>
           JSON
@@ -175,7 +188,7 @@ export default function useCsvJson() {
         hint={direction === 'csv-to-json' ? '.csv file' : '.json file'}
       />
 
-      <ErrorBanner messages={errors} onDismiss={() => setErrors([])} />
+      <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
@@ -204,9 +217,12 @@ export default function useCsvJson() {
         </div>
       </div>
     </div>
+    ),
+    [direction, swapDirection, handleFiles, errors, clearErrors, input, output]
   )
 
-  const settings = (
+  const settings = useMemo(
+    () => (
     <>
       <button
         onClick={() => runConvert()}
@@ -219,7 +235,7 @@ export default function useCsvJson() {
         disabled={!output}
         className="flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
       >
-        <Download className="h-3.5 w-3.5" />
+        <Download className="h-3.5 w-3.5" strokeWidth={2} />
         Download
       </button>
       <button
@@ -227,10 +243,12 @@ export default function useCsvJson() {
         disabled={!output}
         className="mt-auto flex flex-shrink-0 items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
       >
-        <Copy className="h-3.5 w-3.5" />
+        <Copy className="h-3.5 w-3.5" strokeWidth={2} />
         {copied ? 'Copied!' : 'Copy'}
       </button>
     </>
+    ),
+    [runConvert, download, output, copy, copied]
   )
 
   return { workspace, settings }

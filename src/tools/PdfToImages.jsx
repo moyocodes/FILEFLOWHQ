@@ -6,8 +6,10 @@ import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer, canvasToBlob, downloadBlob, stripExtension, uid } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 export default function usePdfToImages() {
+  const { gatedDownload } = useEmailGate()
   const [file, setFile] = useState(null)
   const [pages, setPages] = useState([]) // { id, index, thumb, blob }
   const [scale, setScale] = useState(2)
@@ -59,16 +61,20 @@ export default function usePdfToImages() {
   }, [file, scale])
 
   const downloadPage = useCallback(
-    (page) => downloadBlob(page.blob, `${stripExtension(file.name)}-page-${page.index}.png`),
-    [file]
+    (page) => {
+      const name = `${stripExtension(file.name)}-page-${page.index}.png`
+      gatedDownload(() => downloadBlob(page.blob, name), name)
+    },
+    [file, gatedDownload]
   )
 
   const downloadAllZip = useCallback(async () => {
     const zip = new JSZip()
     pages.forEach((p) => zip.file(`${stripExtension(file.name)}-page-${p.index}.png`, p.blob))
     const content = await zip.generateAsync({ type: 'blob' })
-    downloadBlob(content, `${stripExtension(file.name)}-pages.zip`)
-  }, [pages, file])
+    const name = `${stripExtension(file.name)}-pages.zip`
+    gatedDownload(() => downloadBlob(content, name), name)
+  }, [pages, file, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 

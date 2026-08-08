@@ -6,6 +6,8 @@ import Home from './pages/Home.jsx'
 import ToolPage from './pages/ToolPage.jsx'
 import { tools } from './toolsConfig.js'
 import { SettingsPanelProvider, useSettingsPanel } from './context/SettingsPanelContext.jsx'
+import { EmailGateProvider } from './context/EmailGateContext.jsx'
+import EmailGateModal from './components/EmailGateModal.jsx'
 
 function activeToolFromPath(pathname) {
   return tools.find((t) => t.path === pathname) || null
@@ -77,7 +79,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Home />} />
             {tools.map((tool) => (
-              <Route key={tool.id} path={tool.path} element={<ToolPage tool={tool} />} />
+              <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
             ))}
             <Route path="*" element={<Home />} />
           </Routes>
@@ -85,6 +87,7 @@ function Shell() {
       </div>
 
       <SettingsPane activeTool={activeTool} />
+      <EmailGateModal />
     </div>
   )
 }
@@ -92,7 +95,9 @@ function Shell() {
 export default function App() {
   return (
     <SettingsPanelProvider>
-      <Shell />
+      <EmailGateProvider>
+        <Shell />
+      </EmailGateProvider>
     </SettingsPanelProvider>
   )
 }

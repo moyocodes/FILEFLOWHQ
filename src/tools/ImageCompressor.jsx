@@ -5,6 +5,7 @@ import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
 import { validateFiles, loadImage, canvasToBlob, downloadBlob, stripExtension, formatBytes, uid } from '../utils/fileHelpers.js'
+import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 const TARGET_PRESETS = [
   { id: '500kb', label: '500 KB', bytes: 500 * 1024 },
@@ -43,6 +44,7 @@ async function compressToTargetSize(canvas, mimeType, targetBytes) {
  * with a PNG source auto-falls-back to JPEG output (communicated in the UI).
  */
 export default function useImageCompressor() {
+  const { gatedDownload } = useEmailGate()
   const [items, setItems] = useState([])
   const [targetPreset, setTargetPreset] = useState('1mb')
   const [customTargetMb, setCustomTargetMb] = useState('')
@@ -131,7 +133,14 @@ export default function useImageCompressor() {
   }, [items, keepFormat, targetBytes, targetLabel])
 
   const anyDone = items.some((i) => i.status === 'done')
-  const downloadAll = useCallback(() => items.forEach((i) => i.resultBlob && downloadBlob(i.resultBlob, i.resultName)), [items])
+  const downloadAll = useCallback(() => {
+    const ready = items.filter((i) => i.resultBlob)
+    if (ready.length === 0) return
+    gatedDownload(
+      () => ready.forEach((i) => downloadBlob(i.resultBlob, i.resultName)),
+      ready.length === 1 ? ready[0].resultName : `${ready.length} files`
+    )
+  }, [items, gatedDownload])
   const clearErrors = useCallback(() => setErrors([]), [])
 
   const workspace = useMemo(
@@ -166,7 +175,7 @@ export default function useImageCompressor() {
                     )}
                     {item.status === 'done' && (
                       <button
-                        onClick={() => downloadBlob(item.resultBlob, item.resultName)}
+                        onClick={() => gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName)}
                         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
                         aria-label={`Download ${item.resultName}`}
                       >
@@ -188,7 +197,7 @@ export default function useImageCompressor() {
       )}
     </div>
     ),
-    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, anyDone, downloadAll]
+    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, anyDone, downloadAll, gatedDownload]
   )
 
   const settings = useMemo(
