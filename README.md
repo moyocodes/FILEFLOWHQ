@@ -28,8 +28,7 @@ fileflowhq/
 ├── vite.config.js
 ├── tailwind.config.js
 ├── postcss.config.js
-├── vercel.json          # Vercel build config
-├── netlify.toml          # Netlify build + redirect config
+├── vercel.json          # Vercel build + redirect config
 └── src/
     ├── main.jsx           # App entry, HashRouter + theme bootstrap
     ├── App.jsx             # Layout: sidebar + routed tool pages
@@ -85,10 +84,11 @@ npm run preview
 
 ## Deploying
 
-The app uses `BrowserRouter` (clean URLs like `/tools/image-converter`), so
+The web app uses `BrowserRouter` (clean URLs like `/tools/image-converter`), so
 the host needs a catch-all rewrite that serves `index.html` for every path —
-otherwise a hard refresh or direct link to a tool page 404s. `netlify.toml`
-and `vercel.json` both already include that rewrite/redirect rule.
+otherwise a hard refresh or direct link to a tool page 404s. `vercel.json`
+already includes that rewrite plus a www → non-www redirect. (Native iOS/Android
+builds use `HashRouter` automatically — see `src/utils/platform.js`.)
 
 ### Vercel
 
@@ -107,21 +107,6 @@ Or via CLI:
 ```bash
 npm install -g vercel
 vercel --prod
-```
-
-### Netlify
-
-1. Push this project to a git repo, then **Add new site → Import an existing
-   project** in Netlify, or drag-and-drop the built `dist/` folder onto
-   [app.netlify.com/drop](https://app.netlify.com/drop) for an instant deploy.
-2. Build command `npm run build`, publish directory `dist` (already set in
-   `netlify.toml`).
-
-Or via CLI:
-
-```bash
-npm install -g netlify-cli
-netlify deploy --prod
 ```
 
 ### GitHub Pages
