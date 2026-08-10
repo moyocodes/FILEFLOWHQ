@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { tools } from '../toolsConfig.js'
 import ToolCard from '../components/ToolCard.jsx'
@@ -97,6 +98,65 @@ export default function Home() {
             <ToolCard key={tool.id} tool={tool} />
           ))}
         </motion.div>
+      </section>
+
+      {/* Crawlable SEO copy — spells out the conversions in words with real
+          links, giving search engines keyword-rich text and internal links. */}
+      <section className="mt-10 border-t border-border px-6 pt-8 sm:px-10">
+        <div className="max-w-[70ch] text-text-dim">
+          <h2 className="font-display mb-3 text-[1.1rem] font-semibold tracking-wide text-text">
+            Free online file converter — no uploads, no tracking
+          </h2>
+          <p className="mb-4 text-[0.9rem] leading-relaxed">
+            FileFlowHQ is a free file converter and toolkit that runs entirely in your
+            browser. Convert{' '}
+            <Link to="/tools/image-converter" className="text-signal hover:underline">
+              PNG to JPG, JPG to PNG, and WebP images
+            </Link>
+            ,{' '}
+            <Link to="/tools/image-compressor" className="text-signal hover:underline">
+              compress and resize images
+            </Link>
+            ,{' '}
+            <Link to="/tools/images-to-pdf" className="text-signal hover:underline">
+              turn images into a PDF
+            </Link>
+            ,{' '}
+            <Link to="/tools/pdf-to-images" className="text-signal hover:underline">
+              convert PDF pages to images
+            </Link>
+            ,{' '}
+            <Link to="/tools/merge-split-pdf" className="text-signal hover:underline">
+              merge or split PDFs
+            </Link>
+            ,{' '}
+            <Link to="/tools/pdf-to-text" className="text-signal hover:underline">
+              extract text from a PDF
+            </Link>
+            , and{' '}
+            <Link to="/tools/csv-json" className="text-signal hover:underline">
+              convert CSV to JSON and back
+            </Link>
+            . Every conversion happens locally on your device — your files are never
+            uploaded to a server, so your data stays completely private.
+          </p>
+          <h3 className="mb-2 font-display text-[0.95rem] font-semibold tracking-wide text-text">
+            Why FileFlowHQ?
+          </h3>
+          <ul className="list-disc space-y-1.5 pl-5 text-[0.88rem] leading-relaxed">
+            <li>
+              <strong className="text-text">100% private:</strong> files are processed in
+              your browser and never uploaded.
+            </li>
+            <li>
+              <strong className="text-text">Free, no sign-up, no watermarks.</strong>
+            </li>
+            <li>
+              <strong className="text-text">Works offline</strong> once the page has
+              loaded, and installs as an app on desktop and mobile.
+            </li>
+          </ul>
+        </div>
       </section>
     </div>
   )

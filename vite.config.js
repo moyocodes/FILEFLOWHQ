@@ -34,8 +34,23 @@ export default defineConfig({
       workbox: {
         // Bump the precache limit — the pdfjs/docx bundles are large.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        // SPA fallback so client-side routes work offline.
-        navigateFallback: '/index.html',
+        // Don't precache HTML: the prerender step rewrites each route's
+        // index.html AFTER the build, so a precached copy would go stale and
+        // its revision hash would mismatch. Serve navigations NetworkFirst
+        // instead — always fresh when online, cached copy when offline.
+        globPatterns: ['**/*.{js,css,svg,png,woff,woff2,mjs}'],
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-pages',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 * 7 },
+            },
+          },
+        ],
       },
     }),
   ],
