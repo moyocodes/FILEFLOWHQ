@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { track } from '@vercel/analytics'
@@ -68,9 +68,15 @@ function Shell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const activeTool = activeToolFromPath(location.pathname)
+  const scrollRef = useRef(null)
 
   useEffect(() => {
     track('pageview', { path: location.pathname })
+  }, [location.pathname])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0)
+    window.scrollTo(0, 0)
   }, [location.pathname])
 
   return (
@@ -80,7 +86,7 @@ function Shell() {
       <div className="flex min-w-0 flex-1 flex-col md:h-[100dvh] md:overflow-hidden">
         <WsHeader activeTool={activeTool} onOpenMenu={() => setMenuOpen(true)} />
 
-        <div className="min-h-0 flex-1 md:overflow-y-auto">
+        <div ref={scrollRef} className="min-h-0 flex-1 md:overflow-y-auto">
           <Routes>
             <Route path="/" element={<Home />} />
             {tools.map((tool) => (

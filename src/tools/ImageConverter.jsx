@@ -155,8 +155,9 @@ export default function useImageConverter() {
     () => (
       <div className="space-y-6">
         <p className="text-sm text-text-dim">
-          Convert between PNG, JPG, WebP, and TIFF. Multi-page TIFFs are split into one image per page.
-          Everything happens on your device — no upload.
+          Convert PNG, JPG, WebP, GIF, BMP, and TIFF images to PNG, JPG, or WebP.
+          Multi-page TIFFs are split into one image per page. Everything happens on
+          your device — no upload.
         </p>
 
         <Dropzone accept="image/*,.tif,.tiff" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP, TIFF" />

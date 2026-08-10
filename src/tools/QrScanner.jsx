@@ -1,14 +1,15 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { QrCode, Copy, ExternalLink, Check, Play, Square } from 'lucide-react'
+import { QrCode, Copy, ExternalLink, Check, Play, Square, Upload } from 'lucide-react'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 
 /**
- * QR / Barcode Scanner — reads a code from the live camera and shows the decoded
- * value with Copy and (for links) Open actions.
+ * QR / Barcode Scanner — reads a code from the live camera or an uploaded image
+ * and shows the decoded value with Copy and (for links) Open actions.
  *
  * Uses @zxing/browser's BrowserMultiFormatReader, which drives getUserMedia
  * directly. That same code path works in a desktop/mobile browser AND inside the
- * Capacitor WebView, so there is no separate native plugin to maintain.
+ * Capacitor WebView, so there is no separate native plugin to maintain. The same
+ * reader instance also decodes static images via decodeFromImageUrl.
  */
 
 function isLikelyUrl(text) {
@@ -31,6 +32,7 @@ export default function useQrScanner() {
   const videoRef = useRef(null)
   const controlsRef = useRef(null) // zxing scanner controls (has .stop())
   const readerRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const stop = useCallback(() => {
     controlsRef.current?.stop()
@@ -38,23 +40,37 @@ export default function useQrScanner() {
     setScanning(false)
   }, [])
 
+  const handleDecoded = useCallback((text) => {
+    setResult(text)
+    setCopied(false)
+    setHistory((prev) => (prev[0] === text ? prev : [text, ...prev].slice(0, 8)))
+  }, [])
+
+  const getReader = useCallback(async () => {
+    if (readerRef.current) return readerRef.current
+    const { BrowserMultiFormatReader } = await import('@zxing/browser')
+    const { DecodeHintType } = await import('@zxing/library')
+    // TRY_HARDER matters a lot for continuous video decoding — without it zxing-js
+    // gives up too easily on real-world frames (motion blur, glare, small codes).
+    const hints = new Map()
+    hints.set(DecodeHintType.TRY_HARDER, true)
+    readerRef.current = new BrowserMultiFormatReader(hints)
+    return readerRef.current
+  }, [])
+
   const start = useCallback(async () => {
     setErrors([])
     try {
-      const { BrowserMultiFormatReader } = await import('@zxing/browser')
-      if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader()
+      const reader = await getReader()
 
       setScanning(true)
       // deviceId undefined => zxing picks a camera (prefers the rear one).
-      controlsRef.current = await readerRef.current.decodeFromVideoDevice(
+      controlsRef.current = await reader.decodeFromVideoDevice(
         undefined,
         videoRef.current,
         (res, err, controls) => {
           if (res) {
-            const text = res.getText()
-            setResult(text)
-            setCopied(false)
-            setHistory((prev) => (prev[0] === text ? prev : [text, ...prev].slice(0, 8)))
+            handleDecoded(res.getText())
             controls.stop()
             controlsRef.current = null
             setScanning(false)
@@ -73,7 +89,36 @@ export default function useQrScanner() {
         setErrors(['Could not start the scanner. ' + msg])
       }
     }
-  }, [])
+  }, [handleDecoded, getReader])
+
+  const decodeFile = useCallback(
+    async (file) => {
+      if (!file) return
+      setErrors([])
+      const url = URL.createObjectURL(file)
+      try {
+        const reader = await getReader()
+        const res = await reader.decodeFromImageUrl(url)
+        handleDecoded(res.getText())
+      } catch {
+        setErrors(['No QR code or barcode was found in that image.'])
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    },
+    [handleDecoded, getReader]
+  )
+
+  const pickFile = useCallback(() => fileInputRef.current?.click(), [])
+
+  const onFileChange = useCallback(
+    (e) => {
+      const file = e.target.files?.[0]
+      e.target.value = '' // allow re-selecting the same file
+      decodeFile(file)
+    },
+    [decodeFile]
+  )
 
   // Always release the camera when the tool unmounts (navigating away).
   useEffect(() => () => controlsRef.current?.stop(), [])
@@ -95,8 +140,8 @@ export default function useQrScanner() {
     () => (
       <div className="space-y-6">
         <p className="text-sm text-text-dim">
-          Point your camera at a QR code or barcode to read it. Decoding happens on
-          your device — nothing is uploaded.
+          Point your camera at a QR code or barcode, or upload an image, to read it.
+          Decoding happens on your device — nothing is uploaded.
         </p>
 
         <div className="relative overflow-hidden rounded-card border border-border bg-black">
@@ -110,16 +155,33 @@ export default function useQrScanner() {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-panel/95 text-center">
               <QrCode className="h-8 w-8 text-text-dim" strokeWidth={1.75} />
               <p className="text-sm text-text-dim">Camera is off</p>
-              <button
-                onClick={start}
-                className="flex items-center gap-2 rounded bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90"
-              >
-                <Play className="h-4 w-4" strokeWidth={2} />
-                Start scanning
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={start}
+                  className="flex items-center gap-2 rounded bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+                >
+                  <Play className="h-4 w-4" strokeWidth={2} />
+                  Start scanning
+                </button>
+                <button
+                  onClick={pickFile}
+                  className="flex items-center gap-2 rounded border border-border px-4 py-2 text-sm font-semibold text-text transition-colors hover:border-signal"
+                >
+                  <Upload className="h-4 w-4" strokeWidth={2} />
+                  Upload image
+                </button>
+              </div>
             </div>
           )}
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={onFileChange}
+          className="hidden"
+        />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
@@ -175,7 +237,7 @@ export default function useQrScanner() {
         )}
       </div>
     ),
-    [scanning, start, errors, clearErrors, result, copy, copied, history]
+    [scanning, start, pickFile, onFileChange, errors, clearErrors, result, copy, copied, history]
   )
 
   const settings = useMemo(
@@ -187,7 +249,8 @@ export default function useQrScanner() {
           </label>
           <p className="text-xs leading-relaxed text-text-dim">
             Reads QR codes and common barcodes (EAN, UPC, Code 128, and more) using
-            your camera. The scanner stops automatically after a successful read.
+            your camera or an uploaded image. The scanner stops automatically after a
+            successful read.
           </p>
         </div>
 
