@@ -3,3 +3,19 @@ dist
 .DS_Store
 .env
 *.local
+
+# Capacitor native build artifacts (the ios/ and android/ project folders ARE
+# committed; these generated/downloaded outputs inside them are not).
+/ios/App/Pods
+/ios/App/App/public
+/ios/App/build
+/ios/App/DerivedData
+/android/app/src/main/assets/public
+/android/.gradle
+/android/build
+/android/app/build
+/android/local.properties
+/android/.idea
+/android/app/release
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
