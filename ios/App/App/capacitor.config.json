@@ -1,0 +1,11 @@
+{
+	"appId": "com.fileflowhq.app",
+	"appName": "FileFlowHQ",
+	"webDir": "dist",
+	"packageClassList": [
+		"AppPlugin",
+		"CAPCameraPlugin",
+		"FilesystemPlugin",
+		"SharePlugin"
+	]
+}
