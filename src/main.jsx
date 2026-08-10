@@ -14,7 +14,7 @@ if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
 }
 
 // Web keeps clean URLs (e.g. /tools/image-converter) for SEO; the host has a
-// catch-all rewrite to index.html (see netlify.toml/vercel.json). Native builds
+// catch-all rewrite to index.html (see vercel.json). Native builds
 // load from file:// where those rewrites don't exist, so they use HashRouter.
 const Router = isNative ? HashRouter : BrowserRouter
 
