@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# Canonicalize to the non-www apex domain so Google indexes one host, not two.
+[[redirects]]
+  from = "https://www.fileflowhq.com/*"
+  to = "https://fileflowhq.com/:splat"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
