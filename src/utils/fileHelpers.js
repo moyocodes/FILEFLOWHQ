@@ -75,6 +75,49 @@ export function loadImage(file) {
   })
 }
 
+/** True for TIFF files, which browsers can't decode natively (needs UTIF). */
+export function isTiff(file) {
+  const ext = getExtension(file.name)
+  return ext === 'tif' || ext === 'tiff' || file.type === 'image/tiff'
+}
+
+/**
+ * Decode a TIFF File into one canvas per page. Browsers can't render TIFF in
+ * <img>/canvas, so we decode the pixels ourselves with UTIF (pure JS, no
+ * upload) and paint each page's RGBA bytes onto a canvas the rest of the
+ * image pipeline can treat exactly like a decoded <img>. A multi-page TIFF
+ * yields multiple canvases.
+ */
+export async function decodeTiffToCanvas(file) {
+  const { default: UTIF } = await import('utif')
+  const buffer = await readAsArrayBuffer(file)
+  const ifds = UTIF.decode(buffer)
+  if (!ifds || ifds.length === 0) {
+    throw new Error(`Could not read "${file.name}". It may not be a valid TIFF.`)
+  }
+
+  const canvases = []
+  for (const ifd of ifds) {
+    UTIF.decodeImage(buffer, ifd)
+    const rgba = UTIF.toRGBA8(ifd) // Uint8Array, width*height*4
+    const width = ifd.width
+    const height = ifd.height
+    if (!width || !height) continue
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer), width, height), 0, 0)
+    canvases.push(canvas)
+  }
+
+  if (canvases.length === 0) {
+    throw new Error(`Could not decode any image from "${file.name}".`)
+  }
+  return canvases
+}
+
 /** Read a File as an ArrayBuffer via Promise. */
 export function readAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {

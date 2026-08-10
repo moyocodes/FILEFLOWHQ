@@ -6,7 +6,7 @@ import ToolCard from '../components/ToolCard.jsx'
 import { applySeo } from '../utils/useSeo.js'
 
 const stats = [
-  { n: '7', l: 'Conversion tools, one page' },
+  { n: String(tools.length), l: 'Conversion tools, one page' },
   { n: '0', l: 'Bytes ever sent to a server' },
   { n: '100%', l: 'Runs offline once loaded' }
 ]
