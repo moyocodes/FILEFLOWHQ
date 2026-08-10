@@ -1,4 +1,4 @@
-const SITE_URL = 'https://www.fileflowhq.com'
+const SITE_URL = 'https://fileflowhq.com'
 const SITE_NAME = 'FileFlowHQ'
 
 function setMeta(attr, key, content) {
