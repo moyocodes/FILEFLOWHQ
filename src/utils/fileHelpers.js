@@ -1,4 +1,4 @@
-import { saveAs } from 'file-saver'
+import { saveBlob } from './platform'
 
 /** Maximum file size accepted by default (per file), in bytes. 100 MB. */
 export const MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -13,9 +13,13 @@ export function formatBytes(bytes) {
   return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-/** Trigger a browser download for a Blob. */
+/**
+ * Save a Blob to the device. On the web this is a browser download; inside the
+ * native iOS/Android app it writes the file and opens the share sheet. See
+ * platform.js — every tool goes through here, so all platforms stay in sync.
+ */
 export function downloadBlob(blob, filename) {
-  saveAs(blob, filename)
+  return saveBlob(blob, filename)
 }
 
 /** Strip the extension off a filename, e.g. "photo.png" -> "photo" */

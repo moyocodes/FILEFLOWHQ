@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0e8f5c" />
 
     <title>FileFlowHQ — Free Online File Converter (Images, PDF, CSV/JSON)</title>
     <meta
@@ -13,18 +15,18 @@
     <meta name="keywords" content="file converter, image converter, PNG to JPG, JPG to PNG, WebP converter, PDF to images, merge PDF, split PDF, CSV to JSON, JSON to CSV, image compressor, free online converter" />
     <meta name="author" content="FileFlowHQ" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <link rel="canonical" href="https://www.fileflowhq.com/" />
+    <link rel="canonical" href="https://fileflowhq.com/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="FileFlowHQ" />
-    <meta property="og:url" content="https://www.fileflowhq.com/" />
+    <meta property="og:url" content="https://fileflowhq.com/" />
     <meta property="og:title" content="FileFlowHQ — Free Online File Converter" />
     <meta
       property="og:description"
       content="Convert images, PDFs, and data files for free, right in your browser. No uploads, no server, no tracking."
     />
-    <meta property="og:image" content="https://www.fileflowhq.com/og-image.png" />
+    <meta property="og:image" content="https://fileflowhq.com/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="FileFlowHQ — free, private file conversion in your browser" />
@@ -37,7 +39,7 @@
       name="twitter:description"
       content="Convert images, PDFs, and data files for free, right in your browser. No uploads, no server, no tracking."
     />
-    <meta name="twitter:image" content="https://www.fileflowhq.com/og-image.png" />
+    <meta name="twitter:image" content="https://fileflowhq.com/og-image.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -49,17 +51,44 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "FileFlowHQ",
-        "url": "https://www.fileflowhq.com/",
-        "description": "Convert images, PDFs, and data files for free, entirely in your browser. No uploads, no server, no tracking.",
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "Any (runs in browser)",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        }
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://fileflowhq.com/#organization",
+            "name": "FileFlowHQ",
+            "legalName": "FileFlowHQ",
+            "alternateName": "FileFlowHQ File Converter",
+            "url": "https://fileflowhq.com/",
+            "logo": "https://fileflowhq.com/pwa-512x512.png",
+            "description": "FileFlowHQ is a free, private, browser-based file converter for images, PDFs, and data files. FileFlowHQ is an independent product and is not affiliated with any other company using the FileFlow name.",
+            "slogan": "Free, private file conversion in your browser",
+            "sameAs": ["https://x.com/fileflowhq"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://fileflowhq.com/#website",
+            "name": "FileFlowHQ",
+            "alternateName": "FileFlowHQ — Free Online File Converter",
+            "url": "https://fileflowhq.com/",
+            "publisher": { "@id": "https://fileflowhq.com/#organization" }
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://fileflowhq.com/#webapp",
+            "name": "FileFlowHQ",
+            "url": "https://fileflowhq.com/",
+            "description": "Convert images, PDFs, and data files for free, entirely in your browser. No uploads, no server, no tracking.",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Any (runs in browser)",
+            "isPartOf": { "@id": "https://fileflowhq.com/#website" },
+            "publisher": { "@id": "https://fileflowhq.com/#organization" },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          }
+        ]
       }
     </script>
   </head>

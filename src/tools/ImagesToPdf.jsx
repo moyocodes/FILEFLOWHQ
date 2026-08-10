@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo } from 'react'
-import { jsPDF } from 'jspdf'
 import { GripVertical, Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
-import { validateFiles, loadImage, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
+import { validateFiles, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
+import { buildImagesPdf } from '../utils/imagesToPdf.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 export default function useImagesToPdf() {
@@ -41,48 +41,10 @@ export default function useImagesToPdf() {
     setErrors([])
     setProgress(0)
     try {
-      let doc = null
-
-      for (let i = 0; i < items.length; i++) {
-        const { img, url } = await loadImage(items[i].file)
-        const imgW = img.naturalWidth
-        const imgH = img.naturalHeight
-
-        let pageW, pageH, drawW, drawH, x, y
-        if (pageSize === 'a4') {
-          pageW = 595.28
-          pageH = 841.89
-          const scale = Math.min(pageW / imgW, pageH / imgH)
-          drawW = imgW * scale
-          drawH = imgH * scale
-          x = (pageW - drawW) / 2
-          y = (pageH - drawH) / 2
-        } else {
-          pageW = imgW
-          pageH = imgH
-          drawW = imgW
-          drawH = imgH
-          x = 0
-          y = 0
-        }
-
-        const orientation = pageW > pageH ? 'landscape' : 'portrait'
-
-        if (!doc) {
-          // Construct the document with the first page's exact size instead
-          // of deleting jsPDF's default page (which throws if it's the only one).
-          doc = new jsPDF({ unit: 'pt', orientation, format: [pageW, pageH] })
-        } else {
-          doc.addPage([pageW, pageH], orientation)
-        }
-
-        const format = /png/i.test(items[i].file.type) ? 'PNG' : 'JPEG'
-        doc.addImage(img, format, x, y, drawW, drawH)
-        URL.revokeObjectURL(url)
-        setProgress(((i + 1) / items.length) * 100)
-      }
-
-      const blob = doc.output('blob')
+      const blob = await buildImagesPdf(
+        items.map((it) => it.file),
+        { pageSize, onProgress: (f) => setProgress(f * 100) }
+      )
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
       gatedDownload(() => downloadBlob(blob, name), name, 'Images to PDF')
     } catch (err) {
