@@ -6,7 +6,9 @@ import {
   Combine,
   FileText,
   FileType,
-  Table2
+  Table2,
+  ScanLine,
+  QrCode
 } from 'lucide-react'
 
 import useImageConverter from './tools/ImageConverter.jsx'
@@ -17,6 +19,8 @@ import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
 import usePdfToWord from './tools/PdfToWord.jsx'
 import usePdfToText from './tools/PdfToText.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
+import useDocumentScanner from './tools/DocumentScanner.jsx'
+import useQrScanner from './tools/QrScanner.jsx'
 
 // Single source of truth: order here controls sidebar order, home page
 // card order, and route registration.
@@ -291,6 +295,78 @@ export const tools = [
       {
         q: 'Is my data safe?',
         a: 'Yes. Conversion happens entirely in your browser, so your data is never sent to a server.',
+      },
+    ],
+  },
+  {
+    id: 'document-scanner',
+    path: '/tools/document-scanner',
+    name: 'Document Scanner',
+    tagline: 'Scan pages with your camera to PDF',
+    description: 'Use your camera to scan documents and save them as a multi-page PDF.',
+    icon: ScanLine,
+    component: useDocumentScanner,
+    formats: ['CAM', 'PDF'],
+    seoTitle: 'Document Scanner — Scan Documents to PDF Free Online',
+    seoDescription:
+      'Scan documents with your phone or webcam and save them as a PDF for free. Capture multiple pages, reorder them, and download — all private, in your browser.',
+    keywords:
+      'document scanner, scan to pdf, scan documents, camera to pdf, scan document to pdf, free document scanner',
+    intro:
+      'Turn your camera into a document scanner. Capture one or more pages, arrange them in order, and save the whole thing as a single PDF — for free, with no uploads. On a phone it uses the camera directly; on a laptop you can snap a photo or pick an image.',
+    howTo: [
+      'Tap Scan a page to capture the first page with your camera (or choose an image on desktop).',
+      'Add as many pages as you need — each one becomes a page in the PDF.',
+      'Drag to reorder the pages, then tap Save as PDF to download or share.',
+    ],
+    faq: [
+      {
+        q: 'How do I scan a document to PDF for free?',
+        a: 'Open the Document Scanner, capture each page with your camera, and tap Save as PDF. The multi-page PDF is built on your device — nothing is uploaded.',
+      },
+      {
+        q: 'Can I scan more than one page into a single PDF?',
+        a: 'Yes. Add each page one at a time and they are combined into one PDF, in the order you arrange them.',
+      },
+      {
+        q: 'Does scanning upload my documents anywhere?',
+        a: 'No. The scan is captured and turned into a PDF entirely on your device, so your documents stay completely private.',
+      },
+    ],
+  },
+  {
+    id: 'qr-scanner',
+    path: '/tools/qr-scanner',
+    name: 'QR & Barcode Scanner',
+    tagline: 'Read QR codes and barcodes with your camera',
+    description: 'Scan a QR code or barcode with your camera and copy or open the result.',
+    icon: QrCode,
+    component: useQrScanner,
+    formats: ['QR', 'TEXT'],
+    seoTitle: 'QR Code & Barcode Scanner — Scan Online Free',
+    seoDescription:
+      'Scan QR codes and barcodes with your camera for free, right in your browser. Instantly read the result and copy it or open the link. Private — nothing is uploaded.',
+    keywords:
+      'qr code scanner, barcode scanner, scan qr code, read qr code, online qr scanner, scan barcode',
+    intro:
+      'Scan any QR code or barcode with your camera and instantly see what it contains. Copy the text or open the link with one tap. Everything is decoded on your device — no app to install and nothing is uploaded.',
+    howTo: [
+      'Tap Start scanning and allow camera access when prompted.',
+      'Point your camera at the QR code or barcode.',
+      'Read the decoded result, then copy it or open the link.',
+    ],
+    faq: [
+      {
+        q: 'How do I scan a QR code online?',
+        a: 'Tap Start scanning, allow camera access, and point your camera at the QR code. The decoded value appears instantly with buttons to copy it or open the link.',
+      },
+      {
+        q: 'What kinds of codes can it read?',
+        a: 'It reads QR codes as well as common barcodes such as EAN, UPC, and Code 128, among others.',
+      },
+      {
+        q: 'Is the QR scanner safe and private?',
+        a: 'Yes. Codes are decoded directly in your browser using your camera, so no images or results are ever sent to a server.',
       },
     ],
   },

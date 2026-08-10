@@ -16,11 +16,13 @@
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.2",
     "@capacitor/core": "^8.5.0",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.5.0",
     "@capacitor/share": "^8.0.1",
     "@vercel/analytics": "^2.0.1",
+    "@zxing/browser": "^0.2.1",
     "docx": "^8.5.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^13.0.0",

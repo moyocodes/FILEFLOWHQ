@@ -66,5 +66,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>FileFlowHQ uses the camera to scan documents into PDFs and to read QR codes and barcodes. Images are processed on your device and are never uploaded.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FileFlowHQ can save scanned PDFs and converted files to your photo library.</string>
 </dict>
 </plist>
