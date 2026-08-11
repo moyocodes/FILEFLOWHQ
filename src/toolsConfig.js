@@ -208,6 +208,7 @@ export const tools = [
     description: 'Convert a PDF into an editable Word document — text styling, tables, lists, links, and images.',
     icon: FileText,
     component: usePdfToWord,
+    comingSoon: true,
     formats: ['PDF', 'DOCX'],
     seoTitle: 'PDF to Word — Convert PDF to Editable DOCX Free Online',
     seoDescription:

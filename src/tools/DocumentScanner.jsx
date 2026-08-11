@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
-import { GripVertical, Download, Camera as CameraIcon, Plus } from 'lucide-react'
+import { GripVertical, Download, Camera as CameraIcon, Plus, Pencil } from 'lucide-react'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
+import PageEditorModal from '../components/PageEditorModal.jsx'
 import { downloadBlob, uid } from '../utils/fileHelpers.js'
 import { buildImagesPdf } from '../utils/imagesToPdf.js'
 import { isNative } from '../utils/platform.js'
@@ -40,9 +41,24 @@ export default function useDocumentScanner() {
   const [progress, setProgress] = useState(0)
   const [outputName, setOutputName] = useState('scan.pdf')
   const [dragIndex, setDragIndex] = useState(null)
+  const [editingPageId, setEditingPageId] = useState(null)
+  // When set, the next captured photo replaces this page instead of appending a new one.
+  const retakeTargetRef = useRef(null)
   const webInputRef = useRef(null)
 
   const addBlob = useCallback((blob) => {
+    const retakeId = retakeTargetRef.current
+    retakeTargetRef.current = null
+    if (retakeId) {
+      setPages((prev) =>
+        prev.map((p) => {
+          if (p.id !== retakeId) return p
+          URL.revokeObjectURL(p.thumb)
+          return { ...p, blob, thumb: URL.createObjectURL(blob) }
+        })
+      )
+      return
+    }
     setPages((prev) => [...prev, { id: uid(), blob, thumb: URL.createObjectURL(blob) }])
   }, [])
 
@@ -58,7 +74,9 @@ export default function useDocumentScanner() {
         correctOrientation: true,
       })
       if (photo?.dataUrl) addBlob(dataUrlToBlob(photo.dataUrl))
+      else retakeTargetRef.current = null
     } catch (err) {
+      retakeTargetRef.current = null
       // The user canceling the camera is not an error worth surfacing.
       const msg = (err && (err.message || String(err))) || ''
       if (!/cancel/i.test(msg)) {
@@ -71,7 +89,15 @@ export default function useDocumentScanner() {
   const onWebFiles = useCallback(
     (fileList) => {
       const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'))
-      if (files.length === 0) return
+      if (files.length === 0) {
+        retakeTargetRef.current = null
+        return
+      }
+      // Retake only ever replaces with the first picked image.
+      if (retakeTargetRef.current) {
+        addBlob(files[0])
+        return
+      }
       files.forEach((f) => addBlob(f))
     },
     [addBlob]
@@ -81,6 +107,27 @@ export default function useDocumentScanner() {
     if (isNative) captureNative()
     else webInputRef.current?.click()
   }, [captureNative])
+
+  const retakePage = useCallback(
+    (id) => {
+      retakeTargetRef.current = id
+      setEditingPageId(null)
+      if (isNative) captureNative()
+      else webInputRef.current?.click()
+    },
+    [captureNative]
+  )
+
+  const updatePageBlob = useCallback((id, blob) => {
+    setPages((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p
+        URL.revokeObjectURL(p.thumb)
+        return { ...p, blob, thumb: URL.createObjectURL(blob) }
+      })
+    )
+    setEditingPageId(null)
+  }, [])
 
   const removePage = useCallback((id) => {
     setPages((prev) => {
@@ -183,10 +230,19 @@ export default function useDocumentScanner() {
                 <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-medium text-signal">
                   {index + 1}
                 </span>
-                <img src={page.thumb} alt="" className="h-10 w-10 flex-shrink-0 rounded-md object-cover" />
+                <button onClick={() => setEditingPageId(page.id)} className="flex-shrink-0">
+                  <img src={page.thumb} alt="" className="h-10 w-10 rounded-md object-cover" />
+                </button>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">Page {index + 1}</p>
                 </div>
+                <button
+                  onClick={() => setEditingPageId(page.id)}
+                  className="flex items-center gap-1 text-xs text-text-dim hover:text-signal"
+                >
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                  Edit
+                </button>
                 <button onClick={() => removePage(page.id)} className="text-xs text-text-dim hover:text-red-500">
                   Remove
                 </button>
@@ -194,9 +250,37 @@ export default function useDocumentScanner() {
             ))}
           </div>
         )}
+
+        {editingPageId &&
+          (() => {
+            const page = pages.find((p) => p.id === editingPageId)
+            if (!page) return null
+            return (
+              <PageEditorModal
+                blob={page.blob}
+                onSave={(blob) => updatePageBlob(page.id, blob)}
+                onRetake={() => retakePage(page.id)}
+                onClose={() => setEditingPageId(null)}
+              />
+            )
+          })()}
       </div>
     ),
-    [addPage, onWebFiles, pages, errors, clearErrors, isBuilding, progress, dragIndex, reorder, removePage]
+    [
+      addPage,
+      onWebFiles,
+      pages,
+      errors,
+      clearErrors,
+      isBuilding,
+      progress,
+      dragIndex,
+      reorder,
+      removePage,
+      editingPageId,
+      updatePageBlob,
+      retakePage,
+    ]
   )
 
   const settings = useMemo(
