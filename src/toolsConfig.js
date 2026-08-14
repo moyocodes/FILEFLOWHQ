@@ -8,7 +8,8 @@ import {
   FileType,
   Table2,
   ScanLine,
-  QrCode
+  QrCode,
+  FileOutput
 } from 'lucide-react'
 
 import useImageConverter from './tools/ImageConverter.jsx'
@@ -17,6 +18,7 @@ import useImagesToPdf from './tools/ImagesToPdf.jsx'
 import usePdfToImages from './tools/PdfToImages.jsx'
 import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
 import usePdfToWord from './tools/PdfToWord.jsx'
+import useDocxToPdf from './tools/DocxToPdf.jsx'
 import usePdfToText from './tools/PdfToText.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
 import useDocumentScanner from './tools/DocumentScanner.jsx'
@@ -229,6 +231,41 @@ export const tools = [
       {
         q: 'Is the formatting preserved?',
         a: 'This tool focuses on extracting the text content. Complex layouts may be simplified, but the words come through cleanly.',
+      },
+    ],
+  },
+  {
+    id: 'word-to-pdf',
+    path: '/tools/word-to-pdf',
+    name: 'Word to PDF',
+    tagline: 'Convert .docx to PDF',
+    description: 'Convert a Word (.docx) document into a PDF, preserving text, lists, tables, and images.',
+    icon: FileOutput,
+    component: useDocxToPdf,
+    formats: ['DOCX', 'PDF'],
+    seoTitle: 'Word to PDF — Convert DOCX to PDF Free Online',
+    seoDescription:
+      'Convert Word documents to PDF for free, right in your browser. Preserve text, lists, tables, and images. No uploads, no sign-up, 100% private.',
+    keywords: 'word to pdf, docx to pdf, convert word to pdf, convert docx to pdf online',
+    intro:
+      'Convert a Word (.docx) document into a PDF for free, directly in your browser. Your file never leaves your device — conversion runs locally, so there are no uploads, no servers, and no tracking.',
+    howTo: [
+      'Drop your .docx file into the box above.',
+      'The document is parsed and laid out on PDF pages automatically.',
+      'Download your converted PDF instantly.',
+    ],
+    faq: [
+      {
+        q: 'How do I convert a Word document to PDF for free?',
+        a: 'Upload your .docx file above and download the generated PDF. It is free, with no watermark, and the file is processed locally in your browser.',
+      },
+      {
+        q: 'Is the formatting preserved?',
+        a: 'Text, headings, lists, tables, and images are reconstructed and laid out on standard A4 pages. Complex layouts like columns or precise positioning are approximated.',
+      },
+      {
+        q: 'Is my document uploaded to a server?',
+        a: 'No. FileFlowHQ converts the document entirely inside your browser. Nothing is ever sent to a server, so your file stays private.',
       },
     ],
   },
