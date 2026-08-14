@@ -10,8 +10,11 @@ import { UploadCloud } from 'lucide-react'
  *  - multiple: allow selecting more than one file
  *  - onFiles: (FileList -> File[]) callback fired with the chosen files
  *  - hint: short helper text shown under the main label
+ *  - compact: render a small pill instead of the full drop area — for tools
+ *    where the loaded-file view (preview, controls, etc.) should take the
+ *    space the big dropzone would otherwise occupy once a file is selected
  */
-export default function Dropzone({ accept, multiple = false, onFiles, hint }) {
+export default function Dropzone({ accept, multiple = false, onFiles, hint, compact = false }) {
   const inputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -24,24 +27,60 @@ export default function Dropzone({ accept, multiple = false, onFiles, hint }) {
     [onFiles]
   )
 
+  const sharedProps = {
+    role: 'button',
+    tabIndex: 0,
+    onClick: () => inputRef.current?.click(),
+    onKeyDown: (e) => {
+      if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+    },
+    onDragOver: (e) => {
+      e.preventDefault()
+      setIsDragging(true)
+    },
+    onDragLeave: () => setIsDragging(false),
+    onDrop: (e) => {
+      e.preventDefault()
+      setIsDragging(false)
+      handleFiles(e.dataTransfer.files)
+    },
+  }
+
+  const input = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={accept}
+      multiple={multiple}
+      className="hidden"
+      onChange={(e) => {
+        handleFiles(e.target.files)
+        e.target.value = ''
+      }}
+    />
+  )
+
+  if (compact) {
+    return (
+      <div
+        {...sharedProps}
+        className={[
+          'flex w-full cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-dashed px-4 py-2 text-left transition-colors',
+          isDragging ? 'border-signal bg-signal-dim' : 'border-border-strong bg-panel hover:border-signal hover:bg-signal-dim'
+        ].join(' ')}
+      >
+        <UploadCloud className="h-4 w-4 flex-shrink-0 text-text-dim" strokeWidth={2} />
+        <span className="text-xs text-text-dim">
+          Drop {multiple ? 'files' : 'a different file'} here or click to browse{hint ? ` · ${hint}` : ''}
+        </span>
+        {input}
+      </div>
+    )
+  }
+
   return (
     <motion.div
-      role="button"
-      tabIndex={0}
-      onClick={() => inputRef.current?.click()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
-      }}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setIsDragging(true)
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setIsDragging(false)
-        handleFiles(e.dataTransfer.files)
-      }}
+      {...sharedProps}
       animate={
         prefersReducedMotion
           ? undefined
@@ -60,17 +99,7 @@ export default function Dropzone({ accept, multiple = false, onFiles, hint }) {
           or click to browse — nothing leaves your device{hint ? ` · ${hint}` : ''}
         </p>
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        multiple={multiple}
-        className="hidden"
-        onChange={(e) => {
-          handleFiles(e.target.files)
-          e.target.value = ''
-        }}
-      />
+      {input}
     </motion.div>
   )
 }

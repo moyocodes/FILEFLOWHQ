@@ -7,6 +7,8 @@ import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer } from '../utils/fileHelpers.js'
 import { extractPageLines } from '../utils/pdfTextExtraction.js'
 
+const THUMB_SCALE = 1.3
+
 // Join a line's runs into text. pdf.js often splits a line into one run per
 // word with no space characters in the run text itself (spacing is implied
 // by run position, not glyphs) — joining with '' runs words together, so a
@@ -40,6 +42,7 @@ function linesToSpeechText(lines) {
 export default function usePdfReadAloud() {
   const [file, setFile] = useState(null)
   const [pageTexts, setPageTexts] = useState([]) // string per page, 0-indexed
+  const [pageThumbs, setPageThumbs] = useState([]) // data URL per page, 0-indexed
   const [currentPage, setCurrentPage] = useState(0) // 0-indexed
   const [errors, setErrors] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -48,11 +51,25 @@ export default function usePdfReadAloud() {
   const [voiceURI, setVoiceURI] = useState('')
   const [rate, setRate] = useState(1)
   const [voices, setVoices] = useState([])
+  const [spokenRange, setSpokenRange] = useState(null) // { start, end } char offsets into the current page's text, or null
 
   const utteranceRef = useRef(null)
 
   useEffect(() => {
-    const loadVoices = () => setVoices(window.speechSynthesis.getVoices())
+    const loadVoices = () => {
+      // Only Google's voices are offered — Chromium exposes dozens of
+      // OS-level voices (Samantha, Yuna, Zosia, ...) alongside them, several
+      // of which fail to produce audio or drop onboundary/onend entirely for
+      // certain engines/platforms. Google's voices behave consistently, so
+      // narrowing the list avoids picking a voice known to silently break.
+      const google = window.speechSynthesis.getVoices().filter((v) => /^Google /.test(v.name))
+      setVoices(google)
+      setVoiceURI((prev) => {
+        if (prev && google.some((v) => v.voiceURI === prev)) return prev
+        const defaultVoice = google.find((v) => v.lang?.startsWith('en')) || google[0]
+        return defaultVoice ? defaultVoice.voiceURI : ''
+      })
+    }
     loadVoices()
     window.speechSynthesis.addEventListener('voiceschanged', loadVoices)
     return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices)
@@ -70,6 +87,7 @@ export default function usePdfReadAloud() {
     setStatus('idle')
     setFile(valid[0])
     setPageTexts([])
+    setPageThumbs([])
     setCurrentPage(0)
     setIsLoading(true)
     setLoadProgress(0)
@@ -78,13 +96,24 @@ export default function usePdfReadAloud() {
       const buffer = await readAsArrayBuffer(valid[0])
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
       const texts = []
+      const thumbs = []
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i)
         const lines = await extractPageLines(page)
         texts.push(linesToSpeechText(lines))
+
+        const viewport = page.getViewport({ scale: THUMB_SCALE })
+        const canvas = document.createElement('canvas')
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        const ctx = canvas.getContext('2d')
+        await page.render({ canvasContext: ctx, viewport }).promise
+        thumbs.push(canvas.toDataURL('image/png'))
+
         setLoadProgress((i / pdf.numPages) * 100)
       }
       setPageTexts(texts)
+      setPageThumbs(thumbs)
     } catch (err) {
       setErrors([
         /password/i.test(err.message)
@@ -107,9 +136,27 @@ export default function usePdfReadAloud() {
       const voice = voices.find((v) => v.voiceURI === voiceURI)
       if (voice) utterance.voice = voice
       utterance.rate = rate
-      utterance.onend = () => setStatus('idle')
-      utterance.onerror = () => setStatus('idle')
+      utterance.onend = () => {
+        setStatus('idle')
+        setSpokenRange(null)
+      }
+      utterance.onerror = () => {
+        setStatus('idle')
+        setSpokenRange(null)
+      }
+      // 'word' boundary events give a charIndex/charLength into the utterance
+      // text, which is the same string shown in the transcript panel — used
+      // to highlight the word currently being spoken. Support varies (Safari
+      // fires none, some engines only fire 'sentence'); the panel just shows
+      // no highlight when boundary events don't arrive.
+      utterance.onboundary = (e) => {
+        if (e.name && e.name !== 'word') return
+        const start = e.charIndex
+        const length = e.charLength || text.slice(start).match(/^\S*/)[0].length
+        setSpokenRange({ start, end: start + length })
+      }
       utteranceRef.current = utterance
+      setSpokenRange(null)
       window.speechSynthesis.speak(utterance)
       setStatus('speaking')
     },
@@ -133,6 +180,7 @@ export default function usePdfReadAloud() {
   const stop = useCallback(() => {
     window.speechSynthesis.cancel()
     setStatus('idle')
+    setSpokenRange(null)
   }, [])
 
   const goToPage = useCallback(
@@ -141,6 +189,7 @@ export default function usePdfReadAloud() {
       setCurrentPage(clamped)
       window.speechSynthesis.cancel()
       setStatus('idle')
+      setSpokenRange(null)
     },
     [pageTexts.length]
   )
@@ -149,23 +198,30 @@ export default function usePdfReadAloud() {
 
   const workspace = useMemo(
     () => (
-      <div className="space-y-6">
-        <p className="text-sm text-text-dim">
-          Have a PDF read aloud, page by page, using your browser's built-in text-to-speech. Nothing is
-          uploaded — the PDF is read and spoken entirely on your device.
-        </p>
-
-        <Dropzone accept="application/pdf,.pdf" onFiles={handleFiles} hint="One PDF at a time" />
-        <ErrorBanner messages={errors} onDismiss={clearErrors} />
-
-        {file && (
-          <div className="rounded-card border border-border bg-panel p-4">
-            <p className="truncate text-sm font-medium">{file.name}</p>
-            <p className="text-xs text-text-dim">
-              {pageTexts.length > 0 ? `${pageTexts.length} page${pageTexts.length === 1 ? '' : 's'}` : 'Selected PDF'}
-            </p>
-          </div>
+      <div className="space-y-4">
+        {!file && (
+          <p className="text-sm text-text-dim">
+            Have a PDF read aloud, page by page, using your browser's built-in text-to-speech. Nothing is
+            uploaded — the PDF is read and spoken entirely on your device.
+          </p>
         )}
+
+        {file ? (
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1 rounded-card border border-border bg-panel px-4 py-2.5">
+              <p className="truncate text-sm font-medium">{file.name}</p>
+              <p className="text-xs text-text-dim">
+                {pageTexts.length > 0 ? `${pageTexts.length} page${pageTexts.length === 1 ? '' : 's'}` : 'Selected PDF'}
+              </p>
+            </div>
+            <div className="w-56 flex-shrink-0">
+              <Dropzone accept="application/pdf,.pdf" onFiles={handleFiles} compact />
+            </div>
+          </div>
+        ) : (
+          <Dropzone accept="application/pdf,.pdf" onFiles={handleFiles} hint="One PDF at a time" />
+        )}
+        <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
         {isLoading && <ProgressBar label="Extracting text…" progress={loadProgress} />}
 
@@ -204,19 +260,56 @@ export default function usePdfReadAloud() {
               </button>
             </div>
 
-            <div>
-              <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
-                Page {currentPage + 1} text
-              </p>
-              <pre className="scrollbar-thin max-h-52 overflow-auto whitespace-pre-wrap rounded-card border border-border bg-panel p-4 font-mono text-xs leading-relaxed">
-                {pageTexts[currentPage] || '(No extractable text on this page)'}
-              </pre>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {pageThumbs[currentPage] && (
+                <div>
+                  <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+                    Preview
+                  </p>
+                  <img
+                    src={pageThumbs[currentPage]}
+                    alt={`Page ${currentPage + 1} preview`}
+                    className="max-h-80 w-full rounded-card border border-border object-contain"
+                  />
+                </div>
+              )}
+
+              <div>
+                <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+                  Page {currentPage + 1} text
+                </p>
+                <div className="scrollbar-thin max-h-80 overflow-auto whitespace-pre-wrap rounded-card border border-border bg-panel p-4 font-mono text-xs leading-relaxed">
+                  {pageTexts[currentPage]
+                    ? spokenRange
+                      ? [
+                          pageTexts[currentPage].slice(0, spokenRange.start),
+                          <mark key="spoken" className="rounded-sm bg-signal/30 text-text">
+                            {pageTexts[currentPage].slice(spokenRange.start, spokenRange.end)}
+                          </mark>,
+                          pageTexts[currentPage].slice(spokenRange.end),
+                        ]
+                      : pageTexts[currentPage]
+                    : '(No extractable text on this page)'}
+                </div>
+              </div>
             </div>
           </div>
         )}
       </div>
     ),
-    [handleFiles, clearErrors, errors, file, pageTexts, isLoading, loadProgress, currentPage, goToPage]
+    [
+      handleFiles,
+      clearErrors,
+      errors,
+      file,
+      pageTexts,
+      pageThumbs,
+      isLoading,
+      loadProgress,
+      currentPage,
+      goToPage,
+      spokenRange,
+    ]
   )
 
   const settings = useMemo(

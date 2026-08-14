@@ -1,17 +1,37 @@
+import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { tools } from '../toolsConfig.js'
 import ThemeToggle from './ThemeToggle.jsx'
+
+const COLLAPSE_KEY = 'fileflowhq-rail-collapsed'
 
 /**
  * Left rail: brand, labeled tool list with an animated active-state
  * accent bar (framer-motion layoutId shared-element transition), and a
  * footer caption + theme toggle. ~208px wide on desktop; collapses to a
- * slide-over on small screens (see MobileMenuButton).
+ * slide-over on small screens (see MobileMenuButton), or to a narrow
+ * icon-only toolbar on desktop via the collapse toggle (persisted in
+ * localStorage so the choice survives a reload).
  */
 export default function Rail({ isOpen, onClose }) {
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0')
+    } catch {
+      // Private browsing / storage disabled — collapse state just won't persist.
+    }
+  }, [collapsed])
 
   const goHome = () => {
     onClose?.()
@@ -31,20 +51,25 @@ export default function Rail({ isOpen, onClose }) {
 
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-40 flex w-[208px] flex-shrink-0 flex-col overflow-hidden border-r border-border bg-panel px-3 py-[1.1rem] transition-transform duration-200',
+          'fixed inset-y-0 left-0 z-40 flex flex-shrink-0 flex-col overflow-hidden border-r border-border bg-panel px-3 py-[1.1rem] transition-[transform,width] duration-200',
+          collapsed ? 'md:w-[60px]' : 'md:w-[208px]',
+          'w-[208px]',
           'md:sticky md:top-0 md:h-[100dvh] md:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         ].join(' ')}
       >
-        <div className="mb-7 flex items-center gap-2.5 px-1">
+        <div className={['mb-7 flex items-center gap-2.5 px-1', collapsed ? 'md:justify-center' : ''].join(' ')}>
           <button
             onClick={goHome}
-            className="flex flex-1 items-center gap-2.5 rounded py-0 text-left"
+            className="flex flex-1 items-center gap-2.5 rounded py-0 text-left md:flex-initial"
+            aria-label="FileFlowHQ home"
           >
             <span className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[3px] bg-signal font-mono text-[0.78rem] font-bold text-void">
               F
             </span>
-            <span className="font-display text-[0.92rem] font-semibold tracking-wide text-text">
+            <span
+              className={['font-display text-[0.92rem] font-semibold tracking-wide text-text', collapsed ? 'md:hidden' : ''].join(' ')}
+            >
               FileFlowHQ
             </span>
           </button>
@@ -57,7 +82,12 @@ export default function Rail({ isOpen, onClose }) {
           </button>
         </div>
 
-        <div className="mb-2 px-1 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-text-dim">
+        <div
+          className={[
+            'mb-2 px-1 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-text-dim',
+            collapsed ? 'md:hidden' : ''
+          ].join(' ')}
+        >
           Tools
         </div>
 
@@ -69,9 +99,11 @@ export default function Rail({ isOpen, onClose }) {
                 key={tool.id}
                 to={tool.path}
                 onClick={onClose}
+                title={collapsed ? tool.name : undefined}
                 className={({ isActive }) =>
                   [
                     'relative flex flex-shrink-0 items-center gap-[0.65rem] rounded px-[0.6rem] py-[0.55rem] text-left transition-colors',
+                    collapsed ? 'md:justify-center' : '',
                     isActive
                       ? 'bg-signal-dim text-signal'
                       : 'text-text-dim hover:bg-panel-raised hover:text-text'
@@ -88,9 +120,16 @@ export default function Rail({ isOpen, onClose }) {
                       />
                     )}
                     <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                    <span className="flex-1 truncate text-[0.78rem] font-medium">{tool.name}</span>
+                    <span className={['flex-1 truncate text-[0.78rem] font-medium', collapsed ? 'md:hidden' : ''].join(' ')}>
+                      {tool.name}
+                    </span>
                     {tool.comingSoon && (
-                      <span className="flex-shrink-0 font-mono text-[0.55rem] uppercase tracking-wide text-text-dim">
+                      <span
+                        className={[
+                          'flex-shrink-0 font-mono text-[0.55rem] uppercase tracking-wide text-text-dim',
+                          collapsed ? 'md:hidden' : ''
+                        ].join(' ')}
+                      >
                         Soon
                       </span>
                     )}
@@ -101,8 +140,32 @@ export default function Rail({ isOpen, onClose }) {
           })}
         </nav>
 
-        <div className="mt-3 flex flex-shrink-0 items-center justify-between px-1">
-          <span className="font-mono text-[0.62rem] leading-[1.4] text-text-dim">
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={[
+            'mt-2 hidden flex-shrink-0 items-center gap-[0.65rem] rounded px-[0.6rem] py-[0.55rem] text-left text-text-dim transition-colors hover:bg-panel-raised hover:text-text md:flex',
+            collapsed ? 'md:justify-center' : ''
+          ].join(' ')}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
+          ) : (
+            <>
+              <PanelLeftClose className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
+              <span className="flex-1 truncate text-[0.78rem] font-medium">Collapse</span>
+            </>
+          )}
+        </button>
+
+        <div
+          className={[
+            'mt-3 flex flex-shrink-0 items-center justify-between px-1',
+            collapsed ? 'md:flex-col md:gap-2' : ''
+          ].join(' ')}
+        >
+          <span className={['font-mono text-[0.62rem] leading-[1.4] text-text-dim', collapsed ? 'md:hidden' : ''].join(' ')}>
             100% local
             <br />
             no uploads
