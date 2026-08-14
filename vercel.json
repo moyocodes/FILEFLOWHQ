@@ -17,6 +17,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/tools/:tool", "destination": "/tools/:tool/index.html" },
     { "source": "/((?!assets/|tools/).*)", "destination": "/index.html" }
   ]
 }
