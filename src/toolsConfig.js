@@ -212,27 +212,30 @@ export const tools = [
     description: 'Convert a PDF into an editable Word document — text styling, tables, lists, links, and images.',
     icon: FileText,
     component: usePdfToWord,
-    comingSoon: true,
     formats: ['PDF', 'DOCX'],
     seoTitle: 'PDF to Word — Convert PDF to Editable DOCX Free Online',
     seoDescription:
-      'Convert PDF text into an editable Word (.docx) document for free, right in your browser. No uploads, no sign-up. Coming soon to FileFlowHQ.',
+      'Convert PDF text into an editable Word (.docx) document for free, right in your browser. No uploads, no sign-up.',
     keywords: 'pdf to word, pdf to docx, convert pdf to word, pdf to editable document',
     intro:
-      'Extract the text from a PDF into an editable Word document for free. This tool runs locally in your browser so your documents stay private.',
+      'Convert a PDF into an editable Word document for free. Files up to 4.5 MB are securely converted using Adobe PDF Services and deleted from Adobe\'s servers after conversion.',
     howTo: [
       'Drop your PDF into the box above.',
-      'The text is extracted from every page.',
+      'The file is converted using Adobe PDF Services.',
       'Download an editable .docx Word file.',
     ],
     faq: [
       {
         q: 'How do I convert a PDF to an editable Word document?',
-        a: 'Upload your PDF and download a .docx file containing the extracted text, ready to edit in Word or Google Docs.',
+        a: 'Upload your PDF and download a .docx file containing the extracted text, tables, and layout, ready to edit in Word or Google Docs.',
       },
       {
         q: 'Is the formatting preserved?',
-        a: 'This tool focuses on extracting the text content. Complex layouts may be simplified, but the words come through cleanly.',
+        a: 'Text styling, tables, and layout are reconstructed automatically. Complex or scanned layouts may be simplified.',
+      },
+      {
+        q: 'Is my file uploaded anywhere?',
+        a: "Yes — unlike most tools on FileFlowHQ, this one uploads your PDF to Adobe's PDF Services API to perform the conversion, then the file is deleted from Adobe's servers. Files are limited to 4.5 MB.",
       },
     ],
   },
