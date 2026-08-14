@@ -4,6 +4,7 @@ import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
+import PdfThumbnail from '../components/PdfThumbnail.jsx'
 import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer, canvasToBlob, downloadBlob, stripExtension, uid } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
@@ -92,10 +93,13 @@ export default function usePdfToImages() {
       <Dropzone accept="application/pdf,.pdf" onFiles={handleFiles} hint="One PDF at a time" />
       <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
-      {file && (
-        <div className="rounded-card border border-border bg-panel p-4">
-          <p className="truncate text-sm font-medium">{file.name}</p>
-          <p className="text-xs text-text-dim">Selected PDF</p>
+      {file && pages.length === 0 && (
+        <div className="flex items-center gap-3 rounded-card border border-border bg-panel p-4">
+          <PdfThumbnail file={file} className="h-16 w-12 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{file.name}</p>
+            <p className="text-xs text-text-dim">Selected PDF</p>
+          </div>
         </div>
       )}
 

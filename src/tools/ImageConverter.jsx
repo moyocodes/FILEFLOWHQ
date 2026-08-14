@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
@@ -10,8 +10,25 @@ import { useEmailGate } from '../context/EmailGateContext.jsx'
 const FORMATS = [
   { id: 'png', label: 'PNG', mime: 'image/png' },
   { id: 'jpg', label: 'JPEG', mime: 'image/jpeg' },
-  { id: 'webp', label: 'WebP', mime: 'image/webp' }
+  { id: 'webp', label: 'WebP', mime: 'image/webp' },
+  { id: 'avif', label: 'AVIF', mime: 'image/avif' }
 ]
+
+// AVIF canvas encoding only ships in Chromium browsers today (not Safari/
+// Firefox) — probe once so the option can be disabled with an explanation
+// rather than silently producing a PNG/empty blob on unsupported browsers.
+let avifSupportPromise = null
+function checkAvifSupport() {
+  if (!avifSupportPromise) {
+    avifSupportPromise = new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1
+      canvas.height = 1
+      canvas.toBlob((blob) => resolve(!!blob && blob.type === 'image/avif'), 'image/avif')
+    })
+  }
+  return avifSupportPromise
+}
 
 /**
  * Tool "hook": owns all state/handlers for Image Converter and returns
@@ -32,6 +49,11 @@ export default function useImageConverter() {
   const [errors, setErrors] = useState([])
   const [isConverting, setIsConverting] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [avifSupported, setAvifSupported] = useState(true)
+
+  useEffect(() => {
+    checkAvifSupport().then(setAvifSupported)
+  }, [])
 
   const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, {
@@ -71,6 +93,10 @@ export default function useImageConverter() {
 
   const convertAll = useCallback(async () => {
     if (items.length === 0) return
+    if (targetFormat === 'avif' && !(await checkAvifSupport())) {
+      setErrors(['AVIF export isn’t supported in this browser. Try Chrome or Edge, or pick a different format.'])
+      return
+    }
     setIsConverting(true)
     setErrors([])
     const format = FORMATS.find((f) => f.id === targetFormat)
@@ -149,13 +175,17 @@ export default function useImageConverter() {
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
-  const anyDone = items.some((i) => i.status === 'done')
+  const doneCount = items.filter((i) => i.status === 'done').length
+  const sameFormatExt = targetFormat === 'jpg' ? ['jpg', 'jpeg'] : [targetFormat]
+  const allAlreadyTarget =
+    items.length > 0 &&
+    items.every((i) => sameFormatExt.includes(i.file.name.split('.').pop()?.toLowerCase()))
 
   const workspace = useMemo(
     () => (
       <div className="space-y-6">
         <p className="text-sm text-text-dim">
-          Convert PNG, JPG, WebP, GIF, BMP, and TIFF images to PNG, JPG, or WebP.
+          Convert PNG, JPG, WebP, GIF, BMP, and TIFF images to PNG, JPG, WebP, or AVIF.
           Multi-page TIFFs are split into one image per page. Everything happens on
           your device — no upload.
         </p>
@@ -163,6 +193,13 @@ export default function useImageConverter() {
         <Dropzone accept="image/*,.tif,.tiff" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP, TIFF" />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
+
+        {allAlreadyTarget && !isConverting && doneCount === 0 && (
+          <p className="text-xs text-text-dim">
+            Already {FORMATS.find((f) => f.id === targetFormat)?.label} — converting will just re-encode (useful
+            for changing quality/size), or pick a different format above.
+          </p>
+        )}
 
         {isConverting && <ProgressBar label="Converting images…" progress={progress} />}
 
@@ -201,7 +238,7 @@ export default function useImageConverter() {
               })}
             </div>
 
-            {anyDone && (
+            {doneCount > 1 && (
               <button onClick={downloadAll} className="text-sm font-medium text-signal hover:underline">
                 Download all converted files
               </button>
@@ -210,7 +247,21 @@ export default function useImageConverter() {
         )}
       </div>
     ),
-    [items, errors, isConverting, progress, anyDone, handleFiles, removeItem, renameItem, downloadOne, downloadAll, clearErrors]
+    [
+      items,
+      errors,
+      isConverting,
+      progress,
+      doneCount,
+      allAlreadyTarget,
+      targetFormat,
+      handleFiles,
+      removeItem,
+      renameItem,
+      downloadOne,
+      downloadAll,
+      clearErrors
+    ]
   )
 
   const settings = useMemo(
@@ -221,18 +272,27 @@ export default function useImageConverter() {
             Convert to
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {FORMATS.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setTargetFormat(f.id)}
-                className={[
-                  'rounded px-3 py-1.5 text-sm font-medium transition-colors',
-                  targetFormat === f.id ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim hover:text-text'
-                ].join(' ')}
-              >
-                {f.label}
-              </button>
-            ))}
+            {FORMATS.map((f) => {
+              const disabled = f.id === 'avif' && !avifSupported
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setTargetFormat(f.id)}
+                  disabled={disabled}
+                  title={disabled ? 'AVIF export needs Chrome or Edge' : undefined}
+                  className={[
+                    'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                    disabled
+                      ? 'cursor-not-allowed bg-panel-raised text-text-dim opacity-40'
+                      : targetFormat === f.id
+                        ? 'bg-signal text-void'
+                        : 'bg-panel-raised text-text-dim hover:text-text'
+                  ].join(' ')}
+                >
+                  {f.label}
+                </button>
+              )
+            })}
           </div>
         </div>
 

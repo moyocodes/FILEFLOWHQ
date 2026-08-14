@@ -4,6 +4,7 @@ import { GripVertical } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
+import PdfThumbnail from '../components/PdfThumbnail.jsx'
 import { validateFiles, readAsArrayBuffer, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
@@ -143,6 +144,7 @@ function useMergePanel() {
               <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-medium text-signal">
                 {index + 1}
               </span>
+              <PdfThumbnail file={item.file} className="h-10 w-8 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{item.file.name}</p>
                 <p className="text-xs text-text-dim">{formatBytes(item.file.size)}</p>
@@ -270,9 +272,12 @@ function useSplitPanel() {
       {isWorking && <ProgressBar label="Extracting pages…" />}
 
       {file && pageCount && (
-        <div className="rounded-card border border-border bg-panel p-4">
-          <p className="truncate text-sm font-medium">{file.name}</p>
-          <p className="text-xs text-text-dim">{pageCount} pages</p>
+        <div className="flex items-center gap-3 rounded-card border border-border bg-panel p-4">
+          <PdfThumbnail file={file} className="h-16 w-12 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{file.name}</p>
+            <p className="text-xs text-text-dim">{pageCount} pages</p>
+          </div>
         </div>
       )}
     </>

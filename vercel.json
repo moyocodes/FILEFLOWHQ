@@ -9,6 +9,11 @@
       "has": [{ "type": "host", "value": "www.fileflowhq.com" }],
       "destination": "https://fileflowhq.com/$1",
       "permanent": true
+    },
+    {
+      "source": "/tools/pdf-to-text",
+      "destination": "/tools/pdf-to-word",
+      "permanent": true
     }
   ],
   "rewrites": [

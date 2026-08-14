@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import { useToast } from './ToastContext.jsx'
 
 /**
  * Gates every file download behind a one-time-per-session email prompt.
@@ -16,6 +17,7 @@ import { createContext, useContext, useState, useCallback } from 'react'
 const EmailGateContext = createContext(null)
 
 export function EmailGateProvider({ children }) {
+  const { showToast } = useToast()
   const [email, setEmail] = useState(null)
   const [pending, setPending] = useState(null) // { perform, filename, toolName } awaiting email submission
 
@@ -23,11 +25,12 @@ export function EmailGateProvider({ children }) {
     (perform, filename, toolName) => {
       if (email) {
         perform()
+        showToast(`${filename} downloaded`)
         return
       }
       setPending({ perform, filename, toolName })
     },
-    [email]
+    [email, showToast]
   )
 
   const submitEmail = useCallback(
@@ -35,6 +38,7 @@ export function EmailGateProvider({ children }) {
       setEmail(submittedEmail)
       if (pending) {
         pending.perform()
+        showToast(`${pending.filename} downloaded`)
         fetch('/api/send-confirmation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -45,7 +49,7 @@ export function EmailGateProvider({ children }) {
         setPending(null)
       }
     },
-    [pending]
+    [pending, showToast]
   )
 
   const cancelGate = useCallback(() => setPending(null), [])

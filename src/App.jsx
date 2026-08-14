@@ -8,7 +8,10 @@ import ToolPage from './pages/ToolPage.jsx'
 import { tools } from './toolsConfig.js'
 import { SettingsPanelProvider, useSettingsPanel } from './context/SettingsPanelContext.jsx'
 import { EmailGateProvider } from './context/EmailGateContext.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
 import EmailGateModal from './components/EmailGateModal.jsx'
+import ToastStack from './components/ToastStack.jsx'
+import ContactChat from './components/ContactChat.jsx'
 
 function activeToolFromPath(pathname) {
   return tools.find((t) => t.path === pathname) || null
@@ -99,6 +102,8 @@ function Shell() {
 
       <SettingsPane activeTool={activeTool} />
       <EmailGateModal />
+      <ToastStack />
+      <ContactChat />
     </div>
   )
 }
@@ -106,9 +111,11 @@ function Shell() {
 export default function App() {
   return (
     <SettingsPanelProvider>
-      <EmailGateProvider>
-        <Shell />
-      </EmailGateProvider>
+      <ToastProvider>
+        <EmailGateProvider>
+          <Shell />
+        </EmailGateProvider>
+      </ToastProvider>
     </SettingsPanelProvider>
   )
 }

@@ -13,8 +13,17 @@ import { UploadCloud } from 'lucide-react'
  *  - compact: render a small pill instead of the full drop area — for tools
  *    where the loaded-file view (preview, controls, etc.) should take the
  *    space the big dropzone would otherwise occupy once a file is selected
+ *  - privacyNote: overrides the default "nothing leaves your device" claim —
+ *    for the rare tool (e.g. PDF to Word) that uploads the file to convert it
  */
-export default function Dropzone({ accept, multiple = false, onFiles, hint, compact = false }) {
+export default function Dropzone({
+  accept,
+  multiple = false,
+  onFiles,
+  hint,
+  compact = false,
+  privacyNote = 'nothing leaves your device',
+}) {
   const inputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -96,7 +105,7 @@ export default function Dropzone({ accept, multiple = false, onFiles, hint, comp
       <div>
         <p className="text-[0.92rem] font-medium">Drop {multiple ? 'files' : 'a file'} here</p>
         <p className="mt-1 text-[0.76rem] text-text-dim">
-          or click to browse — nothing leaves your device{hint ? ` · ${hint}` : ''}
+          or click to browse — {privacyNote}{hint ? ` · ${hint}` : ''}
         </p>
       </div>
       {input}

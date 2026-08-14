@@ -5,7 +5,6 @@ import {
   Images,
   Combine,
   FileText,
-  FileType,
   Table2,
   ScanLine,
   QrCode,
@@ -20,7 +19,6 @@ import usePdfToImages from './tools/PdfToImages.jsx'
 import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
 import usePdfToWord from './tools/PdfToWord.jsx'
 import useDocxToPdf from './tools/DocxToPdf.jsx'
-import usePdfToText from './tools/PdfToText.jsx'
 import usePdfReadAloud from './tools/PdfReadAloud.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
 import useDocumentScanner from './tools/DocumentScanner.jsx'
@@ -208,34 +206,40 @@ export const tools = [
     id: 'pdf-to-word',
     path: '/tools/pdf-to-word',
     name: 'PDF to Word',
-    tagline: 'Editable .docx with tables, lists & links',
-    description: 'Convert a PDF into an editable Word document — text styling, tables, lists, links, and images.',
+    tagline: 'Editable .docx, or plain .txt extraction',
+    description:
+      'Convert a PDF into an editable Word document — text styling, tables, lists, links, and images — or pull out plain text.',
     icon: FileText,
     component: usePdfToWord,
-    formats: ['PDF', 'DOCX'],
-    seoTitle: 'PDF to Word — Convert PDF to Editable DOCX Free Online',
+    formats: ['PDF', 'DOCX', 'TXT'],
+    seoTitle: 'PDF to Word — Convert PDF to Editable DOCX or Plain Text Free',
     seoDescription:
-      'Convert PDF text into an editable Word (.docx) document for free, right in your browser. No uploads, no sign-up.',
-    keywords: 'pdf to word, pdf to docx, convert pdf to word, pdf to editable document',
+      'Convert a PDF into an editable Word (.docx) document, or extract plain text as a .txt file, for free. No sign-up.',
+    keywords:
+      'pdf to word, pdf to docx, convert pdf to word, pdf to editable document, pdf to text, extract text from pdf, pdf to txt',
     intro:
-      'Convert a PDF into an editable Word document for free. Files up to 4.5 MB are securely converted using Adobe PDF Services and deleted from Adobe\'s servers after conversion.',
+      'Convert a PDF into an editable Word document, or extract its plain text as a .txt file, for free. Word conversion (up to 4.5 MB) is done securely via Adobe PDF Services and deleted from Adobe\'s servers after conversion; plain-text extraction runs entirely on your device.',
     howTo: [
       'Drop your PDF into the box above.',
-      'The file is converted using Adobe PDF Services.',
-      'Download an editable .docx Word file.',
+      'Choose Word (.docx) or Plain text (.txt) in the panel on the right.',
+      'Download the converted file.',
     ],
     faq: [
       {
         q: 'How do I convert a PDF to an editable Word document?',
-        a: 'Upload your PDF and download a .docx file containing the extracted text, tables, and layout, ready to edit in Word or Google Docs.',
+        a: 'Upload your PDF, choose "Word (.docx)", and download a file containing the extracted text, tables, and layout, ready to edit in Word or Google Docs.',
+      },
+      {
+        q: 'How do I just extract the text from a PDF?',
+        a: 'Choose "Plain text (.txt)" instead of Word — it pulls the words out in reading order, with no formatting, and runs entirely in your browser.',
       },
       {
         q: 'Is the formatting preserved?',
-        a: 'Text styling, tables, and layout are reconstructed automatically. Complex or scanned layouts may be simplified.',
+        a: 'For Word output, text styling, tables, and layout are reconstructed automatically (complex or scanned layouts may be simplified). Plain text output has no formatting at all — just the words.',
       },
       {
         q: 'Is my file uploaded anywhere?',
-        a: "Yes — unlike most tools on FileFlowHQ, this one uploads your PDF to Adobe's PDF Services API to perform the conversion, then the file is deleted from Adobe's servers. Files are limited to 4.5 MB.",
+        a: "Only for Word output — unlike most tools on FileFlowHQ, that mode uploads your PDF to Adobe's PDF Services API to perform the conversion, then the file is deleted from Adobe's servers (limited to 4.5 MB). Plain-text output never leaves your device.",
       },
     ],
   },
@@ -271,37 +275,6 @@ export const tools = [
       {
         q: 'Is my document uploaded to a server?',
         a: 'No. FileFlowHQ converts the document entirely inside your browser. Nothing is ever sent to a server, so your file stays private.',
-      },
-    ],
-  },
-  {
-    id: 'pdf-to-text',
-    path: '/tools/pdf-to-text',
-    name: 'PDF to Text',
-    tagline: 'Plain text extraction, reading order preserved',
-    description: 'Pull the plain text out of a PDF, in reading order, as a .txt file — no formatting, no surprises.',
-    icon: FileType,
-    component: usePdfToText,
-    formats: ['PDF', 'TXT'],
-    seoTitle: 'PDF to Text — Extract Text from PDF Free Online',
-    seoDescription:
-      'Extract plain text from any PDF for free, in the correct reading order, as a .txt file. Private and browser-based — no uploads or sign-up.',
-    keywords: 'pdf to text, extract text from pdf, pdf to txt, copy text from pdf',
-    intro:
-      'Pull the plain text out of a PDF in reading order and download it as a .txt file — for free and entirely in your browser. Ideal for copying content or feeding text into other tools.',
-    howTo: [
-      'Drop your PDF into the box above.',
-      'The text is extracted in natural reading order.',
-      'Download it as a clean .txt file.',
-    ],
-    faq: [
-      {
-        q: 'How do I extract text from a PDF for free?',
-        a: 'Upload your PDF above and download a .txt file with all the text in reading order. It is free and processed locally in your browser.',
-      },
-      {
-        q: 'Does it work on scanned PDFs?',
-        a: 'This tool extracts existing text layers. Scanned image-only PDFs without a text layer would need OCR, which is not yet supported.',
       },
     ],
   },

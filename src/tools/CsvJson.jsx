@@ -127,7 +127,7 @@ export default function useCsvJson() {
       try {
         const text = await readAsText(valid[0])
         setInput(text)
-        setOutputName(stripExtension(valid[0].name))
+        setOutputName(`${stripExtension(valid[0].name)}-converted`)
         runConvert(text)
       } catch (err) {
         setErrors((prev) => [...prev, err.message])

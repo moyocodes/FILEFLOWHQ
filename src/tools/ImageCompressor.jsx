@@ -267,7 +267,8 @@ export default function useImageCompressor() {
         <span>
           Keep original format
           <span className="mt-0.5 block text-xs font-normal text-text-dim">
-            PNG can't be size-targeted losslessly — PNGs always convert to JPEG to hit a target.
+            JPEGs and WebPs stay as-is. PNGs are always converted to JPEG, since PNG has no quality setting to shrink
+            it with.
           </span>
         </span>
       </label>

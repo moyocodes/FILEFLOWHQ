@@ -3,6 +3,7 @@ import { Info } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
+import ResultCard from '../components/ResultCard.jsx'
 import { validateFiles, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
 import { convertDocxToPdf } from '../utils/docxToPdf.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
@@ -16,13 +17,15 @@ export default function useDocxToPdf() {
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState(null)
 
   const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, { accept: ACCEPT })
     setErrors(fileErrors)
     if (valid.length > 0) {
       setFile(valid[0])
-      setOutputName(`${stripExtension(valid[0].name)}.pdf`)
+      setOutputName(`${stripExtension(valid[0].name)}-converted.pdf`)
+      setResult(null)
     }
   }, [])
 
@@ -30,12 +33,14 @@ export default function useDocxToPdf() {
     if (!file) return
     setIsWorking(true)
     setErrors([])
+    setResult(null)
     setProgress(0)
     try {
       const blob = await convertDocxToPdf(file, (f) => setProgress(f * 100))
       const trimmedName = outputName.trim() || stripExtension(file.name)
       const resultName = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
       gatedDownload(() => downloadBlob(blob, resultName), resultName, 'Word to PDF')
+      setResult({ name: resultName, size: blob.size })
     } catch (err) {
       setErrors([err.message || `Couldn't convert "${file.name}". It may be corrupted or not a valid .docx file.`])
     }
@@ -63,7 +68,7 @@ export default function useDocxToPdf() {
       <Dropzone accept=".docx" onFiles={handleFiles} hint="One .docx file at a time" />
       <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
-      {file && (
+      {file && !result && (
         <div className="rounded-card border border-border bg-panel p-4">
           <p className="truncate text-sm font-medium">{file.name}</p>
           <p className="text-xs text-text-dim">Selected Word document</p>
@@ -71,9 +76,13 @@ export default function useDocxToPdf() {
       )}
 
       {isWorking && <ProgressBar label="Building PDF…" progress={progress} />}
+
+      {result && file && (
+        <ResultCard beforeName={file.name} beforeSize={file.size} afterName={result.name} afterSize={result.size} />
+      )}
     </div>
     ),
-    [handleFiles, clearErrors, errors, file, isWorking, progress]
+    [handleFiles, clearErrors, errors, file, isWorking, progress, result]
   )
 
   const settings = useMemo(

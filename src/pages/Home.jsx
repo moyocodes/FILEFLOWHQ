@@ -130,15 +130,16 @@ export default function Home() {
               merge or split PDFs
             </Link>
             ,{' '}
-            <Link to="/tools/pdf-to-text" className="text-signal hover:underline">
+            <Link to="/tools/pdf-to-word" className="text-signal hover:underline">
               extract text from a PDF
             </Link>
             , and{' '}
             <Link to="/tools/csv-json" className="text-signal hover:underline">
               convert CSV to JSON and back
             </Link>
-            . Every conversion happens locally on your device — your files are never
-            uploaded to a server, so your data stays completely private.
+            . Almost every conversion happens locally on your device — your files aren't
+            uploaded to a server, so your data stays private. (The one exception is Word
+            conversion in PDF to Word, which uses a secure cloud API.)
           </p>
           <h3 className="mb-2 font-display text-[0.95rem] font-semibold tracking-wide text-text">
             Why FileFlowHQ?
