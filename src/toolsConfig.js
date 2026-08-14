@@ -9,7 +9,8 @@ import {
   Table2,
   ScanLine,
   QrCode,
-  FileOutput
+  FileOutput,
+  Volume2
 } from 'lucide-react'
 
 import useImageConverter from './tools/ImageConverter.jsx'
@@ -20,6 +21,7 @@ import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
 import usePdfToWord from './tools/PdfToWord.jsx'
 import useDocxToPdf from './tools/DocxToPdf.jsx'
 import usePdfToText from './tools/PdfToText.jsx'
+import usePdfReadAloud from './tools/PdfReadAloud.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
 import useDocumentScanner from './tools/DocumentScanner.jsx'
 import useQrScanner from './tools/QrScanner.jsx'
@@ -297,6 +299,45 @@ export const tools = [
       {
         q: 'Does it work on scanned PDFs?',
         a: 'This tool extracts existing text layers. Scanned image-only PDFs without a text layer would need OCR, which is not yet supported.',
+      },
+    ],
+  },
+  {
+    id: 'pdf-read-aloud',
+    path: '/tools/pdf-read-aloud',
+    name: 'PDF Read Aloud',
+    tagline: 'Text-to-speech, page by page',
+    description: 'Have a PDF read aloud page by page using your browser\'s text-to-speech, with voice and speed controls.',
+    icon: Volume2,
+    component: usePdfReadAloud,
+    formats: ['PDF', 'AUDIO'],
+    seoTitle: 'PDF Read Aloud — Text-to-Speech PDF Reader Free Online',
+    seoDescription:
+      'Listen to any PDF read aloud, page by page, for free. Pick a page, choose a voice and speed, and play. Runs entirely in your browser — no uploads.',
+    keywords: 'pdf read aloud, pdf text to speech, pdf reader, listen to pdf, pdf audio reader',
+    intro:
+      'Have any PDF read aloud for free, right in your browser. Jump to any page, pick a voice and reading speed, and press play — your browser\'s built-in speech engine does the rest. Nothing is uploaded; the PDF is read and spoken entirely on your device.',
+    howTo: [
+      'Drop your PDF into the box above — its text is extracted page by page.',
+      'Use the page controls to jump to the page you want read.',
+      'Pick a voice and speed in the settings, then press play.',
+    ],
+    faq: [
+      {
+        q: 'How do I have a PDF read aloud for free?',
+        a: 'Upload your PDF above, choose the page you want, and press play. Your browser\'s built-in text-to-speech reads it aloud — no app or sign-up needed.',
+      },
+      {
+        q: 'Can I choose a different voice or reading speed?',
+        a: 'Yes. The available voices depend on your browser and operating system, and you can adjust the speed from 0.5x to 2x.',
+      },
+      {
+        q: 'Does it work on scanned PDFs?',
+        a: 'Only PDFs with an existing text layer can be read aloud. Scanned image-only pages have no extractable text.',
+      },
+      {
+        q: 'Is my PDF uploaded anywhere?',
+        a: 'No. Text extraction and speech both happen locally in your browser, so your document stays private.',
       },
     ],
   },
