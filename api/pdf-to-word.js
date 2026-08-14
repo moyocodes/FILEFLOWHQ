@@ -10,6 +10,7 @@ import {
   ServiceUsageError,
   ServiceApiError,
 } from '@adobe/pdfservices-node-sdk'
+import { Readable } from 'node:stream'
 
 export const config = {
   api: {
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
     const pdfServices = new PDFServices({ credentials })
 
     const inputAsset = await pdfServices.upload({
-      readStream: pdfBuffer,
+      readStream: Readable.from(pdfBuffer),
       mimeType: MimeType.PDF,
     })
 
