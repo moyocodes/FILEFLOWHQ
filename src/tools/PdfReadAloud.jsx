@@ -57,16 +57,19 @@ export default function usePdfReadAloud() {
 
   useEffect(() => {
     const loadVoices = () => {
-      // Only Google's voices are offered — Chromium exposes dozens of
-      // OS-level voices (Samantha, Yuna, Zosia, ...) alongside them, several
-      // of which fail to produce audio or drop onboundary/onend entirely for
-      // certain engines/platforms. Google's voices behave consistently, so
-      // narrowing the list avoids picking a voice known to silently break.
-      const google = window.speechSynthesis.getVoices().filter((v) => /^Google /.test(v.name))
-      setVoices(google)
+      // Chrome's "Google …" voices are network-backed and, on many
+      // platforms, never fire onboundary word events at all — which is why
+      // the read-along highlight can silently stop working. Local/OS voices
+      // (Samantha, Daniel, ...) are the ones that reliably report word
+      // boundaries, so they're offered first; Google voices are still listed
+      // as a fallback for environments where local voices aren't available.
+      const all = window.speechSynthesis.getVoices()
+      const local = all.filter((v) => !/^Google /.test(v.name))
+      const list = local.length > 0 ? local : all
+      setVoices(list)
       setVoiceURI((prev) => {
-        if (prev && google.some((v) => v.voiceURI === prev)) return prev
-        const defaultVoice = google.find((v) => v.lang?.startsWith('en')) || google[0]
+        if (prev && list.some((v) => v.voiceURI === prev)) return prev
+        const defaultVoice = list.find((v) => v.lang?.startsWith('en')) || list[0]
         return defaultVoice ? defaultVoice.voiceURI : ''
       })
     }
