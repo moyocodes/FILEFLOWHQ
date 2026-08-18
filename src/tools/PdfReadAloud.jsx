@@ -69,7 +69,14 @@ export default function usePdfReadAloud() {
       setVoices(list)
       setVoiceURI((prev) => {
         if (prev && list.some((v) => v.voiceURI === prev)) return prev
-        const defaultVoice = list.find((v) => v.lang?.startsWith('en')) || list[0]
+        // Prefer a Nigerian-English voice (en-NG) when the OS ships one, then
+        // any other English voice, so English text defaults to a clearly
+        // spoken English voice instead of whatever the platform lists first.
+        const defaultVoice =
+          list.find((v) => v.lang?.toLowerCase() === 'en-ng') ||
+          list.find((v) => /nigeria/i.test(v.name)) ||
+          list.find((v) => v.lang?.startsWith('en')) ||
+          list[0]
         return defaultVoice ? defaultVoice.voiceURI : ''
       })
     }
