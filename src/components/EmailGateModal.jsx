@@ -75,8 +75,8 @@ export default function EmailGateModal() {
 
                   <h2 className="font-display mb-2 text-2xl tracking-wide">One more step</h2>
                   <p className="mb-7 max-w-sm text-sm leading-relaxed text-text-dim">
-                    Enter your email and we'll send a confirmation once your file's ready. Asked once per visit —
-                    every download after this goes straight through.
+                    Enter your email and we'll send a confirmation once your file's ready. Asked once — every
+                    download after this, on this device, goes straight through.
                   </p>
 
                   <form onSubmit={handleSubmit} className="space-y-4">

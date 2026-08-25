@@ -26,7 +26,7 @@ export default function EmailPolicyModal({ onClose }) {
         </div>
         <div className="space-y-2.5 text-sm leading-relaxed text-text-dim">
           <p>Your email is used for exactly one thing: sending a one-time confirmation that your file was converted.</p>
-          <p>We don't sell it, spam it, or use it for marketing. It isn't sent anywhere until you download a file, and it's asked once per visit.</p>
+          <p>We don't sell it, spam it, or use it for marketing. It isn't sent anywhere until you download a file, and it's only asked once — we remember it on this device so future downloads go straight through.</p>
           <p>Your actual files never leave your browser — conversions happen entirely on your device.</p>
         </div>
         <button
