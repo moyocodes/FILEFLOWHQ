@@ -20,6 +20,16 @@ function writeStoredEmail(value) {
   }
 }
 
+function sendConfirmation(email, fileName, toolName) {
+  fetch('/api/send-confirmation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, fileName, toolName }),
+  }).catch(() => {
+    // Confirmation email is best-effort; the download already succeeded.
+  })
+}
+
 /**
  * Gates every file download behind a one-time email prompt, remembered in
  * localStorage so returning visitors are never asked again on this device.
@@ -31,9 +41,10 @@ function writeStoredEmail(value) {
  * call time rather than read from "current route" at submit time, since the
  * user could navigate away before submitting the email.
  * The first-ever call opens a modal; once the user submits a valid email,
- * it's saved to localStorage, `perform` runs, a confirmation is sent
- * (best-effort), and every gatedDownload call after that — this visit and
- * every future one on this device — runs immediately.
+ * it's saved to localStorage and every gatedDownload call after that — this
+ * visit and every future one on this device — runs immediately with no
+ * modal. A confirmation email is sent for every download, not just the
+ * first, since that's the point of asking for the address.
  */
 const EmailGateContext = createContext(null)
 
@@ -47,6 +58,7 @@ export function EmailGateProvider({ children }) {
       if (email) {
         perform()
         showToast(`${filename} downloaded`)
+        sendConfirmation(email, filename, toolName)
         return
       }
       setPending({ perform, filename, toolName })
@@ -61,13 +73,7 @@ export function EmailGateProvider({ children }) {
       if (pending) {
         pending.perform()
         showToast(`${pending.filename} downloaded`)
-        fetch('/api/send-confirmation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: submittedEmail, fileName: pending.filename, toolName: pending.toolName }),
-        }).catch(() => {
-          // Confirmation email is best-effort; the download already succeeded.
-        })
+        sendConfirmation(submittedEmail, pending.filename, pending.toolName)
         setPending(null)
       }
     },
