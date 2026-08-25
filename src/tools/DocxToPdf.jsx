@@ -40,12 +40,17 @@ export default function useDocxToPdf() {
       const trimmedName = outputName.trim() || stripExtension(file.name)
       const resultName = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
       gatedDownload(() => downloadBlob(blob, resultName), resultName, 'Word to PDF')
-      setResult({ name: resultName, size: blob.size })
+      setResult({ name: resultName, size: blob.size, blob })
     } catch (err) {
       setErrors([err.message || `Couldn't convert "${file.name}". It may be corrupted or not a valid .docx file.`])
     }
     setIsWorking(false)
   }, [file, outputName, gatedDownload])
+
+  const downloadAgain = useCallback(() => {
+    if (!result) return
+    gatedDownload(() => downloadBlob(result.blob, result.name), result.name, 'Word to PDF')
+  }, [result, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -102,15 +107,15 @@ export default function useDocxToPdf() {
       )}
 
       <button
-        onClick={convert}
+        onClick={result ? downloadAgain : convert}
         disabled={isWorking || !file}
         className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Convert to .pdf
+        {result ? 'Download again' : 'Convert to .pdf'}
       </button>
     </>
     ),
-    [convert, isWorking, file, outputName]
+    [convert, isWorking, file, outputName, result, downloadAgain]
   )
 
   return { workspace, settings }

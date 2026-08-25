@@ -219,13 +219,15 @@ export default function useImageCompressor() {
   }, [items, keepFormat, targetBytes, targetLabel])
 
   const anyDone = items.some((i) => i.status === 'done')
+  const doneCount = items.filter((i) => i.status === 'done').length
+  const allDone = items.length > 0 && doneCount === items.length
   const downloadAll = useCallback(() => {
     const ready = items.filter((i) => i.resultBlob)
     if (ready.length === 0) return
     gatedDownload(
       () => ready.forEach((i) => downloadBlob(i.resultBlob, i.resultName)),
       ready.length === 1 ? ready[0].resultName : `${ready.length} files`,
-      'Image Compressor'
+      'Image & PDF Compressor'
     )
   }, [items, gatedDownload])
   const clearErrors = useCallback(() => setErrors([]), [])
@@ -267,7 +269,7 @@ export default function useImageCompressor() {
                           gatedDownload(
                             () => downloadBlob(item.resultBlob, item.resultName),
                             item.resultName,
-                            'Image Compressor'
+                            'Image & PDF Compressor'
                           )
                         }
                         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
@@ -282,16 +284,16 @@ export default function useImageCompressor() {
             ))}
           </div>
 
-          {anyDone && (
+          {anyDone && !allDone && (
             <button onClick={downloadAll} className="text-sm font-medium text-signal hover:underline">
-              Download all compressed files
+              Download {doneCount > 1 ? 'all' : ''} compressed {doneCount === 1 ? 'file' : 'files'}
             </button>
           )}
         </>
       )}
     </div>
     ),
-    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, renameItem, anyDone, downloadAll, gatedDownload]
+    [handleFiles, clearErrors, errors, isConverting, progress, items, removeItem, renameItem, anyDone, allDone, doneCount, downloadAll, gatedDownload]
   )
 
   const settings = useMemo(
@@ -357,15 +359,17 @@ export default function useImageCompressor() {
       )}
 
       <button
-        onClick={convertAll}
+        onClick={allDone ? downloadAll : convertAll}
         disabled={isConverting || items.length === 0}
         className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Compress {items.length || ''} {items.length === 1 ? 'file' : 'files'}
+        {allDone
+          ? `Download ${doneCount > 1 ? `all ${doneCount} files` : 'compressed file'}`
+          : `Compress ${items.length || ''} ${items.length === 1 ? 'file' : 'files'}`}
       </button>
     </>
     ),
-    [targetPreset, customTargetKb, targetLabel, keepFormat, convertAll, isConverting, items]
+    [targetPreset, customTargetKb, targetLabel, keepFormat, convertAll, isConverting, items, allDone, doneCount, downloadAll]
   )
 
   return { workspace, settings }

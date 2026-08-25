@@ -176,6 +176,7 @@ export default function useImageConverter() {
   const clearErrors = useCallback(() => setErrors([]), [])
 
   const doneCount = items.filter((i) => i.status === 'done').length
+  const allDone = items.length > 0 && doneCount === items.length
   const sameFormatExt = targetFormat === 'jpg' ? ['jpg', 'jpeg'] : [targetFormat]
   const allAlreadyTarget =
     items.length > 0 &&
@@ -315,15 +316,17 @@ export default function useImageConverter() {
         )}
 
         <button
-          onClick={convertAll}
+          onClick={allDone ? downloadAll : convertAll}
           disabled={isConverting || items.length === 0}
           className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Convert {items.length || ''} {items.length === 1 ? 'image' : 'images'}
+          {allDone
+            ? `Download ${doneCount > 1 ? `all ${doneCount} files` : 'converted file'}`
+            : `Convert ${items.length || ''} ${items.length === 1 ? 'image' : 'images'}`}
         </button>
       </>
     ),
-    [targetFormat, quality, isConverting, items.length, convertAll]
+    [targetFormat, quality, isConverting, items.length, convertAll, allDone, doneCount, downloadAll]
   )
 
   return { workspace, settings }

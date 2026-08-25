@@ -168,15 +168,15 @@ export default function usePdfToImages() {
       )}
 
       <button
-        onClick={convert}
+        onClick={pages.length > 0 ? downloadAllZip : convert}
         disabled={isConverting || !file}
         className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Split into images
+        {pages.length > 0 ? `Download ${pages.length} pages as .zip` : 'Split into images'}
       </button>
     </>
     ),
-    [scale, baseName, convert, isConverting, file]
+    [scale, baseName, convert, isConverting, file, pages, downloadAllZip]
   )
 
   return { workspace, settings }

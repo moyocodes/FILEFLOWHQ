@@ -80,7 +80,7 @@ export default function usePdfToWord() {
     const trimmedName = outputName.trim() || stripExtension(file.name)
     const resultName = trimmedName.endsWith('.docx') ? trimmedName : `${trimmedName}.docx`
     gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Word')
-    setResult({ name: resultName, size: blob.size })
+    setResult({ name: resultName, size: blob.size, blob, toolName: 'PDF to Word' })
     setProgress(100)
   }, [file, outputName, gatedDownload])
 
@@ -103,10 +103,15 @@ export default function usePdfToWord() {
     const trimmedName = outputName.trim() || stripExtension(file.name)
     const resultName = trimmedName.endsWith('.txt') ? trimmedName : `${trimmedName}.txt`
     gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Text')
-    setResult({ name: resultName, size: blob.size })
+    setResult({ name: resultName, size: blob.size, blob, toolName: 'PDF to Text' })
     setProgress(100)
     setPreview(fullText.split('\n').slice(0, 14).join('\n') || '(No text found)')
   }, [file, outputName, gatedDownload])
+
+  const downloadAgain = useCallback(() => {
+    if (!result) return
+    gatedDownload(() => downloadBlob(result.blob, result.name), result.name, result.toolName)
+  }, [result, gatedDownload])
 
   const convert = useCallback(async () => {
     if (!file) return
@@ -242,15 +247,15 @@ export default function usePdfToWord() {
       )}
 
       <button
-        onClick={convert}
+        onClick={result ? downloadAgain : convert}
         disabled={isWorking || !file}
         className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Convert to .{format}
+        {result ? 'Download again' : `Convert to .${format}`}
       </button>
     </>
     ),
-    [convert, isWorking, file, outputName, format, changeFormat]
+    [convert, isWorking, file, outputName, format, changeFormat, result, downloadAgain]
   )
 
   return { workspace, settings }

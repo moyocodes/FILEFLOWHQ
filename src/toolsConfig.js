@@ -70,7 +70,7 @@ export const tools = [
     description: 'Reduce image or PDF file size to a target size before you download.',
     icon: Minimize2,
     component: useImageCompressor,
-    formats: ['JPG', 'PNG', 'WEBP', 'PDF'],
+    formats: ['IMG/PDF', 'SMALLER'],
     seoTitle: 'Image & PDF Compressor — Reduce File Size Free & Online',
     seoDescription:
       'Compress JPG, PNG, WebP images and PDF files to a target size for free. Runs entirely in your browser — no uploads, no watermarks.',
