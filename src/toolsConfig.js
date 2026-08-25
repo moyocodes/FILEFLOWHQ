@@ -65,35 +65,35 @@ export const tools = [
   {
     id: 'image-compressor',
     path: '/tools/image-compressor',
-    name: 'Image Compressor',
-    tagline: 'Shrink file size or resize dimensions',
-    description: 'Reduce image file size or resize dimensions before you download.',
+    name: 'Image & PDF Compressor',
+    tagline: 'Shrink image or PDF file size to a target',
+    description: 'Reduce image or PDF file size to a target size before you download.',
     icon: Minimize2,
     component: useImageCompressor,
-    formats: ['JPG', 'PNG', 'WEBP'],
-    seoTitle: 'Image Compressor — Reduce Image File Size Free & Online',
+    formats: ['JPG', 'PNG', 'WEBP', 'PDF'],
+    seoTitle: 'Image & PDF Compressor — Reduce File Size Free & Online',
     seoDescription:
-      'Compress JPG, PNG, and WebP images to reduce file size without losing quality. Resize dimensions too. Free, private, and runs entirely in your browser.',
-    keywords: 'image compressor, compress jpg, reduce image size, resize image, compress png online',
+      'Compress JPG, PNG, WebP images and PDF files to a target size for free. Runs entirely in your browser — no uploads, no watermarks.',
+    keywords: 'image compressor, compress jpg, reduce image size, compress pdf, pdf compressor, compress png online',
     intro:
-      'Shrink image file sizes or resize dimensions for free, right in your browser. Perfect for speeding up websites, meeting upload limits, or emailing photos — all without uploading your files anywhere.',
+      'Shrink image or PDF file sizes down to a target for free, right in your browser. Perfect for speeding up websites, meeting upload limits, or emailing files — all without uploading anything to a server.',
     howTo: [
-      'Drop your image (JPG, PNG, or WebP) into the box above.',
-      'Set your target quality or new dimensions.',
-      'Download the smaller, optimized image.',
+      'Drop your image (JPG, PNG, WebP) or PDF into the box above.',
+      'Pick a target output size.',
+      'Download the smaller, optimized file.',
     ],
     faq: [
       {
         q: 'How can I reduce image file size without losing quality?',
-        a: 'Lower the quality slider slightly or convert to WebP — both dramatically cut file size while keeping the image looking sharp. Compression happens locally in your browser.',
+        a: 'Pick a target size close to the original — the tool only lowers quality as much as needed to reach it. Compression happens locally in your browser.',
       },
       {
-        q: 'Is this image compressor free?',
+        q: 'Can I compress a PDF file?',
+        a: 'Yes. Drop in a PDF and pick a target size — each page is recompressed to fit, and a smaller PDF is rebuilt for you to download. Note that any selectable text becomes part of a page image in the process.',
+      },
+      {
+        q: 'Is this compressor free?',
         a: 'Yes, it is completely free with no watermarks and no sign-up required.',
-      },
-      {
-        q: 'Can I resize the dimensions as well as compress?',
-        a: 'Yes. You can set new width and height values to resize the image in addition to compressing it.',
       },
     ],
   },
