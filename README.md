@@ -1,23 +1,27 @@
-# FileFlowHQ — free, client-side file conversion
+# FileFlowHQ — file conversion, mostly client-side
 
-A single-page React + Tailwind app that converts images, PDFs, and data files
-entirely **in the browser**. No backend, no file upload, no server costs —
-it can be hosted for free on Vercel, Netlify, or GitHub Pages as a static site.
+A React + Tailwind app that converts images, PDFs, and data files. Most tools
+run **entirely in the browser** — nothing is sent to a server — but two
+features do call a small serverless backend: **PDF to Word** (Word output,
+via Adobe PDF Services) uploads the file for conversion, and a post-download
+confirmation email is sent via Mailjet. Ships as a web app (Vercel) and, via
+Capacitor, as native iOS/Android apps.
 
 ## Tools included
 
-| Tool | What it does | Library used |
+| Tool | What it does | How |
 |---|---|---|
-| Image Converter | PNG ↔ JPG ↔ WebP | Canvas API |
-| Image Compressor | Reduce file size / resize dimensions | Canvas API |
-| Images to PDF | Combine images into one PDF | `jspdf` |
-| PDF to Images | Split PDF pages into PNGs | `pdfjs-dist` |
-| Merge / Split PDF | Combine PDFs or extract page ranges | `pdf-lib` |
-| PDF to Word (basic) | Extract PDF text into a `.docx` | `pdfjs-dist` + `docx` |
-| CSV ⇄ JSON | Convert tabular data both directions | plain JS |
-
-Every tool processes files with `FileReader`/`Canvas`/WebAssembly-backed
-libraries directly on the user's device. Nothing is ever sent to a server.
+| Image Converter | PNG ↔ JPG ↔ WebP | Canvas API (client-side) |
+| Image & PDF Compressor | Reduce file size / resize dimensions, images and PDFs | Canvas API (client-side) |
+| Images to PDF | Combine images into one PDF | `jspdf` (client-side) |
+| PDF to Images | Split PDF pages into PNGs | `pdfjs-dist` (client-side) |
+| Merge / Split PDF | Combine PDFs or extract page ranges | `pdf-lib` (client-side) |
+| PDF to Word | Convert to `.docx` (Adobe PDF Services) or extract plain text | `api/pdf-to-word.js` (server) / `pdfjs-dist` (client) |
+| Word to PDF | Convert `.docx` to PDF | client-side |
+| PDF Read Aloud | Read PDF text aloud | client-side |
+| Document Scanner | Capture/crop a document into a PDF or image | client-side |
+| QR & Barcode Scanner | Scan codes via camera | client-side |
+| CSV ⇄ JSON | Convert tabular data both directions | plain JS (client-side) |
 
 ## Project structure
 
@@ -29,34 +33,29 @@ fileflowhq/
 ├── tailwind.config.js
 ├── postcss.config.js
 ├── vercel.json          # Vercel build + redirect config
+├── prerender.mjs        # headlessly renders each /tools/* route to static HTML (SEO)
+├── capacitor.config.json
+├── ios/, android/        # Capacitor native projects
+├── api/                  # Vercel serverless functions
+│   ├── pdf-to-word.js      # Adobe PDF Services — PDF → Word
+│   ├── send-confirmation.js # Mailjet — post-download email
+│   └── contact-message.js   # Mailjet — contact form
 └── src/
-    ├── main.jsx           # App entry, HashRouter + theme bootstrap
+    ├── main.jsx           # App entry; picks BrowserRouter (web) or HashRouter (native)
     ├── App.jsx             # Layout: sidebar + routed tool pages
     ├── index.css           # Tailwind directives + small globals
     ├── toolsConfig.js       # Single source of truth for all tools
-    ├── components/
-    │   ├── Rail.jsx
-    │   ├── Dropzone.jsx      # Drag-and-drop + browse button
-    │   ├── ProgressBar.jsx
-    │   ├── ErrorBanner.jsx
-    │   ├── FileRow.jsx
-    │   ├── ToolCard.jsx
-    │   ├── StampBadge.jsx
-    │   └── ThemeToggle.jsx
+    ├── components/           # Rail, Dropzone, ProgressBar, ErrorBanner, FileRow,
+    │                           ToolCard, StampBadge, ThemeToggle, ContactChat,
+    │                           EmailGateModal, EmailPolicyModal, PageEditorModal,
+    │                           PdfThumbnail, ResultCard, ToastStack
+    ├── context/              # EmailGateContext, SettingsPanelContext, ToastContext
     ├── pages/
     │   ├── Home.jsx
     │   └── ToolPage.jsx
-    ├── tools/
-    │   ├── ImageConverter.jsx
-    │   ├── ImageCompressor.jsx
-    │   ├── ImagesToPdf.jsx
-    │   ├── PdfToImages.jsx
-    │   ├── MergeSplitPdf.jsx
-    │   ├── PdfToWord.jsx
-    │   └── CsvJson.jsx
-    └── utils/
-        ├── fileHelpers.js     # validation, downloads, canvas helpers
-        └── pdfjsSetup.js       # pdf.js worker configuration
+    ├── tools/                # one component per tool (see table above)
+    └── utils/                # fileHelpers, pdfjsSetup, docxToPdf, imagesToPdf,
+                                pdfTextExtraction, platform (native vs. web checks)
 ```
 
 ## Local development
@@ -73,10 +72,13 @@ This starts a Vite dev server (default `http://localhost:5173`) with hot reload.
 ## Build for production
 
 ```bash
-npm run build
+npm run build       # plain Vite build → dist/ (fast, local use)
+npm run build:web   # build + prerender — this is what Vercel actually runs
 ```
 
-Outputs a static site to `dist/`. Preview it locally with:
+`build:web` also runs `prerender.mjs`, which headlessly renders each
+`/tools/*` route to static HTML so search engines and social-link previews
+see real content. Preview either build locally with:
 
 ```bash
 npm run preview
@@ -84,22 +86,29 @@ npm run preview
 
 ## Deploying
 
-The web app uses `BrowserRouter` (clean URLs like `/tools/image-converter`), so
-the host needs a catch-all rewrite that serves `index.html` for every path —
-otherwise a hard refresh or direct link to a tool page 404s. `vercel.json`
-already includes that rewrite plus a www → non-www redirect. (Native iOS/Android
-builds use `HashRouter` automatically — see `src/utils/platform.js`.)
+The web app uses `BrowserRouter` (clean URLs like `/tools/image-converter`),
+so the host needs a catch-all rewrite that serves `index.html` for every
+path — otherwise a hard refresh or direct link to a tool page 404s.
+`vercel.json` already includes that rewrite. (Native iOS/Android builds use
+`HashRouter` instead — the switch lives in `src/main.jsx`, based on
+`isNative` from `src/utils/platform.js`.)
+
+Deploys are Vercel-only (Netlify config was removed; GitHub Pages was never
+fully wired up and isn't a supported target).
 
 ### Vercel
 
 1. Push this project to a GitHub/GitLab/Bitbucket repo.
 2. In Vercel, click **New Project** → import the repo.
-3. Framework preset: **Vite**. Build command `npm run build`, output
+3. Framework preset: **Vite**. Build command `npm run build:web`, output
    directory `dist` (already set in `vercel.json`).
-4. Add `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`, and `MJ_SENDER_EMAIL` as
-   environment variables (see `.env.example`) — required by the
-   `api/send-confirmation.js` function that emails users a download
-   confirmation via Mailjet.
+4. Add these environment variables (see `.env.example`):
+   - `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`, `MJ_SENDER_EMAIL` — Mailjet,
+     required by `api/send-confirmation.js` and `api/contact-message.js`.
+   - `PDF_SERVICES_CLIENT_ID`, `PDF_SERVICES_CLIENT_SECRET` — Adobe PDF
+     Services, required by `api/pdf-to-word.js` (Word-output mode). Without
+     these the Word-conversion feature fails; the plain-text extraction mode
+     still works client-side.
 5. Deploy.
 
 Or via CLI:
@@ -109,28 +118,31 @@ npm install -g vercel
 vercel --prod
 ```
 
-### GitHub Pages
+## Mobile (iOS / Android)
 
-1. `npm run build`
-2. Push the contents of `dist/` to a `gh-pages` branch (e.g. using the
-   `gh-pages` npm package, or GitHub Actions), or configure Pages to serve
-   from a `dist` folder via an Actions workflow.
-3. GitHub Pages has no built-in rewrite config, and with `BrowserRouter` a
-   direct link or refresh on a tool page (e.g. `/tools/image-converter`)
-   will 404. This needs the common `404.html`-redirects-to-`index.html`
-   workaround (or switching back to `HashRouter`) to work correctly — not
-   set up here.
+The app is wrapped with Capacitor (`appId: com.fileflowhq.app`). Native
+projects live in `ios/` and `android/` and are checked in.
+
+```bash
+npm run sync       # vite build && cap sync — rebuilds web assets and copies them into both native projects
+npm run open:ios     # opens the Xcode project (requires Xcode)
+npm run open:android # opens the Android Studio project (requires Android Studio)
+```
+
+`ios/App/CapApp-SPM/` is Capacitor-CLI-managed boilerplate — don't edit it
+directly; it's regenerated by `cap sync`.
 
 ## Notes on the PDF tools
 
-- **PDF to Images** and **PDF to Word** use `pdfjs-dist`, which needs a web
-  worker. Vite bundles this automatically via the `?url` import in
-  `src/utils/pdfjsSetup.js` — no extra configuration needed after
-  `npm install`.
-- **PDF to Word** does *basic text extraction only*: it pulls text line by
-  line based on position and writes it into a `.docx`. Complex layouts,
-  multi-column text, tables, and images will not be preserved — this is
-  called out in the tool's UI.
+- **PDF to Images**, **PDF to Word** (text mode), and **PDF Read Aloud** use
+  `pdfjs-dist`, which needs a web worker. Vite bundles this automatically via
+  the `?url` import in `src/utils/pdfjsSetup.js` — no extra configuration
+  needed after `npm install`.
+- **PDF to Word** has two modes: converting to an actual `.docx` uploads the
+  file to **Adobe PDF Services** (`api/pdf-to-word.js`), which preserves text
+  styling, tables, lists, links, and images, and is capped at 4.5MB per file.
+  Plain-text extraction runs entirely client-side via `pdfjs-dist` with no
+  size cap and no upload.
 - Password-protected or scanned (image-only) PDFs are handled with a clear
   error/notice rather than failing silently.
 
