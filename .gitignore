@@ -19,3 +19,6 @@ dist
 /android/app/release
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
+
+# Claude Code local settings
+.claude/
