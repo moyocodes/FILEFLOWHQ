@@ -9,7 +9,8 @@ import {
   ScanLine,
   QrCode,
   FileOutput,
-  Volume2
+  Volume2,
+  Link2
 } from 'lucide-react'
 
 import useImageConverter from './tools/ImageConverter.jsx'
@@ -23,6 +24,7 @@ import usePdfReadAloud from './tools/PdfReadAloud.jsx'
 import useCsvJson from './tools/CsvJson.jsx'
 import useDocumentScanner from './tools/DocumentScanner.jsx'
 import useQrScanner from './tools/QrScanner.jsx'
+import useUrlShortener from './tools/UrlShortener.jsx'
 
 // Single source of truth: order here controls sidebar order, home page
 // card order, and route registration.
@@ -421,6 +423,41 @@ export const tools = [
       {
         q: 'Is the QR scanner safe and private?',
         a: 'Yes. Codes are decoded directly in your browser using your camera, so no images or results are ever sent to a server.',
+      },
+    ],
+  },
+  {
+    id: 'url-shortener',
+    path: '/tools/url-shortener',
+    name: 'URL Shortener',
+    tagline: 'Turn a long link into a short one',
+    description: 'Shorten a long URL into a short fileflowhq.com link you can copy and share.',
+    icon: Link2,
+    component: useUrlShortener,
+    formats: ['URL', 'SHORT'],
+    seoTitle: 'URL Shortener — Shorten Links Free, No Sign-up',
+    seoDescription:
+      'Shorten long URLs into short, shareable fileflowhq.com links for free. No account, no sign-up. The URL is stored on our server so the link can redirect.',
+    keywords: 'url shortener, shorten url, short link, link shortener, free url shortener, shorten link',
+    intro:
+      'Paste a long link and get a short fileflowhq.com link that redirects to it, for free and with no account. Unlike most FileFlowHQ tools, this one needs our server: the URL you enter is stored so the short link can send people to it.',
+    howTo: [
+      'Paste the long URL (it must start with http:// or https://).',
+      'Click Shorten URL.',
+      'Copy the short link and share it anywhere.',
+    ],
+    faq: [
+      {
+        q: 'Is the URL shortener free?',
+        a: 'Yes. There is no account, no sign-up, and no fee.',
+      },
+      {
+        q: 'Is my URL sent to a server?',
+        a: 'Yes. Unlike most tools on FileFlowHQ, a short link can only work if we store the original URL, so it is saved on our server. Do not shorten links that contain private tokens or passwords.',
+      },
+      {
+        q: 'Do short links expire?',
+        a: 'No, short links do not expire. We may remove links that are used for spam, phishing, or other abuse.',
       },
     ],
   },
