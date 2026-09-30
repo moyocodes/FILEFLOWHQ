@@ -7,7 +7,7 @@ import EmailPolicyModal from './EmailPolicyModal.jsx'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function EmailGateModal() {
-  const { pending, submitEmail, cancelGate } = useEmailGate()
+  const { pending, submitEmail, skipGate, cancelGate } = useEmailGate()
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
   const [showPolicy, setShowPolicy] = useState(false)
@@ -97,6 +97,14 @@ export default function EmailGateModal() {
                       className="w-full rounded-xl bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
                     >
                       Continue to download
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={skipGate}
+                      className="w-full rounded-xl border border-border px-4 py-3 text-sm font-semibold text-text-dim transition-colors hover:border-signal hover:text-signal"
+                    >
+                      Skip and download
                     </button>
 
                     <button

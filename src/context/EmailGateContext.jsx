@@ -2,6 +2,26 @@ import { createContext, useContext, useState, useCallback } from 'react'
 import { useToast } from './ToastContext.jsx'
 
 const STORAGE_KEY = 'fileflowhq_email'
+const SKIP_KEY = 'fileflowhq_email_skipped_at'
+const SKIP_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000
+
+/** True if the user skipped the email prompt recently enough to not be asked again yet. */
+function isSkipSnoozed() {
+  try {
+    const at = Number(localStorage.getItem(SKIP_KEY))
+    return Boolean(at) && Date.now() - at < SKIP_SNOOZE_MS
+  } catch {
+    return false
+  }
+}
+
+function writeSkipTime() {
+  try {
+    localStorage.setItem(SKIP_KEY, String(Date.now()))
+  } catch {
+    // Non-fatal — the gate just asks again next time.
+  }
+}
 
 function readStoredEmail() {
   try {
@@ -21,13 +41,18 @@ function writeStoredEmail(value) {
 }
 
 function sendConfirmation(email, fileName, toolName) {
-  fetch('/api/send-confirmation', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, fileName, toolName }),
-  }).catch(() => {
-    // Confirmation email is best-effort; the download already succeeded.
-  })
+  // Best-effort and fully isolated: the download has already happened, so
+  // nothing here (network failure, Mailjet outage, a synchronous throw) may
+  // ever surface to the user or affect the file they received.
+  try {
+    fetch('/api/send-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, fileName, toolName }),
+    }).catch(() => {})
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -61,6 +86,11 @@ export function EmailGateProvider({ children }) {
         sendConfirmation(email, filename, toolName)
         return
       }
+      if (isSkipSnoozed()) {
+        perform()
+        showToast(`${filename} downloaded`)
+        return
+      }
       setPending({ perform, filename, toolName })
     },
     [email, showToast]
@@ -80,10 +110,21 @@ export function EmailGateProvider({ children }) {
     [pending, showToast]
   )
 
+  // Download without giving an email. No confirmation email is sent, and the
+  // prompt is snoozed for a week so skipping doesn't mean being asked again on
+  // every download.
+  const skipGate = useCallback(() => {
+    if (!pending) return
+    writeSkipTime()
+    pending.perform()
+    showToast(`${pending.filename} downloaded`)
+    setPending(null)
+  }, [pending, showToast])
+
   const cancelGate = useCallback(() => setPending(null), [])
 
   return (
-    <EmailGateContext.Provider value={{ gatedDownload, pending, submitEmail, cancelGate }}>
+    <EmailGateContext.Provider value={{ gatedDownload, pending, submitEmail, skipGate, cancelGate }}>
       {children}
     </EmailGateContext.Provider>
   )
