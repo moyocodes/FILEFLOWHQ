@@ -48,6 +48,16 @@ export default function Privacy() {
         </p>
       </Section>
 
+      <Section title="URL shortener">
+        <p>
+          The URL Shortener stores the web address you enter so its short link can redirect to it. Short links do
+          not expire. We do not attach your name or email to a link. For abuse prevention we use your IP address
+          briefly to limit how many links can be created per minute; it is not kept with the link. We may remove
+          links used for spam, phishing, or other abuse. Do not shorten links that contain private tokens or
+          passwords.
+        </p>
+      </Section>
+
       <Section title="Your email address">
         <p>
           When you download a file, we may ask for your email address. You can skip this. If you provide it, we

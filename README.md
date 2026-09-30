@@ -22,6 +22,7 @@ Capacitor, as native iOS/Android apps.
 | Document Scanner | Capture/crop a document into a PDF or image | client-side |
 | QR & Barcode Scanner | Scan codes via camera | client-side |
 | CSV ⇄ JSON | Convert tabular data both directions | plain JS (client-side) |
+| URL Shortener | Turn a long link into a short `/s/<code>` link | `api/shorten.js` + `api/s.js` (server, Upstash Redis) |
 
 ## Project structure
 
@@ -105,6 +106,10 @@ fully wired up and isn't a supported target).
 4. Add these environment variables (see `.env.example`):
    - `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`, `MJ_SENDER_EMAIL` — Mailjet,
      required by `api/send-confirmation.js` and `api/contact-message.js`.
+   - `KV_REST_API_URL`, `KV_REST_API_TOKEN` — Upstash Redis, required by the
+     URL shortener (`api/shorten.js`, `api/s.js`). Create a free Upstash Redis
+     database under your Vercel project's **Storage** tab; Vercel injects these
+     automatically. (`UPSTASH_REDIS_REST_URL` / `_TOKEN` also work.)
    - `PDF_SERVICES_CLIENT_ID`, `PDF_SERVICES_CLIENT_SECRET` — Adobe PDF
      Services, required by `api/pdf-to-word.js` (Word-output mode). Without
      these the Word-conversion feature fails; the plain-text extraction mode
