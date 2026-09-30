@@ -89,12 +89,19 @@ export default function useUrlShortener() {
               >
                 {shortUrl}
               </a>
+              <button
+                onClick={copy}
+                className="flex items-center justify-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium"
+              >
+                <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
             </div>
           </div>
         )}
       </div>
     ),
-    [input, errors, clearErrors, shortUrl, shorten]
+    [input, errors, clearErrors, shortUrl, shorten, copy, copied]
   )
 
   const settings = useMemo(
