@@ -1,3 +1,5 @@
+import { handleCors } from './_cors.js'
+
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -14,6 +16,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // api/send-confirmation.js to relay a visitor's message to the site admin —
 // an async "email live chat" rather than real-time chat infrastructure.
 export default async function handler(req, res) {
+  if (handleCors(req, res)) return
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })

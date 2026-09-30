@@ -9,6 +9,7 @@ import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
 import { extractPageLines } from '../utils/pdfTextExtraction.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { apiUrl } from '../utils/api'
 
 // Matches the Vercel serverless function's request body ceiling (api/pdf-to-word.js).
 const MAX_UPLOAD_SIZE = 4.5 * 1024 * 1024
@@ -64,7 +65,7 @@ export default function usePdfToWord() {
   )
 
   const convertToWord = useCallback(async () => {
-    const response = await fetch('/api/pdf-to-word', {
+    const response = await fetch(apiUrl('/api/pdf-to-word'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/pdf' },
       body: file,

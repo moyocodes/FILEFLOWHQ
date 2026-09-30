@@ -1,3 +1,4 @@
+import { handleCors } from './_cors.js'
 import {
   ServicePrincipalCredentials,
   PDFServices,
@@ -33,6 +34,8 @@ function readRawBody(req) {
 }
 
 export default async function handler(req, res) {
+  if (handleCors(req, res)) return
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })

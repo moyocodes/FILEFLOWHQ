@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { MessageCircle, X } from 'lucide-react'
+import { apiUrl } from '../utils/api'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CONTACT_EMAIL = 'moyosorejames@gmail.com'
@@ -74,7 +75,7 @@ export default function ContactChat() {
     setSending(true)
     setError('')
     try {
-      const response = await fetch('/api/contact-message', {
+      const response = await fetch(apiUrl('/api/contact-message'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, message }),

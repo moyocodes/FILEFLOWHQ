@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react'
 import { useToast } from './ToastContext.jsx'
+import { apiUrl } from '../utils/api'
 
 const STORAGE_KEY = 'fileflowhq_email'
 const SKIP_KEY = 'fileflowhq_email_skipped_at'
@@ -45,7 +46,7 @@ function sendConfirmation(email, fileName, toolName) {
   // nothing here (network failure, Mailjet outage, a synchronous throw) may
   // ever surface to the user or affect the file they received.
   try {
-    fetch('/api/send-confirmation', {
+    fetch(apiUrl('/api/send-confirmation'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, fileName, toolName }),

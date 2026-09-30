@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "FileFlowHQ — File Converter",
-  "version": "1.0.0",
+  "name": "FileFlowHQ \u2014 File Converter",
+  "version": "1.0.1",
   "description": "Convert images, PDFs, and data files for free, right in your browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -18,5 +18,10 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["sidePanel"]
+  "permissions": [
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://fileflowhq.com/*"
+  ]
 }

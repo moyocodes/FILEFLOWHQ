@@ -1,3 +1,5 @@
+import { handleCors } from './_cors.js'
+
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -139,6 +141,8 @@ function buildConfirmationHtml(fileName, toolName) {
 // Vercel serverless function. Keeps the Mailjet private key server-side —
 // it must never be bundled into client code (see .env.example).
 export default async function handler(req, res) {
+  if (handleCors(req, res)) return
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
