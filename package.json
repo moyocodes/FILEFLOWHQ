@@ -8,6 +8,7 @@
     "build": "vite build",
     "prerender": "node prerender.mjs",
     "build:web": "vite build && node prerender.mjs",
+    "build:extension": "vite build --config vite.extension.config.js --mode extension",
     "preview": "vite preview",
     "sync": "vite build && cap sync",
     "open:ios": "cap open ios",

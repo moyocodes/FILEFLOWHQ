@@ -10,6 +10,9 @@ import { Capacitor } from '@capacitor/core'
 /** True when running inside the native iOS/Android shell, false on the web. */
 export const isNative = Capacitor.isNativePlatform()
 
+/** True in the Chrome extension build (`vite build --mode extension`). */
+export const isExtension = import.meta.env.MODE === 'extension'
+
 /**
  * Save a Blob to the user's device.
  *  - Web: triggers a normal browser download (unchanged behavior).

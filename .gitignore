@@ -22,3 +22,6 @@ android/app/src/main/assets/capacitor.plugins.json
 
 # Claude Code local settings
 .claude/
+
+# Chrome extension build output
+dist-extension
