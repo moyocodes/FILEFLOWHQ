@@ -102,7 +102,7 @@ export default function Privacy() {
           <a href="mailto:moyosorejames@gmail.com" className="text-signal underline">
             moyosorejames@gmail.com
           </a>{' '}
-          or use the contact button on the site.
+          or use the <a href="/contact" className="text-signal underline">contact page</a>.
         </p>
       </Section>
 

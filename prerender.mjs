@@ -23,7 +23,7 @@ const PORT = 4319
 async function getRoutes() {
   const cfg = await readFile(join(__dirname, 'src/toolsConfig.js'), 'utf8')
   const paths = [...cfg.matchAll(/path:\s*'(\/tools\/[^']+)'/g)].map((m) => m[1])
-  return ['/', '/privacy', ...paths]
+  return ['/', '/privacy', '/contact', ...paths]
 }
 
 async function run() {

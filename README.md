@@ -1,10 +1,11 @@
 # FileFlowHQ — file conversion, mostly client-side
 
 A React + Tailwind app that converts images, PDFs, and data files. Most tools
-run **entirely in the browser** — nothing is sent to a server — but two
+run **entirely in the browser** — nothing is sent to a server — but three
 features do call a small serverless backend: **PDF to Word** (Word output,
-via Adobe PDF Services) uploads the file for conversion, and a post-download
-confirmation email is sent via Mailjet. Ships as a web app (Vercel) and, via
+via Adobe PDF Services) uploads the file for conversion, a post-download
+confirmation email is sent via Mailjet, and the **URL Shortener** stores links in
+Upstash Redis. Ships as a web app (Vercel) and, via
 Capacitor, as native iOS/Android apps.
 
 ## Tools included

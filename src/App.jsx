@@ -6,6 +6,7 @@ import Rail, { MobileMenuButton } from './components/Rail.jsx'
 import Home from './pages/Home.jsx'
 import ToolPage from './pages/ToolPage.jsx'
 import Privacy from './pages/Privacy.jsx'
+import Contact from './pages/Contact.jsx'
 import { tools } from './toolsConfig.js'
 import { SettingsPanelProvider, useSettingsPanel } from './context/SettingsPanelContext.jsx'
 import { EmailGateProvider } from './context/EmailGateContext.jsx'
@@ -40,6 +41,9 @@ function WsHeader({ activeTool, onOpenMenu }) {
       </div>
       <div className="flex items-center gap-4 font-mono text-[0.65rem] text-text-dim">
         <span className="hidden sm:inline">{coords}</span>
+        <button onClick={() => navigate('/contact')} className="underline transition-colors hover:text-signal">
+          Contact
+        </button>
         <button onClick={() => navigate('/privacy')} className="underline transition-colors hover:text-signal">
           Privacy
         </button>
@@ -102,6 +106,7 @@ function Shell() {
               <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
             ))}
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </div>
