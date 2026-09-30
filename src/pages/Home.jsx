@@ -159,6 +159,10 @@ export default function Home() {
           </ul>
         </div>
       </section>
+
+      <footer className="border-t border-border px-6 py-6 sm:px-9">
+        <p className="font-mono text-[0.65rem] text-text-dim">&copy; 2026 James Moyosore. All Rights Reserved.</p>
+      </footer>
     </div>
   )
 }

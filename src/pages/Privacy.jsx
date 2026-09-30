@@ -88,10 +88,17 @@ export default function Privacy() {
 
       <Section title="Changes and contact">
         <p>
-          If this policy changes, we&apos;ll update the date above. Questions? Use the contact button on the
-          site and we&apos;ll get back to you.
+          If this policy changes, we&apos;ll update the date above. Questions? Email{' '}
+          <a href="mailto:moyosorejames@gmail.com" className="text-signal underline">
+            moyosorejames@gmail.com
+          </a>{' '}
+          or use the contact button on the site.
         </p>
       </Section>
+
+      <footer className="mt-10 border-t border-border pt-6">
+        <p className="font-mono text-[0.65rem] text-text-dim">&copy; 2026 James Moyosore. All Rights Reserved.</p>
+      </footer>
     </main>
   )
 }
