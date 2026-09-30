@@ -5,6 +5,7 @@ import { track } from '@vercel/analytics'
 import Rail, { MobileMenuButton } from './components/Rail.jsx'
 import Home from './pages/Home.jsx'
 import ToolPage from './pages/ToolPage.jsx'
+import Privacy from './pages/Privacy.jsx'
 import { tools } from './toolsConfig.js'
 import { SettingsPanelProvider, useSettingsPanel } from './context/SettingsPanelContext.jsx'
 import { EmailGateProvider } from './context/EmailGateContext.jsx'
@@ -37,7 +38,12 @@ function WsHeader({ activeTool, onOpenMenu }) {
           )}
         </div>
       </div>
-      <span className="hidden font-mono text-[0.65rem] text-text-dim sm:inline">{coords}</span>
+      <div className="flex items-center gap-4 font-mono text-[0.65rem] text-text-dim">
+        <span className="hidden sm:inline">{coords}</span>
+        <button onClick={() => navigate('/privacy')} className="underline transition-colors hover:text-signal">
+          Privacy
+        </button>
+      </div>
     </div>
   )
 }
@@ -95,6 +101,7 @@ function Shell() {
             {tools.map((tool) => (
               <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
             ))}
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </div>

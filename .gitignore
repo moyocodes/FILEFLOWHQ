@@ -25,3 +25,4 @@ android/app/src/main/assets/capacitor.plugins.json
 
 # Chrome extension build output
 dist-extension
+fileflowhq-extension.zip
