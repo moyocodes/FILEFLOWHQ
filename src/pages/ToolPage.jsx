@@ -117,7 +117,7 @@ export default function ToolPage({ tool }) {
       description: tool.comingSoon
         ? `${tool.name} is coming soon to FileFlowHQ — ${tool.seoDescription || tool.description}`
         : tool.seoDescription ||
-          `${tool.description} Free, private, and runs entirely in your browser — no uploads.`,
+          `${tool.description} Free and private — most tools run entirely in your browser.`,
       keywords: tool.keywords,
       path: tool.path,
     })

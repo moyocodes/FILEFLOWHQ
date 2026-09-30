@@ -7,7 +7,7 @@ import { applySeo } from '../utils/useSeo.js'
 
 const stats = [
   { n: String(tools.length), l: 'Conversion tools, one page' },
-  { n: '0', l: 'Bytes ever sent to a server' },
+  { n: '10', l: 'Tools that never upload a file' },
   { n: '100%', l: 'Runs offline once loaded' }
 ]
 
@@ -18,7 +18,7 @@ export default function Home() {
     applySeo({
       title: null,
       description:
-        'Convert images, PDFs, and data files for free, right in your browser. PNG/JPG/WebP conversion, image compression, PDF to images, merge/split PDF, CSV to JSON and back. No uploads, no tracking.',
+        'Convert images, PDFs, and data files for free, right in your browser. PNG/JPG/WebP conversion, image compression, PDF to images, merge/split PDF, CSV to JSON and back. Almost everything runs locally in your browser, with no tracking.',
       path: '/'
     })
   }, [])
@@ -59,7 +59,7 @@ export default function Home() {
         >
           <span className="mb-3.5 inline-flex items-center gap-2 rounded-[3px] border border-signal-dim bg-signal-dim px-[0.7rem] py-[0.3rem] font-mono text-[0.64rem] uppercase tracking-[0.16em] text-mono-text">
             <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_6px_var(--signal)]" />
-            Local processing only
+            Mostly local processing
           </span>
 
           <h1 className="font-display mb-3 max-w-[22ch] text-[clamp(1.6rem,3.2vw,2.4rem)] font-semibold leading-[1.08] tracking-wide">
@@ -67,8 +67,8 @@ export default function Home() {
           </h1>
 
           <p className="mb-5 max-w-[52ch] font-body text-[0.92rem] normal-case text-text-dim">
-            FileFlowHQ reads, decodes, and re-writes images, PDFs, and data files entirely in your
-            browser. No upload, no server, no trace.
+            FileFlowHQ reads, decodes, and re-writes images, PDFs, and data files in your browser.
+            Nearly every tool runs locally, so your files stay on your device.
           </p>
 
           <div className="flex flex-wrap gap-8">
@@ -105,7 +105,7 @@ export default function Home() {
       <section className="mt-10 border-t border-border px-6 pt-8 sm:px-10">
         <div className="max-w-[70ch] text-text-dim">
           <h2 className="font-display mb-3 text-[1.1rem] font-semibold tracking-wide text-text">
-            Free online file converter — no uploads, no tracking
+            Free online file converter — private, no sign-up
           </h2>
           <p className="mb-4 text-[0.9rem] leading-relaxed">
             FileFlowHQ is a free file converter and toolkit that runs entirely in your
@@ -146,8 +146,8 @@ export default function Home() {
           </h3>
           <ul className="list-disc space-y-1.5 pl-5 text-[0.88rem] leading-relaxed">
             <li>
-              <strong className="text-text">100% private:</strong> files are processed in
-              your browser and never uploaded.
+              <strong className="text-text">Private by design:</strong> almost every tool
+              processes files in your browser and never uploads them.
             </li>
             <li>
               <strong className="text-text">Free, no sign-up, no watermarks.</strong>
