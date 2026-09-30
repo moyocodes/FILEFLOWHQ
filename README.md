@@ -5,8 +5,10 @@ run **entirely in the browser** — nothing is sent to a server — but three
 features do call a small serverless backend: **PDF to Word** (Word output,
 via Adobe PDF Services) uploads the file for conversion, a post-download
 confirmation email is sent via Mailjet, and the **URL Shortener** stores links in
-Upstash Redis. Ships as a web app (Vercel) and, via
-Capacitor, as native iOS/Android apps.
+Upstash Redis. Live as a web app (Vercel); it also
+builds as a Chrome extension (in Web Store review) and, via Capacitor, as
+iOS/Android apps (native projects are in the repo, but the apps are not yet
+published to the App Store or Google Play).
 
 ## Tools included
 
@@ -127,7 +129,9 @@ vercel --prod
 ## Mobile (iOS / Android)
 
 The app is wrapped with Capacitor (`appId: com.fileflowhq.app`). Native
-projects live in `ios/` and `android/` and are checked in.
+projects live in `ios/` and `android/` and are checked in. **The mobile apps
+are not published yet** — this section is for building and running them
+locally.
 
 ```bash
 npm run sync       # vite build && cap sync — rebuilds web assets and copies them into both native projects
