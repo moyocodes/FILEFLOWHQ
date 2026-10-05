@@ -14,7 +14,7 @@ import { ToastProvider } from './context/ToastContext.jsx'
 import EmailGateModal from './components/EmailGateModal.jsx'
 import ToastStack from './components/ToastStack.jsx'
 import ContactChat from './components/ContactChat.jsx'
-import InstallPrompt from './components/InstallPrompt.jsx'
+import InstallPrompt, { InstallButton } from './components/InstallPrompt.jsx'
 
 function activeToolFromPath(pathname) {
   return tools.find((t) => t.path === pathname) || null
@@ -42,6 +42,7 @@ function WsHeader({ activeTool, onOpenMenu }) {
       </div>
       <div className="flex items-center gap-4 font-mono text-[0.65rem] text-text-dim">
         <span className="hidden sm:inline">{coords}</span>
+        <InstallButton />
         <button onClick={() => navigate('/contact')} className="underline transition-colors hover:text-signal">
           Contact
         </button>
