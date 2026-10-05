@@ -14,6 +14,7 @@ import { ToastProvider } from './context/ToastContext.jsx'
 import EmailGateModal from './components/EmailGateModal.jsx'
 import ToastStack from './components/ToastStack.jsx'
 import ContactChat from './components/ContactChat.jsx'
+import InstallPrompt from './components/InstallPrompt.jsx'
 
 function activeToolFromPath(pathname) {
   return tools.find((t) => t.path === pathname) || null
@@ -116,6 +117,7 @@ function Shell() {
       <EmailGateModal />
       <ToastStack />
       <ContactChat />
+      <InstallPrompt />
     </div>
   )
 }
