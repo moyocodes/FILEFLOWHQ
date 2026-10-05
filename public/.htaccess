@@ -17,6 +17,10 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
+# Prerendered routes are written as /tools/x.html — serve them at /tools/x.
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
 # Everything under /assets/ or /tools/ that isn't a real file falls through
 # (404) instead of being rewritten to the SPA shell.
 RewriteRule ^(assets|tools)/ - [L]
