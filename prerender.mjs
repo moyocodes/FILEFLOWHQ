@@ -97,7 +97,7 @@ function buildPages(tools) {
       path: '/',
       title: `${SITE_NAME} — Free Online File Converter (Images, PDF, CSV/JSON)`,
       description: homeDescription,
-      body: `<main><h1>FileFlowHQ — free online file converter</h1><p>${esc(homeDescription)}</p>${toolLinks(tools)}</main>`,
+      body: `<main><h1>FileFlowHQ — free online file converter</h1><p>FileFlowHQ (FileFlow HQ) is a free file converter that runs in your browser. ${esc(homeDescription)}</p>${toolLinks(tools)}</main>`,
       jsonLd: [],
       priority: '1.0',
       changefreq: 'weekly',
