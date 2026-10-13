@@ -69,9 +69,8 @@ export function isHeic(file) {
 
 /** Convert a HEIC/HEIF File to a JPEG Blob (pure JS, nothing is uploaded). */
 async function heicToJpeg(file) {
-  const { default: heic2any } = await import('heic2any')
-  const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-  return Array.isArray(out) ? out[0] : out
+  const { heicTo } = await import('heic-to')
+  return heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 })
 }
 
 function decodeImage(blob, name) {
@@ -90,6 +89,11 @@ function decodeImage(blob, name) {
 /** Load a File/Blob into an HTMLImageElement, resolved once decoded. */
 export async function loadImage(file) {
   if (isHeic(file)) {
+    try {
+      return await decodeImage(file, file.name)
+    } catch {
+      // Not natively decodable (everything except Safari) — fall through.
+    }
     try {
       return await decodeImage(await heicToJpeg(file), file.name)
     } catch {
