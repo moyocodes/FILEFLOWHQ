@@ -61,18 +61,42 @@ export function validateFiles(files, { accept, maxSize = MAX_FILE_SIZE } = {}) {
   return { valid, errors }
 }
 
-/** Load a File/Blob into an HTMLImageElement, resolved once decoded. */
-export function loadImage(file) {
+/** True for HEIC/HEIF files (iPhone photos), which most browsers can't decode. */
+export function isHeic(file) {
+  const ext = getExtension(file.name || '')
+  return ext === 'heic' || ext === 'heif' || /^image\/hei[cf]/.test(file.type || '')
+}
+
+/** Convert a HEIC/HEIF File to a JPEG Blob (pure JS, nothing is uploaded). */
+async function heicToJpeg(file) {
+  const { default: heic2any } = await import('heic2any')
+  const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+  return Array.isArray(out) ? out[0] : out
+}
+
+function decodeImage(blob, name) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     const img = new Image()
     img.onload = () => resolve({ img, url })
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error(`Could not read "${file.name}". The file may be corrupted.`))
+      reject(new Error(`Could not read "${name}". The file may be corrupted.`))
     }
     img.src = url
   })
+}
+
+/** Load a File/Blob into an HTMLImageElement, resolved once decoded. */
+export async function loadImage(file) {
+  if (isHeic(file)) {
+    try {
+      return await decodeImage(await heicToJpeg(file), file.name)
+    } catch {
+      throw new Error(`Could not read "${file.name}". The HEIC file may be corrupted or unsupported.`)
+    }
+  }
+  return decodeImage(file, file.name)
 }
 
 /** True for TIFF files, which browsers can't decode natively (needs UTIF). */

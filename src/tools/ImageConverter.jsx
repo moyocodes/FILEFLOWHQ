@@ -58,7 +58,7 @@ export default function useImageConverter() {
   const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, {
       // TIFF often has an empty/`image/tiff` MIME that `image/*` may miss, so accept by extension too.
-      accept: ['image/*', '.tif', '.tiff']
+      accept: ['image/*', '.tif', '.tiff', '.heic', '.heif']
     })
     setErrors(fileErrors)
     const newItems = valid.map((file) => ({
@@ -191,7 +191,7 @@ export default function useImageConverter() {
           your device — no upload.
         </p>
 
-        <Dropzone accept="image/*,.tif,.tiff" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP, TIFF" />
+        <Dropzone accept="image/*,.tif,.tiff,.heic,.heif" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP, TIFF, HEIC" />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
 

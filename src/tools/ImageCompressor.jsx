@@ -118,7 +118,7 @@ export default function useImageCompressor() {
     : TARGET_PRESETS.find((p) => p.id === targetPreset)?.label ?? '1 MB'
 
   const handleFiles = useCallback((files) => {
-    const { valid, errors: fileErrors } = validateFiles(files, { accept: ['image/*', '.pdf', 'application/pdf'] })
+    const { valid, errors: fileErrors } = validateFiles(files, { accept: ['image/*', '.heic', '.heif', '.pdf', 'application/pdf'] })
     setErrors(fileErrors)
     const newItems = valid.map((file) => {
       const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name)
@@ -239,7 +239,7 @@ export default function useImageCompressor() {
         Pick a target output size and FileFlowHQ finds a quality level that gets each image or PDF under it.
       </p>
 
-      <Dropzone accept="image/*,.pdf,application/pdf" multiple onFiles={handleFiles} hint="PNG, JPG, WebP, PDF" />
+      <Dropzone accept="image/*,.heic,.heif,.pdf,application/pdf" multiple onFiles={handleFiles} hint="PNG, JPG, WebP, PDF" />
       <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
       {isConverting && <ProgressBar label="Compressing…" progress={progress} />}

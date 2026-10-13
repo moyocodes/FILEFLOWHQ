@@ -18,7 +18,7 @@ export default function useImagesToPdf() {
   const [dragIndex, setDragIndex] = useState(null)
 
   const handleFiles = useCallback((files) => {
-    const { valid, errors: fileErrors } = validateFiles(files, { accept: ['image/*'] })
+    const { valid, errors: fileErrors } = validateFiles(files, { accept: ['image/*', '.heic', '.heif'] })
     setErrors(fileErrors)
     const newItems = valid.map((file) => ({ id: uid(), file, thumb: URL.createObjectURL(file) }))
     setItems((prev) => [...prev, ...newItems])
@@ -62,7 +62,7 @@ export default function useImagesToPdf() {
         Combine one or more images into a single PDF. Drag rows to reorder pages.
       </p>
 
-      <Dropzone accept="image/*" multiple onFiles={handleFiles} hint="PNG, JPG, WebP" />
+      <Dropzone accept="image/*,.heic,.heif" multiple onFiles={handleFiles} hint="PNG, JPG, WebP, HEIC" />
       <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
       {isConverting && <ProgressBar label="Building PDF…" progress={progress} />}
