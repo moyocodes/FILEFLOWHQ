@@ -111,33 +111,30 @@ function HeroVideo() {
   )
 }
 
-function FeatureRow({ eyebrow, title, body, mock, flip = false, toolId }) {
+/** Compact feature card: a short headline over an animated mock of the tool. */
+function FeatureCard({ title, mock, toolId, delay = 0 }) {
   const tool = tools.find((t) => t.id === toolId)
   return (
-    <div className={`grid items-center gap-10 lg:grid-cols-2 lg:gap-16 ${flip ? 'lg:[&>*:first-child]:order-2' : ''}`}>
-      <Reveal>
-        <p className="mb-3 text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-text-dim">{eyebrow}</p>
-        {title}
-        <p className="mt-4 max-w-[46ch] text-[1rem] leading-relaxed text-text-dim">{body}</p>
-        {tool && (
-          <Link to={tool.path} className="group mt-6 inline-flex items-center gap-2 text-[0.95rem] font-semibold text-signal">
-            Open {tool.name}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-        )}
-      </Reveal>
-      <Reveal delay={0.1} className="[perspective:1200px]">
+    <Reveal delay={delay} className="flex flex-col">
+      <h3 className="mb-4 text-[1.25rem] font-bold leading-snug tracking-tight">{title}</h3>
+      <div className="[perspective:1200px]">
         <motion.div
-          initial={{ rotateY: flip ? 10 : -10, rotateX: 6 }}
-          whileInView={{ rotateY: flip ? 4 : -4, rotateX: 2 }}
-          whileHover={{ rotateY: 0, rotateX: 0 }}
+          initial={{ rotateX: 8 }}
+          whileInView={{ rotateX: 0 }}
+          whileHover={{ y: -4 }}
           viewport={{ once: true, amount: 0.4 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 18 }}
+          transition={{ type: 'spring', stiffness: 90, damping: 18 }}
         >
           {mock}
         </motion.div>
-      </Reveal>
-    </div>
+      </div>
+      {tool && (
+        <Link to={tool.path} className="group mt-4 inline-flex items-center gap-1.5 text-[0.88rem] font-semibold text-signal">
+          Open {tool.name}
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </Link>
+      )}
+    </Reveal>
   )
 }
 
@@ -186,13 +183,13 @@ export default function Home() {
           initial={{ opacity: 0, y: reduce ? 0 : 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mx-auto max-w-4xl px-4 pb-12 pt-16 text-center sm:px-6 sm:pt-24"
+          className="relative mx-auto max-w-4xl px-4 pb-10 pt-10 text-center sm:px-6 sm:pt-14"
         >
           <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-panel px-3.5 py-1.5 text-[0.75rem] font-medium text-text-dim shadow-card">
             <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_8px_var(--signal)]" />
             Free · private · no sign-up
           </span>
-          <h1 className="text-[clamp(2.4rem,6.5vw,4.6rem)] font-bold leading-[1.02] tracking-tight">
+          <h1 className="text-[clamp(2.1rem,5.5vw,3.9rem)] font-bold leading-[1.04] tracking-tight">
             Every file you convert.
             <br />
             <span className="text-signal">Never leaves</span> your device.
@@ -201,7 +198,7 @@ export default function Home() {
             Images, PDFs, SVGs and data files — converted right in your browser, in seconds. No uploads, no
             watermarks, no account.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/#tools"
               className="inline-flex items-center gap-2 rounded-full bg-signal px-6 py-3 text-[0.95rem] font-semibold text-white shadow-[0_14px_34px_-12px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void"
@@ -212,7 +209,7 @@ export default function Home() {
           </div>
 
           {/* tool snippets → the rest */}
-          <div className="mt-8 flex flex-wrap justify-center gap-2">
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
             {POPULAR.map((id) => {
               const t = tools.find((x) => x.id === id)
               const Icon = t.icon
@@ -232,15 +229,12 @@ export default function Home() {
           </div>
         </motion.div>
 
-        <div className="relative px-4 pb-20 sm:px-6">
-          <HeroVideo />
-        </div>
       </section>
 
       {/* ---------- Every tool ---------- */}
-      <section id="tools" className="scroll-mt-20 bg-[color-mix(in_srgb,var(--panel-raised)_45%,transparent)] py-20">
+      <section id="tools" className="scroll-mt-20 bg-[color-mix(in_srgb,var(--panel-raised)_45%,transparent)] py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <Reveal className="mb-10 text-center">
+          <Reveal className="mb-8 text-center">
             <Title before="Every tool. " accent="One place." />
             <p className="mx-auto mt-3 max-w-[52ch] text-text-dim">
               {tools.length} converters and utilities — {localCount} of them never upload a single byte.
@@ -267,69 +261,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- "What if it never left?" ---------- */}
-      <section className="mx-auto max-w-4xl px-4 py-24 text-center sm:px-6">
-        <Reveal>
-          <Title before="What if it " accent="never left" after="?" className="text-[clamp(2.2rem,5.5vw,4rem)]" />
-          <p className="mx-auto mt-5 max-w-[60ch] text-[1.05rem] leading-relaxed text-text-dim">
-            Most online converters upload your photos, contracts and spreadsheets to someone else's server.
-            FileFlowHQ does the work inside your browser instead — so your files stay exactly where they are.
+      {/* ---------- Launch video ---------- */}
+      <section className="px-4 py-16 sm:px-6">
+        <Reveal className="mx-auto mb-8 max-w-3xl text-center">
+          <Title before="What if it " accent="never left" after="?" />
+          <p className="mx-auto mt-3 max-w-[56ch] text-text-dim">
+            Most converters upload your files to a server. FileFlowHQ does the work inside your browser instead.
           </p>
         </Reveal>
+        <HeroVideo />
       </section>
 
-      {/* ---------- Feature rows (video scenes) ---------- */}
-      <section className="mx-auto max-w-6xl space-y-28 px-4 pb-28 sm:px-6 lg:px-8">
-        <FeatureRow
-          eyebrow="Image & PDF Compressor"
-          title={<Title before="Compress to the " accent="size" after=" you need." />}
-          body="Pick a target — 100 KB, 500 KB, 1 MB — and FileFlowHQ finds the best quality that fits. Perfect for upload limits and email attachments."
-          mock={<CompressMock />}
-          toolId="image-compressor"
-        />
-        <FeatureRow
-          flip
-          eyebrow="Merge / Split PDF"
-          title={<Title accent="Merge" after=" and split PDFs." />}
-          body="Drop in several PDFs, drag them into order, and get one file. Or pull out just the pages you need. Links inside the PDF keep working."
-          mock={<MergeMock />}
-          toolId="merge-split-pdf"
-        />
-        <FeatureRow
-          eyebrow="Document Scanner"
-          title={<Title before="Scan paper straight to " accent="PDF" after="." />}
-          body="Point your phone's camera at a page, snap, and save a clean PDF — receipts, forms and notes, without installing an app."
-          mock={<ScanMock />}
-          toolId="document-scanner"
-        />
+      {/* ---------- Three features, one row ---------- */}
+      <section className="mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 md:grid-cols-3 lg:px-8">
+        <FeatureCard title={<>Compress to the <span className="text-signal">size</span> you need.</>} mock={<CompressMock />} toolId="image-compressor" />
+        <FeatureCard title={<><span className="text-signal">Merge</span> and split PDFs.</>} mock={<MergeMock />} toolId="merge-split-pdf" delay={0.08} />
+        <FeatureCard title={<>Scan paper straight to <span className="text-signal">PDF</span>.</>} mock={<ScanMock />} toolId="document-scanner" delay={0.16} />
       </section>
 
-      {/* ---------- Checklist ---------- */}
-      <section className="mx-auto max-w-3xl px-4 pb-24 sm:px-6">
-        <div className="grid gap-3">
-          {[
-            ['Private by design', 'Files stay on your device.'],
-            ['Free, no sign-up', 'No watermarks, no account, no limits on quality.'],
-            ['Works offline', 'Install it like an app — on desktop and phone.']
-          ].map(([t, d], i) => (
-            <Reveal key={t} delay={i * 0.1}>
-              <div className="flex items-center gap-4 rounded-2xl bg-panel px-5 py-4 shadow-card">
-                <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-signal-dim text-signal">
-                  <Check className="h-4 w-4" strokeWidth={2.5} />
-                </span>
-                <div>
-                  <p className="font-semibold">{t}</p>
-                  <p className="text-[0.85rem] text-text-dim">{d}</p>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ---------- End card (video finale) ---------- */}
-      <section className="relative overflow-hidden px-4 pb-24 sm:px-6">
-        <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-[#040608] px-6 py-16 text-center sm:px-16">
+      {/* ---------- End card (video finale) + promises ---------- */}
+      <section className="px-4 pb-16 sm:px-6">
+        <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-[#040608] px-6 py-12 text-center sm:px-12">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0">
             {[20, 40, 60, 80].map((top, i) => (
               <span
@@ -339,24 +291,29 @@ export default function Home() {
               />
             ))}
           </div>
-          <img src="/logofull.svg" alt="FileFlowHQ" width="248" height="63" className="relative mx-auto h-14 w-auto sm:h-20" />
-          <p className="relative mt-6 text-[clamp(1.2rem,2.6vw,1.6rem)] font-semibold text-white">
-            Free, <span className="text-[#3be698]">private</span> file conversion.
-            <br />
-            Right in your browser.
+          <img src="/logofull.svg" alt="FileFlowHQ" width="248" height="63" className="relative mx-auto h-12 w-auto sm:h-16" />
+          <p className="relative mt-5 text-[clamp(1.15rem,2.4vw,1.5rem)] font-semibold text-white">
+            Free, <span className="text-[#3be698]">private</span> file conversion. Right in your browser.
           </p>
+          <div className="relative mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[0.88rem] text-[#a3b3ad]">
+            {['Private by design', 'Free, no sign-up', 'Works offline'].map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5">
+                <Check className="h-4 w-4 text-[#3be698]" strokeWidth={2.5} /> {t}
+              </span>
+            ))}
+          </div>
           <Link
             to="/#tools"
-            className="relative mt-8 inline-flex rounded-full bg-[#3be698] px-7 py-3 text-[0.95rem] font-semibold text-[#040608] transition-transform hover:-translate-y-0.5"
+            className="relative mt-7 inline-flex rounded-full bg-[#3be698] px-7 py-3 text-[0.95rem] font-semibold text-[#040608] transition-transform hover:-translate-y-0.5"
           >
-            fileflowhq.com — start now
+            Start converting
           </Link>
         </Reveal>
       </section>
 
       {/* Crawlable SEO copy — spells out the conversions in words with real
           links, giving search engines keyword-rich text and internal links. */}
-      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
         <div className="max-w-[70ch] text-text-dim">
           <h2 className="mb-3 text-[1.1rem] font-semibold text-text">Free online file converter — private, no sign-up</h2>
           <p className="text-[0.9rem] leading-relaxed">
