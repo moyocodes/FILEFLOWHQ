@@ -7,7 +7,7 @@
  */
 /* global __BUILD_ID__ */
 const BUILD_KEY = 'ffhq-build'
-const KEEP = ['theme', 'ffhq-analytics-optout', 'ffhq-analytics-optout-set', 'ffhq-stats-token']
+const KEEP = ['ffhq-theme', 'ffhq-analytics-optout', 'ffhq-analytics-optout-set', 'ffhq-stats-token']
 
 export function resetOnNewDeploy() {
   const build = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : ''

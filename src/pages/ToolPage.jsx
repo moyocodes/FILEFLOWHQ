@@ -46,7 +46,7 @@ function ToolHero({ tool }) {
             )}
             <StampBadge formats={tool.formats} />
           </div>
-          <h1 className="text-[clamp(1.7rem,3.4vw,2.6rem)] font-bold leading-[1.1] tracking-tight">{tool.name}</h1>
+          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-semibold leading-[1.15] tracking-tight">{tool.name}</h1>
           {tool.description && (
             <p className="mt-2 max-w-[56ch] text-[0.95rem] leading-relaxed text-text-dim">{tool.description}</p>
           )}

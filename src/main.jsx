@@ -11,10 +11,14 @@ resetOnNewDeploy()
 
 // Restore theme before paint to avoid a flash of the wrong theme. Dark is the
 // default look (it matches the brand video); light only when chosen.
-const savedTheme = localStorage.getItem('theme')
-if (savedTheme !== 'light') {
-  document.documentElement.classList.add('dark')
+// index.html already starts with class="dark"; only an explicit choice of light removes it.
+let savedTheme = null
+try {
+  savedTheme = localStorage.getItem('ffhq-theme')
+} catch {
+  // storage blocked: stay dark
 }
+document.documentElement.classList.toggle('dark', savedTheme !== 'light')
 
 // Web keeps clean URLs (e.g. /tools/image-converter) for SEO; the host has a
 // catch-all rewrite to index.html (see vercel.json). Native builds

@@ -32,9 +32,9 @@ const CHIPS = [
 /** Section heading in the video's style: white, with one mint keyword. */
 function Title({ before, accent, after, className = '' }) {
   return (
-    <h2 className={`text-[clamp(1.8rem,4vw,3rem)] font-bold leading-[1.1] tracking-tight ${className}`}>
+    <h2 className={`text-[clamp(1.6rem,3.2vw,2.4rem)] font-semibold leading-[1.15] tracking-tight ${className}`}>
       {before}
-      <span className="text-signal">{accent}</span>
+      <span className="font-bold text-signal">{accent}</span>
       {after}
     </h2>
   )
@@ -64,15 +64,10 @@ function HeroVideo() {
 
   return (
     <div className="relative mx-auto w-full max-w-3xl [perspective:1400px]">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, rotateY: -18, rotateX: 8, y: 30 }}
-        animate={{ opacity: 1, rotateY: reduce ? 0 : -4, rotateX: reduce ? 0 : 2, y: 0 }}
-        whileHover={{ rotateY: 0, rotateX: 0 }}
-        transition={{ type: 'spring', stiffness: 60, damping: 16, delay: 0.15, opacity: { duration: 0.4, delay: 0.1 } }}
-        // Dark mode: no frame — the video's own near-black background is the page's,
-        // and a soft edge mask dissolves it into the page. Light mode keeps a
-        // rounded frame (a dark video can't blend into a light page).
-        className="relative overflow-hidden rounded-[22px] bg-black shadow-lift dark:rounded-none dark:bg-transparent dark:shadow-none dark:[mask-image:radial-gradient(ellipse_75%_70%_at_50%_50%,#000_55%,transparent_100%)]"
+      <div
+        // Entrance is a CSS animation (.video-in) so the video can never be left half-faded;
+        // the slight 3D tilt straightens on hover.
+        className="video-in relative overflow-hidden rounded-[22px] bg-black shadow-lift transition-transform duration-700 ease-out [transform:rotateY(-4deg)_rotateX(2deg)] hover:[transform:none] motion-reduce:[transform:none] dark:rounded-none dark:bg-transparent dark:shadow-none dark:[mask-image:radial-gradient(ellipse_75%_70%_at_50%_50%,#000_55%,transparent_100%)]"
       >
         <video
           ref={videoRef}
@@ -113,7 +108,7 @@ function HeroVideo() {
           {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           {muted ? 'Sound off' : 'Sound on'}
         </button>
-      </motion.div>
+      </div>
     </div>
   )
 }
@@ -123,7 +118,7 @@ function FeatureCard({ title, mock, toolId, delay = 0 }) {
   const tool = tools.find((t) => t.id === toolId)
   return (
     <Reveal delay={delay} className="flex flex-col">
-      <h3 className="mb-4 text-[1.25rem] font-bold leading-snug tracking-tight">{title}</h3>
+      <h3 className="mb-4 text-[1.15rem] font-semibold leading-snug tracking-tight [&_span]:font-bold">{title}</h3>
       <div className="[perspective:1200px]">
         <motion.div
           initial={{ rotateX: 8 }}
@@ -197,12 +192,12 @@ export default function Home() {
             <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_8px_var(--signal)]" />
             Free · private · no sign-up
           </span>
-          <h1 className="text-[clamp(2.1rem,4.6vw,3.6rem)] font-bold leading-[1.04] tracking-tight">
+          <h1 className="text-[clamp(1.9rem,3.4vw,2.75rem)] font-semibold leading-[1.1] tracking-tight">
             Every file you convert.
             <br />
-            <span className="text-signal">Never leaves</span> your device.
+            <span className="font-bold text-signal">Never leaves</span> your device.
           </h1>
-          <p className="mx-auto mt-5 max-w-[52ch] text-[1.05rem] leading-relaxed text-text-dim lg:mx-0">
+          <p className="mx-auto mt-4 max-w-[52ch] text-[0.98rem] font-light leading-relaxed text-text-dim lg:mx-0">
             Images, PDFs, SVGs and data files — converted right in your browser, in seconds. No uploads, no
             watermarks, no account.
           </p>

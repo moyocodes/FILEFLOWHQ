@@ -26,7 +26,7 @@ export default function ToolCard({ tool }) {
         <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
       </span>
       <span className="relative min-w-0 flex-1">
-        <span className="block truncate text-[0.9rem] font-semibold tracking-tight text-text">{tool.name}</span>
+        <span className="block truncate text-[0.9rem] font-medium text-text">{tool.name}</span>
         <span className="block truncate text-[0.76rem] text-text-dim">
           {tool.comingSoon ? 'Coming soon' : tool.tagline || tool.description}
         </span>

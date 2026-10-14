@@ -27,7 +27,7 @@ export default function Privacy() {
       <section className="bg-gradient-to-b from-signal-dim to-transparent">
         <div className="mx-auto max-w-3xl px-4 pb-8 pt-12 sm:px-6">
           <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-signal">Last updated {UPDATED}</p>
-          <h1 className="text-[clamp(1.9rem,4vw,2.8rem)] font-bold leading-tight tracking-tight">Privacy Policy</h1>
+          <h1 className="text-[clamp(1.8rem,3.4vw,2.5rem)] font-semibold leading-tight tracking-tight">Privacy Policy</h1>
           <p className="mt-3 max-w-[60ch] text-[0.95rem] leading-relaxed text-text-dim">
             This policy covers the FileFlowHQ website (fileflowhq.com), its mobile apps, and its Chrome extension.
             In short: almost everything happens on your device, and the few things that don&apos;t are listed below.

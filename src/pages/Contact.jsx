@@ -20,7 +20,7 @@ export default function Contact() {
           <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-signal">
             We reply by email
           </p>
-          <h1 className="text-[clamp(1.9rem,4vw,2.8rem)] font-bold leading-tight tracking-tight">
+          <h1 className="text-[clamp(1.8rem,3.4vw,2.5rem)] font-semibold leading-tight tracking-tight">
             Contact FileFlowHQ
           </h1>
           <p className="mt-3 max-w-[60ch] text-[0.95rem] leading-relaxed text-text-dim">

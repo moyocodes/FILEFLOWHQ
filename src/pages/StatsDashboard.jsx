@@ -475,7 +475,7 @@ export default function StatsDashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-signal">Private</p>
-          <h1 className="text-[clamp(1.8rem,3.5vw,2.4rem)] font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-[clamp(1.8rem,3.5vw,2.4rem)] font-semibold tracking-tight">Analytics</h1>
           <p className="text-[0.85rem] text-text-dim">Cookie-free: no IPs stored, bots and refreshes within 30 minutes not counted.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
