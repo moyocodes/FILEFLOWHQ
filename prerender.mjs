@@ -19,6 +19,7 @@ import { build } from 'esbuild'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { studioApps, studioPath } from './src/studioApps.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DIST = join(__dirname, 'dist')
@@ -123,6 +124,33 @@ function buildPages(tools) {
       changefreq: 'yearly',
     },
   ]
+
+  // Mirrors applySeo() in src/pages/Studio.jsx.
+  const studioDescription =
+    'Free editors that run entirely in your browser: edit PDFs, photos, video, vectors, audio, documents, slides, spreadsheets and CAD drawings. No uploads, no sign-up.'
+  pages.push({
+    path: '/studio',
+    title: `Studio — Free Online Editors — ${SITE_NAME}`,
+    description: studioDescription,
+    body: `<main><h1>Studio</h1><p>${esc(studioDescription)}</p><ul>${studioApps
+      .map((a) => `<li><a href="${studioPath(a)}">${esc(a.name)}</a> — ${esc(a.description)}</li>`)
+      .join('')}</ul>${toolLinks(tools)}</main>`,
+    jsonLd: [breadcrumb('Studio', '/studio')],
+    priority: '0.8',
+    changefreq: 'weekly',
+  })
+  for (const app of studioApps) {
+    const description = `${app.description} Free, runs entirely in your browser — your files never leave your device.`
+    pages.push({
+      path: studioPath(app),
+      title: `${app.name} — Free Online ${app.tagline} — ${SITE_NAME}`,
+      description,
+      body: `<main><h1>${esc(app.name)}</h1><p>${esc(description)}</p>${toolLinks(tools)}</main>`,
+      jsonLd: [breadcrumb(app.name, studioPath(app))],
+      priority: '0.7',
+      changefreq: 'monthly',
+    })
+  }
 
   for (const tool of tools) {
     // Mirrors ToolPage.jsx's applySeo() call so the static and live tags agree.

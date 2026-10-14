@@ -50,6 +50,25 @@ export default function Privacy() {
         </p>
       </Section>
 
+      <Section title="Studio editors">
+        <p>
+          The Studio editors (PDF Editor, Photo Editor, Video Editor and the others) run entirely in your browser.
+          Documents you open or create in them are never uploaded. When you save or export, the file goes from the
+          editor to this page on your device and is downloaded from there.
+        </p>
+      </Section>
+
+      <Section title="Payments and credits">
+        <p>
+          Some features use credits. To count them without accounts, we store a one-way hash of your IP address
+          with your credit balance; the IP address itself is never stored. When you buy credits, the payment is
+          processed by Paystack: you enter your card or bank details on Paystack&apos;s checkout, never on our
+          site, and we never see or store them. We send Paystack the email address you give for your receipt and
+          keep the payment reference so we can credit your balance. Paystack handles your payment under its own
+          terms and privacy policy.
+        </p>
+      </Section>
+
       <Section title="The one feature that uploads a file: PDF to Word">
         <p>
           When you choose Word (.docx) output in PDF to Word, the PDF is sent to our server, which passes it to
@@ -111,7 +130,8 @@ export default function Privacy() {
         <p>
           We do not sell your data, use it for advertising, or use it to determine creditworthiness or lending
           eligibility. We do not transfer it to third parties except the service providers named above (Adobe
-          for PDF to Word, Mailjet for email, Vercel for hosting and analytics, Google Fonts for typefaces),
+          for PDF to Word, Mailjet for email, Paystack for payments, Upstash for storing credit balances and short
+          links, Vercel for hosting and analytics, Google Fonts for typefaces),
           solely to provide the features you use.
         </p>
       </Section>

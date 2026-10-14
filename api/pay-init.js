@@ -47,7 +47,8 @@ export default async function handler(req, res) {
       console.error('Paystack initialize failed:', body)
       return res.status(502).json({ error: 'Could not start the payment. Please try again.' })
     }
-    return res.status(200).json({ authorizationUrl: body.data.authorization_url, reference })
+    // accessCode lets the page open Paystack's popup instead of leaving (Studio keeps the open document).
+    return res.status(200).json({ authorizationUrl: body.data.authorization_url, accessCode: body.data.access_code, reference })
   } catch (err) {
     console.error('pay-init error:', err)
     return res.status(502).json({ error: 'Could not start the payment. Please try again.' })

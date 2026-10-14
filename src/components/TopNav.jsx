@@ -4,6 +4,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { tools, categories } from '../toolsConfig.js'
+import { studioApps, studioPath } from '../studioApps.js'
+import { studioIcons } from '../pages/Studio.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
 import { InstallButton } from './InstallPrompt.jsx'
 import ExtensionButton from './ExtensionButton.jsx'
@@ -55,6 +57,49 @@ function ToolLinks({ onNavigate, columns = true }) {
           </ul>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Drawer section listing the Studio editors (src/studioApps.js). */
+function StudioLinks({ onNavigate }) {
+  return (
+    <div className="mt-6">
+      <NavLink
+        to="/studio"
+        end
+        onClick={onNavigate}
+        className="mb-2 block px-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-text-dim hover:text-text"
+      >
+        Studio editors
+      </NavLink>
+      <ul className="space-y-0.5">
+        {studioApps.map((app) => {
+          const Icon = studioIcons[app.icon]
+          return (
+            <li key={app.id}>
+              <NavLink
+                to={studioPath(app)}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  [
+                    'flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors',
+                    isActive ? 'bg-signal-dim text-text' : 'hover:bg-panel-raised'
+                  ].join(' ')
+                }
+              >
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-signal-dim text-signal">
+                  <Icon className="h-4 w-4" strokeWidth={1.9} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[0.85rem] font-medium text-text">{app.name}</span>
+                  <span className="block truncate text-[0.72rem] text-text-dim">{app.tagline}</span>
+                </span>
+              </NavLink>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -114,6 +159,9 @@ export default function TopNav() {
         </Link>
 
         <nav className="flex items-center gap-1" aria-label="Main">
+          <NavLink to="/studio" className={`${link} hidden md:inline-flex`}>
+            Studio
+          </NavLink>
           <NavLink to="/contact" className={`${link} hidden md:inline-flex`}>
             Contact
           </NavLink>
@@ -182,8 +230,12 @@ export default function TopNav() {
               </div>
               <div className="flex-1 overflow-y-auto px-3 pb-6">
                 <ToolLinks columns={false} onNavigate={() => setDrawerOpen(false)} />
+                <StudioLinks onNavigate={() => setDrawerOpen(false)} />
               </div>
               <div className="flex flex-shrink-0 flex-wrap gap-2 px-5 pb-6 pt-3 md:hidden">
+                <Link to="/studio" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-medium">
+                  Studio
+                </Link>
                 <Link to="/contact" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-medium">
                   Contact
                 </Link>

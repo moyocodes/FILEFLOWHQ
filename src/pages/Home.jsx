@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, Volume2, VolumeX, Play } from 'lucide-react'
+import { ArrowRight, Volume2, VolumeX, Play, Sparkles } from 'lucide-react'
 import { tools, categories } from '../toolsConfig.js'
 import ToolCard from '../components/ToolCard.jsx'
 import ExtensionButton from '../components/ExtensionButton.jsx'
-import { CompressMock, MergeMock, ScanMock } from '../components/HomeMocks.jsx'
+import { studioApps, studioPath } from '../studioApps.js'
+import { studioIcons } from './Studio.jsx'
 import { applySeo } from '../utils/useSeo.js'
 
 /*
- * Home page. Structure follows Notion's (centered hero → product video →
- * sections); the look follows the FileFlowHQ launch video (near-black, mint
- * keyword highlights, floating format chips, speed lines, tilted app windows).
+ * Home page, kept short: hero + video → every tool → Studio strip → SEO copy.
+ * The look follows the FileFlowHQ launch video (near-black, mint keyword
+ * highlights, floating format chips, speed lines, tilted app windows).
  */
 
 const localCount = tools.filter((t) => !t.usesServer).length
@@ -113,33 +114,6 @@ function HeroVideo() {
   )
 }
 
-/** Compact feature card: a short headline over an animated mock of the tool. */
-function FeatureCard({ title, mock, toolId, delay = 0 }) {
-  const tool = tools.find((t) => t.id === toolId)
-  return (
-    <Reveal delay={delay} className="flex flex-col">
-      <h3 className="mb-4 text-[1.15rem] font-semibold leading-snug tracking-tight [&_span]:font-bold">{title}</h3>
-      <div className="[perspective:1200px]">
-        <motion.div
-          initial={{ rotateX: 8 }}
-          whileInView={{ rotateX: 0 }}
-          whileHover={{ y: -4 }}
-          viewport={{ once: true, amount: 0.4 }}
-          transition={{ type: 'spring', stiffness: 90, damping: 18 }}
-        >
-          {mock}
-        </motion.div>
-      </div>
-      {tool && (
-        <Link to={tool.path} className="group mt-4 inline-flex items-center gap-1.5 text-[0.88rem] font-semibold text-signal">
-          Open {tool.name}
-          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-        </Link>
-      )}
-    </Reveal>
-  )
-}
-
 export default function Home() {
   const reduce = useReducedMotion()
 
@@ -188,18 +162,22 @@ export default function Home() {
           className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-12 pt-10 sm:px-6 sm:pt-14 lg:grid-cols-[1fr_1.1fr] lg:gap-12 lg:px-8"
         >
           <div className="text-center lg:text-left">
-          <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-panel px-3.5 py-1.5 text-[0.75rem] font-medium text-text-dim shadow-card">
+          <Link
+            to="/studio"
+            className="group mb-5 inline-flex items-center gap-2 rounded-full bg-panel px-3.5 py-1.5 text-[0.75rem] font-medium text-text-dim shadow-card transition-colors hover:text-text"
+          >
             <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_8px_var(--signal)]" />
-            Free · private · no sign-up
-          </span>
+            <span className="font-semibold text-signal">New</span> {studioApps.length} free editors in Studio
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </Link>
           <h1 className="text-[clamp(1.9rem,3.4vw,2.75rem)] font-semibold leading-[1.1] tracking-tight">
             Every file you convert.
             <br />
             <span className="font-bold text-signal">Never leaves</span> your device.
           </h1>
           <p className="mx-auto mt-4 max-w-[52ch] text-[0.98rem] font-light leading-relaxed text-text-dim lg:mx-0">
-            Images, PDFs, SVGs and data files — converted right in your browser, in seconds. No uploads, no
-            watermarks, no account.
+            Convert images, PDFs and data files in seconds, or edit them in Studio. All in your browser: no
+            uploads, no watermarks, no account.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
             <Link
@@ -207,6 +185,12 @@ export default function Home() {
               className="inline-flex items-center gap-2 rounded-full bg-signal px-6 py-3 text-[0.95rem] font-semibold text-white shadow-[0_14px_34px_-12px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void"
             >
               Start converting <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/studio"
+              className="inline-flex items-center gap-2 rounded-full bg-panel px-6 py-3 text-[0.95rem] font-semibold shadow-card transition-transform hover:-translate-y-0.5"
+            >
+              <Sparkles className="h-4 w-4 text-signal" /> Open Studio
             </Link>
             <ExtensionButton variant="hero" />
           </div>
@@ -267,11 +251,39 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- Three features, one row ---------- */}
-      <section className="mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 md:grid-cols-3 lg:px-8">
-        <FeatureCard title={<>Compress to the <span className="text-signal">size</span> you need.</>} mock={<CompressMock />} toolId="image-compressor" />
-        <FeatureCard title={<><span className="text-signal">Merge</span> and split PDFs.</>} mock={<MergeMock />} toolId="merge-split-pdf" delay={0.08} />
-        <FeatureCard title={<>Scan paper straight to <span className="text-signal">PDF</span>.</>} mock={<ScanMock />} toolId="document-scanner" delay={0.16} />
+      {/* ---------- Studio ---------- */}
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <Reveal className="rounded-card bg-panel p-6 shadow-card sm:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <Title before="Need more than a convert? " accent="Edit it." />
+              <p className="mt-2 max-w-[56ch] text-text-dim">
+                Studio has {studioApps.length} full editors for PDFs, photos, video, documents and more. They run in your
+                browser too, so nothing is uploaded.
+              </p>
+            </div>
+            <Link
+              to="/studio"
+              className="inline-flex items-center gap-2 rounded-full bg-signal px-5 py-2.5 text-[0.9rem] font-semibold text-white shadow-[0_14px_34px_-12px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void"
+            >
+              Open Studio <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            {studioApps.map((app) => {
+              const Icon = studioIcons[app.icon]
+              return (
+                <Link
+                  key={app.id}
+                  to={studioPath(app)}
+                  className="inline-flex items-center gap-2 rounded-full bg-panel-raised px-3.5 py-2 text-[0.8rem] font-medium transition-colors hover:text-signal"
+                >
+                  <Icon className="h-3.5 w-3.5 text-signal" /> {app.name}
+                </Link>
+              )
+            })}
+          </div>
+        </Reveal>
       </section>
 
       {/* Crawlable SEO copy — spells out the conversions in words with real
@@ -311,6 +323,30 @@ export default function Home() {
             , and{' '}
             <Link to="/tools/csv-json" className="text-signal hover:underline">
               convert CSV to JSON and back
+            </Link>
+            . Need to edit instead?{' '}
+            <Link to="/studio" className="text-signal hover:underline">
+              Studio
+            </Link>{' '}
+            has free in-browser editors for{' '}
+            <Link to="/studio/pdf-editor" className="text-signal hover:underline">
+              PDFs
+            </Link>
+            ,{' '}
+            <Link to="/studio/photo-editor" className="text-signal hover:underline">
+              photos
+            </Link>
+            ,{' '}
+            <Link to="/studio/video-editor" className="text-signal hover:underline">
+              video
+            </Link>
+            ,{' '}
+            <Link to="/studio/word-processor" className="text-signal hover:underline">
+              documents
+            </Link>{' '}
+            and{' '}
+            <Link to="/studio/spreadsheet" className="text-signal hover:underline">
+              spreadsheets
             </Link>
             . Almost every conversion happens locally on your device — your files aren't uploaded to a server,
             so your data stays private. (The exceptions are Word output in PDF to Word, which uses a secure cloud

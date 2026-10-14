@@ -1,0 +1,18 @@
+{
+  "name": "fileflowhq-video",
+  "private": true,
+  "type": "module",
+  "description": "Motion videos for FileFlowHQ, written as React with Remotion.",
+  "scripts": {
+    "studio": "remotion studio src/index.js",
+    "render": "remotion render src/index.js",
+    "render:all": "node render-all.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.535",
+    "@remotion/google-fonts": "4.0.535",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.535"
+  }
+}

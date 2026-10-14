@@ -24,12 +24,14 @@ const UsageContext = createContext(null)
 export function UsageProvider({ children }) {
   const { showToast } = useToast()
   const [remaining, setRemaining] = useState(null) // null = unknown / unlimited
+  const [paidRemaining, setPaidRemaining] = useState(null) // purchased uses left (Studio exports)
   const [pricing, setPricing] = useState({ packUses: 5, priceNaira: 1500, freeUses: 5 })
   const [paywallOpen, setPaywallOpen] = useState(false)
   const recent = useRef(new Map()) // download key -> when it was counted
 
   const applyStatus = useCallback((data) => {
     if (data && 'remaining' in data) setRemaining(data.remaining)
+    if (data && 'paidRemaining' in data) setPaidRemaining(data.paidRemaining)
     if (data?.priceNaira) setPricing({ packUses: data.packUses, priceNaira: data.priceNaira, freeUses: data.freeUses })
   }, [])
 
@@ -66,16 +68,34 @@ export function UsageProvider({ children }) {
     }
   }, [refresh, showToast])
 
-  /** Spend one use for this download. Resolves true if the download may proceed. */
+  /** Confirm a Paystack reference with the server and credit it. Resolves true when credited. */
+  const verifyPayment = useCallback(
+    async (reference) => {
+      const res = await post('/api/pay-verify', { reference })
+      if (!res.ok) return false
+      await refresh()
+      return true
+    },
+    [refresh]
+  )
+
+  /**
+   * Spend one use for this download. Resolves true if the download may proceed.
+   * `paid: true` (Studio exports) spends only purchased uses; on 402 it resolves
+   * false without opening the tools paywall, so the caller shows its own checkout.
+   */
   const requestUse = useCallback(
-    async (key) => {
+    async (key, { paid = false } = {}) => {
       const last = recent.current.get(key)
       if (last && Date.now() - last < REPEAT_WINDOW_MS) return true // re-downloading the same result
       try {
-        const res = await post('/api/usage', { action: 'consume' })
+        const res = await post('/api/usage', { action: 'consume', paid })
         if (res.status === 402) {
-          setRemaining(0)
-          setPaywallOpen(true)
+          applyStatus(await res.json().catch(() => ({})))
+          if (!paid) {
+            setRemaining(0)
+            setPaywallOpen(true)
+          }
           return false
         }
         if (!res.ok) return true
@@ -96,7 +116,7 @@ export function UsageProvider({ children }) {
   const closePaywall = useCallback(() => setPaywallOpen(false), [])
 
   return (
-    <UsageContext.Provider value={{ remaining, pricing, paywallOpen, requestUse, openPaywall, closePaywall }}>
+    <UsageContext.Provider value={{ remaining, paidRemaining, pricing, paywallOpen, requestUse, verifyPayment, refresh, openPaywall, closePaywall }}>
       {children}
     </UsageContext.Provider>
   )

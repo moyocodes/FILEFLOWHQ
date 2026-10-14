@@ -184,3 +184,26 @@ html.dark {
 @media (prefers-reduced-motion: reduce) {
   .video-in { animation: none; }
 }
+
+/* Studio editor loader: an indeterminate bar while the editor downloads and starts. */
+@keyframes studio-load {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.studio-load-bar {
+  animation: studio-load 1.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-load-bar {
+    animation: none;
+    transform: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
