@@ -15,6 +15,8 @@ import ToastStack from './components/ToastStack.jsx'
 import ContactChat from './components/ContactChat.jsx'
 import InstallPrompt from './components/InstallPrompt.jsx'
 import StatsDashboard from './pages/StatsDashboard.jsx'
+import PreviewModal from './components/PreviewModal.jsx'
+import { PreviewProvider } from './context/PreviewContext.jsx'
 import { trackView } from './utils/analytics.js'
 
 /**
@@ -59,6 +61,7 @@ function Shell() {
       </main>
       <SiteFooter />
 
+      <PreviewModal />
       <EmailGateModal />
       <ToastStack />
       <ContactChat />
@@ -71,7 +74,9 @@ export default function App() {
   return (
     <ToastProvider>
       <EmailGateProvider>
-        <Shell />
+        <PreviewProvider>
+          <Shell />
+        </PreviewProvider>
       </EmailGateProvider>
     </ToastProvider>
   )

@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
+import { PreviewButton } from '../components/PreviewModal.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
@@ -215,13 +216,16 @@ export default function useImageConverter() {
                     onRename={primary ? (newName) => renameItem(item.id, newName) : undefined}
                     rightSlot={
                       item.status === 'done' ? (
-                        <button
-                          onClick={() => downloadOne(item)}
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
-                          aria-label={`Download ${displayName}`}
-                        >
-                          <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                        </button>
+                        <>
+                          <PreviewButton blob={primary.blob} name={primary.name} onDownload={() => downloadOne(item)} />
+                          <button
+                            onClick={() => downloadOne(item)}
+                            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
+                            aria-label={`Download ${displayName}`}
+                          >
+                            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                          </button>
+                        </>
                       ) : null
                     }
                   />

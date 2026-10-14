@@ -9,6 +9,7 @@ import pdfjsLib from '../utils/pdfjsSetup.js'
 import { validateFiles, readAsArrayBuffer, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
 import { extractPageLines } from '../utils/pdfTextExtraction.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { usePreview } from '../context/PreviewContext.jsx'
 import { apiUrl } from '../utils/api'
 
 // Matches the Vercel serverless function's request body ceiling (api/pdf-to-word.js).
@@ -28,6 +29,7 @@ function linesToPlainText(lines) {
 
 export default function usePdfToWord() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [file, setFile] = useState(null)
   const [format, setFormat] = useState('docx') // 'docx' (Adobe, styled) | 'txt' (local, plain)
   const [outputName, setOutputName] = useState('')
@@ -80,10 +82,10 @@ export default function usePdfToWord() {
     const blob = await response.blob()
     const trimmedName = outputName.trim() || stripExtension(file.name)
     const resultName = trimmedName.endsWith('.docx') ? trimmedName : `${trimmedName}.docx`
-    gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Word')
+    showPreview({ blob: blob, name: resultName, onDownload: () => gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Word') })
     setResult({ name: resultName, size: blob.size, blob, toolName: 'PDF to Word' })
     setProgress(100)
-  }, [file, outputName, gatedDownload])
+  }, [file, outputName, gatedDownload, showPreview])
 
   const convertToText = useCallback(async () => {
     const buffer = await readAsArrayBuffer(file)
@@ -103,16 +105,16 @@ export default function usePdfToWord() {
     const blob = new Blob([fullText], { type: 'text/plain' })
     const trimmedName = outputName.trim() || stripExtension(file.name)
     const resultName = trimmedName.endsWith('.txt') ? trimmedName : `${trimmedName}.txt`
-    gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Text')
+    showPreview({ blob: blob, name: resultName, onDownload: () => gatedDownload(() => downloadBlob(blob, resultName), resultName, 'PDF to Text') })
     setResult({ name: resultName, size: blob.size, blob, toolName: 'PDF to Text' })
     setProgress(100)
     setPreview(fullText.split('\n').slice(0, 14).join('\n') || '(No text found)')
-  }, [file, outputName, gatedDownload])
+  }, [file, outputName, gatedDownload, showPreview])
 
   const downloadAgain = useCallback(() => {
     if (!result) return
     gatedDownload(() => downloadBlob(result.blob, result.name), result.name, result.toolName)
-  }, [result, gatedDownload])
+  }, [result, gatedDownload, showPreview])
 
   const convert = useCallback(async () => {
     if (!file) return

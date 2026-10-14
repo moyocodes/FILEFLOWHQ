@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
@@ -140,7 +141,10 @@ export default function TopNav() {
         </nav>
       </div>
 
-      <AnimatePresence>
+      {/* Portalled to <body>: the header's backdrop-blur makes it the containing block for
+          position:fixed children, which would trap the drawer inside the 64px bar. */}
+      {createPortal(
+        <AnimatePresence>
         {drawerOpen && (
           <>
             <motion.div
@@ -192,7 +196,9 @@ export default function TopNav() {
             </motion.aside>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body
+      )}
     </header>
   )
 }

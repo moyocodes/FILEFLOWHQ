@@ -7,6 +7,7 @@ import ProgressBar from '../components/ProgressBar.jsx'
 import PdfThumbnail from '../components/PdfThumbnail.jsx'
 import { validateFiles, readAsArrayBuffer, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { usePreview } from '../context/PreviewContext.jsx'
 import { remapInternalLinks } from '../utils/pdfLinks.js'
 
 /**
@@ -68,6 +69,7 @@ export default function useMergeSplitPdf() {
 
 function useMergePanel() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [items, setItems] = useState([])
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
@@ -113,12 +115,12 @@ function useMergePanel() {
       const bytes = await outDoc.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name, 'Merge PDF')
+      showPreview({ blob: blob, name: name, onDownload: () => gatedDownload(() => downloadBlob(blob, name), name, 'Merge PDF') })
     } catch (err) {
       setErrors(['One of the selected files could not be read as a PDF. It may be corrupted or encrypted.'])
     }
     setIsWorking(false)
-  }, [items, outputName, gatedDownload])
+  }, [items, outputName, gatedDownload, showPreview])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -196,6 +198,7 @@ function useMergePanel() {
 
 function useSplitPanel() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [file, setFile] = useState(null)
   const [pageCount, setPageCount] = useState(null)
   const [start, setStart] = useState(1)
@@ -259,12 +262,12 @@ function useSplitPanel() {
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const trimmedName = outputName.trim() || `pages-${s}-${e}.pdf`
       const name = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name, 'Split PDF')
+      showPreview({ blob: blob, name: name, onDownload: () => gatedDownload(() => downloadBlob(blob, name), name, 'Split PDF') })
     } catch {
       setErrors(['Something went wrong while extracting those pages.'])
     }
     setIsWorking(false)
-  }, [file, start, end, pageCount, outputName, gatedDownload])
+  }, [file, start, end, pageCount, outputName, gatedDownload, showPreview])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 

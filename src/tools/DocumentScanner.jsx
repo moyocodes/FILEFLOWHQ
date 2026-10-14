@@ -7,6 +7,7 @@ import { downloadBlob, uid } from '../utils/fileHelpers.js'
 import { buildImagesPdf } from '../utils/imagesToPdf.js'
 import { isNative } from '../utils/platform.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { usePreview } from '../context/PreviewContext.jsx'
 
 /**
  * Document Scanner — capture pages with the device camera and save them as a
@@ -34,6 +35,7 @@ function dataUrlToBlob(dataUrl) {
 
 export default function useDocumentScanner() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [pages, setPages] = useState([]) // { id, blob, thumb }
   const [pageSize, setPageSize] = useState('a4') // scans default to A4
   const [errors, setErrors] = useState([])
@@ -157,12 +159,12 @@ export default function useDocumentScanner() {
         { pageSize, onProgress: (f) => setProgress(f * 100) }
       )
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name, 'Document Scanner')
+      showPreview({ blob: blob, name: name, onDownload: () => gatedDownload(() => downloadBlob(blob, name), name, 'Document Scanner') })
     } catch (err) {
       setErrors([err.message || 'Something went wrong while building the PDF.'])
     }
     setIsBuilding(false)
-  }, [pages, pageSize, outputName, gatedDownload])
+  }, [pages, pageSize, outputName, gatedDownload, showPreview])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 

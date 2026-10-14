@@ -6,9 +6,11 @@ import ProgressBar from '../components/ProgressBar.jsx'
 import { validateFiles, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
 import { buildImagesPdf } from '../utils/imagesToPdf.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { usePreview } from '../context/PreviewContext.jsx'
 
 export default function useImagesToPdf() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [items, setItems] = useState([]) // { id, file, thumb }
   const [pageSize, setPageSize] = useState('fit') // 'fit' | 'a4'
   const [errors, setErrors] = useState([])
@@ -46,12 +48,12 @@ export default function useImagesToPdf() {
         { pageSize, onProgress: (f) => setProgress(f * 100) }
       )
       const name = outputName.endsWith('.pdf') ? outputName : `${outputName}.pdf`
-      gatedDownload(() => downloadBlob(blob, name), name, 'Images to PDF')
+      showPreview({ blob: blob, name: name, onDownload: () => gatedDownload(() => downloadBlob(blob, name), name, 'Images to PDF') })
     } catch (err) {
       setErrors([err.message || 'Something went wrong while building the PDF.'])
     }
     setIsConverting(false)
-  }, [items, pageSize, outputName, gatedDownload])
+  }, [items, pageSize, outputName, gatedDownload, showPreview])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 

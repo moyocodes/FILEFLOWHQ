@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
+import { PreviewButton } from '../components/PreviewModal.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
@@ -250,13 +251,16 @@ export default function useSvgToPng() {
                     onRename={r ? (newName) => renameItem(item.id, newName) : undefined}
                     rightSlot={
                       r ? (
-                        <button
-                          onClick={() => downloadOne(item)}
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
-                          aria-label={`Download ${r.name}`}
-                        >
-                          <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                        </button>
+                        <>
+                          <PreviewButton blob={r.blob} name={r.name} onDownload={() => downloadOne(item)} />
+                          <button
+                            onClick={() => downloadOne(item)}
+                            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-signal hover:bg-signal-dim"
+                            aria-label={`Download ${r.name}`}
+                          >
+                            <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                          </button>
+                        </>
                       ) : null
                     }
                   />

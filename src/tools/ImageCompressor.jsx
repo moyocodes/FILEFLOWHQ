@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { PDFDocument, PDFName, PDFString } from 'pdf-lib'
 import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
+import { PreviewButton } from '../components/PreviewModal.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
@@ -344,6 +345,15 @@ export default function useImageCompressor() {
                       <span className="hidden font-mono text-xs text-text-dim sm:inline">
                         {formatBytes(item.file.size)} → {formatBytes(item.resultBlob.size)}
                       </span>
+                    )}
+                    {item.status === 'done' && (
+                      <PreviewButton
+                        blob={item.resultBlob}
+                        name={item.resultName}
+                        onDownload={() =>
+                          gatedDownload(() => downloadBlob(item.resultBlob, item.resultName), item.resultName, 'Image & PDF Compressor')
+                        }
+                      />
                     )}
                     {item.status === 'done' && (
                       <button

@@ -7,11 +7,13 @@ import ResultCard from '../components/ResultCard.jsx'
 import { validateFiles, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
 import { convertDocxToPdf } from '../utils/docxToPdf.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { usePreview } from '../context/PreviewContext.jsx'
 
 const ACCEPT = ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
 
 export default function useDocxToPdf() {
   const { gatedDownload } = useEmailGate()
+  const { preview: showPreview } = usePreview()
   const [file, setFile] = useState(null)
   const [outputName, setOutputName] = useState('')
   const [errors, setErrors] = useState([])
@@ -39,18 +41,18 @@ export default function useDocxToPdf() {
       const blob = await convertDocxToPdf(file, (f) => setProgress(f * 100))
       const trimmedName = outputName.trim() || stripExtension(file.name)
       const resultName = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
-      gatedDownload(() => downloadBlob(blob, resultName), resultName, 'Word to PDF')
+      showPreview({ blob: blob, name: resultName, onDownload: () => gatedDownload(() => downloadBlob(blob, resultName), resultName, 'Word to PDF') })
       setResult({ name: resultName, size: blob.size, blob })
     } catch (err) {
       setErrors([err.message || `Couldn't convert "${file.name}". It may be corrupted or not a valid .docx file.`])
     }
     setIsWorking(false)
-  }, [file, outputName, gatedDownload])
+  }, [file, outputName, gatedDownload, showPreview])
 
   const downloadAgain = useCallback(() => {
     if (!result) return
     gatedDownload(() => downloadBlob(result.blob, result.name), result.name, 'Word to PDF')
-  }, [result, gatedDownload])
+  }, [result, gatedDownload, showPreview])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
