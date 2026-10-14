@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, Check, Volume2, VolumeX, Play } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { ArrowRight, Volume2, VolumeX, Play } from 'lucide-react'
 import { tools, categories } from '../toolsConfig.js'
 import ToolCard from '../components/ToolCard.jsx'
 import ExtensionButton from '../components/ExtensionButton.jsx'
@@ -16,15 +16,17 @@ import { applySeo } from '../utils/useSeo.js'
 
 const localCount = tools.filter((t) => !t.usesServer).length
 const POPULAR = ['image-converter', 'svg-to-png', 'image-compressor', 'merge-split-pdf', 'pdf-to-word']
+// [label, left, top, tilt, duration, delay] — kept to the edges and the top/bottom
+// bands so they never sit on the headline or buttons.
 const CHIPS = [
-  ['PNG', '8%', '22%', '-8deg', '7s', '0s'],
-  ['JSON', '16%', '62%', '6deg', '8s', '1s'],
-  ['CSV', '84%', '18%', '10deg', '6.5s', '0.5s'],
-  ['DOCX', '90%', '58%', '-6deg', '7.5s', '1.5s'],
-  ['JPG', '4%', '84%', '4deg', '9s', '0.8s'],
-  ['TIFF', '78%', '86%', '-10deg', '8.5s', '0.2s'],
-  ['SVG', '27%', '8%', '12deg', '6s', '1.2s'],
-  ['PDF', '70%', '6%', '-4deg', '7s', '0.4s']
+  ['SVG', '30%', '5%', '12deg', '6s', '1.2s'],
+  ['JSON', '55%', '3%', '6deg', '8s', '1s'],
+  ['PDF', '72%', '8%', '-4deg', '7s', '0.4s'],
+  ['CSV', '88%', '14%', '10deg', '6.5s', '0.5s'],
+  ['DOCX', '95%', '52%', '-6deg', '7.5s', '1.5s'],
+  ['TIFF', '80%', '91%', '-10deg', '8.5s', '0.2s'],
+  ['PNG', '50%', '93%', '-8deg', '7s', '0s'],
+  ['JPG', '1.5%', '93%', '4deg', '9s', '0.8s']
 ]
 
 /** Section heading in the video's style: white, with one mint keyword. */
@@ -53,20 +55,25 @@ function Reveal({ children, className = '', delay = 0 }) {
   )
 }
 
-/** Launch video in a tilted app window that straightens as it scrolls into view. */
+/** Launch video in a tilted app window (like the video's own 3D shots) that settles on hover. */
 function HeroVideo() {
-  const ref = useRef(null)
   const videoRef = useRef(null)
   const reduce = useReducedMotion()
   const [muted, setMuted] = useState(true)
   const [playing, setPlaying] = useState(!reduce)
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'center center'] })
-  const rotateX = useTransform(scrollYProgress, [0, 1], [reduce ? 0 : 18, 0])
-  const scale = useTransform(scrollYProgress, [0, 1], [reduce ? 1 : 0.9, 1])
 
   return (
-    <div ref={ref} className="mx-auto max-w-5xl [perspective:1400px]">
-      <motion.div style={{ rotateX, scale }} className="relative overflow-hidden rounded-[22px] bg-black shadow-[0_40px_120px_-30px_rgba(59,230,152,0.35)]">
+    <div className="relative mx-auto w-full max-w-3xl [perspective:1400px]">
+      <motion.div
+        initial={reduce ? false : { opacity: 0, rotateY: -18, rotateX: 8, y: 30 }}
+        animate={{ opacity: 1, rotateY: reduce ? 0 : -4, rotateX: reduce ? 0 : 2, y: 0 }}
+        whileHover={{ rotateY: 0, rotateX: 0 }}
+        transition={{ type: 'spring', stiffness: 60, damping: 16, delay: 0.15, opacity: { duration: 0.4, delay: 0.1 } }}
+        // Dark mode: no frame — the video's own near-black background is the page's,
+        // and a soft edge mask dissolves it into the page. Light mode keeps a
+        // rounded frame (a dark video can't blend into a light page).
+        className="relative overflow-hidden rounded-[22px] bg-black shadow-lift dark:rounded-none dark:bg-transparent dark:shadow-none dark:[mask-image:radial-gradient(ellipse_75%_70%_at_50%_50%,#000_55%,transparent_100%)]"
+      >
         <video
           ref={videoRef}
           className="block aspect-video w-full"
@@ -101,7 +108,7 @@ function HeroVideo() {
               if (!next) videoRef.current.play()
             }
           }}
-          className="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-2 text-[0.75rem] font-medium text-white backdrop-blur"
+          className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-[0.72rem] font-medium text-white backdrop-blur"
         >
           {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           {muted ? 'Sound off' : 'Sound on'}
@@ -183,22 +190,23 @@ export default function Home() {
           initial={{ opacity: 0, y: reduce ? 0 : 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mx-auto max-w-4xl px-4 pb-10 pt-10 text-center sm:px-6 sm:pt-14"
+          className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-12 pt-10 sm:px-6 sm:pt-14 lg:grid-cols-[1fr_1.1fr] lg:gap-12 lg:px-8"
         >
+          <div className="text-center lg:text-left">
           <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-panel px-3.5 py-1.5 text-[0.75rem] font-medium text-text-dim shadow-card">
             <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_8px_var(--signal)]" />
             Free · private · no sign-up
           </span>
-          <h1 className="text-[clamp(2.1rem,5.5vw,3.9rem)] font-bold leading-[1.04] tracking-tight">
+          <h1 className="text-[clamp(2.1rem,4.6vw,3.6rem)] font-bold leading-[1.04] tracking-tight">
             Every file you convert.
             <br />
             <span className="text-signal">Never leaves</span> your device.
           </h1>
-          <p className="mx-auto mt-5 max-w-[56ch] text-[1.05rem] leading-relaxed text-text-dim">
+          <p className="mx-auto mt-5 max-w-[52ch] text-[1.05rem] leading-relaxed text-text-dim lg:mx-0">
             Images, PDFs, SVGs and data files — converted right in your browser, in seconds. No uploads, no
             watermarks, no account.
           </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
             <Link
               to="/#tools"
               className="inline-flex items-center gap-2 rounded-full bg-signal px-6 py-3 text-[0.95rem] font-semibold text-white shadow-[0_14px_34px_-12px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void"
@@ -209,7 +217,7 @@ export default function Home() {
           </div>
 
           {/* tool snippets → the rest */}
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <div className="mt-6 flex flex-wrap justify-center gap-2 lg:justify-start">
             {POPULAR.map((id) => {
               const t = tools.find((x) => x.id === id)
               const Icon = t.icon
@@ -227,6 +235,9 @@ export default function Home() {
               All {tools.length} tools <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
+          </div>
+
+          <HeroVideo />
         </motion.div>
 
       </section>
@@ -261,54 +272,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- Launch video ---------- */}
-      <section className="px-4 py-16 sm:px-6">
-        <Reveal className="mx-auto mb-8 max-w-3xl text-center">
-          <Title before="What if it " accent="never left" after="?" />
-          <p className="mx-auto mt-3 max-w-[56ch] text-text-dim">
-            Most converters upload your files to a server. FileFlowHQ does the work inside your browser instead.
-          </p>
-        </Reveal>
-        <HeroVideo />
-      </section>
-
       {/* ---------- Three features, one row ---------- */}
       <section className="mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 md:grid-cols-3 lg:px-8">
         <FeatureCard title={<>Compress to the <span className="text-signal">size</span> you need.</>} mock={<CompressMock />} toolId="image-compressor" />
         <FeatureCard title={<><span className="text-signal">Merge</span> and split PDFs.</>} mock={<MergeMock />} toolId="merge-split-pdf" delay={0.08} />
         <FeatureCard title={<>Scan paper straight to <span className="text-signal">PDF</span>.</>} mock={<ScanMock />} toolId="document-scanner" delay={0.16} />
-      </section>
-
-      {/* ---------- End card (video finale) + promises ---------- */}
-      <section className="px-4 pb-16 sm:px-6">
-        <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-[28px] bg-[#040608] px-6 py-12 text-center sm:px-12">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-            {[20, 40, 60, 80].map((top, i) => (
-              <span
-                key={top}
-                className="streak absolute left-0 h-px w-48 bg-gradient-to-r from-transparent via-[#3be698] to-transparent"
-                style={{ top: `${top}%`, '--d': `${4 + i}s`, '--delay': `${i * 0.9}s` }}
-              />
-            ))}
-          </div>
-          <img src="/logofull.svg" alt="FileFlowHQ" width="248" height="63" className="relative mx-auto h-12 w-auto sm:h-16" />
-          <p className="relative mt-5 text-[clamp(1.15rem,2.4vw,1.5rem)] font-semibold text-white">
-            Free, <span className="text-[#3be698]">private</span> file conversion. Right in your browser.
-          </p>
-          <div className="relative mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[0.88rem] text-[#a3b3ad]">
-            {['Private by design', 'Free, no sign-up', 'Works offline'].map((t) => (
-              <span key={t} className="inline-flex items-center gap-1.5">
-                <Check className="h-4 w-4 text-[#3be698]" strokeWidth={2.5} /> {t}
-              </span>
-            ))}
-          </div>
-          <Link
-            to="/#tools"
-            className="relative mt-7 inline-flex rounded-full bg-[#3be698] px-7 py-3 text-[0.95rem] font-semibold text-[#040608] transition-transform hover:-translate-y-0.5"
-          >
-            Start converting
-          </Link>
-        </Reveal>
       </section>
 
       {/* Crawlable SEO copy — spells out the conversions in words with real

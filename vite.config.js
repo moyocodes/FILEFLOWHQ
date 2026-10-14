@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Changes on every deploy (Vercel commit SHA, else build time) so the app can
+  // reset stored state for a fresh start — see src/utils/deployReset.js.
+  define: {
+    __BUILD_ID__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now()))
+  },
   plugins: [
     react(),
     // Makes the web build installable (Add to Home Screen) and offline-capable.

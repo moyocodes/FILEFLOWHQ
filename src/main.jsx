@@ -5,6 +5,9 @@ import { Analytics } from '@vercel/analytics/react'
 import App from './App.jsx'
 import { isNative, isExtension } from './utils/platform'
 import './index.css'
+import { resetOnNewDeploy } from './utils/deployReset'
+
+resetOnNewDeploy()
 
 // Restore theme before paint to avoid a flash of the wrong theme. Dark is the
 // default look (it matches the brand video); light only when chosen.
