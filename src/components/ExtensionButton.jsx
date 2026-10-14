@@ -4,9 +4,11 @@ import { isExtension, isNative } from '../utils/platform'
 /**
  * Chrome Web Store listing for the FileFlowHQ extension. Chrome removed inline
  * installs, so the closest to one click is opening the listing, where "Add to
- * Chrome" is a single button. Set VITE_CHROME_EXTENSION_URL to show the button.
+ * Chrome" is a single button. VITE_CHROME_EXTENSION_URL overrides the listing URL.
  */
-export const CHROME_EXTENSION_URL = import.meta.env.VITE_CHROME_EXTENSION_URL || ''
+// Same published extension ID that api/_cors.js allows.
+export const CHROME_EXTENSION_URL =
+  import.meta.env.VITE_CHROME_EXTENSION_URL || 'https://chromewebstore.google.com/detail/gjfjbeejnohhebifklghhhmdgjgbcbmf'
 
 /** Desktop Chromium browsers can install Web Store extensions; phones can't. */
 function canInstallChromeExtension() {

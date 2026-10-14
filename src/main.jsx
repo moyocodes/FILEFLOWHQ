@@ -6,10 +6,10 @@ import App from './App.jsx'
 import { isNative, isExtension } from './utils/platform'
 import './index.css'
 
-// Restore theme before paint to avoid a flash of the wrong theme
+// Restore theme before paint to avoid a flash of the wrong theme. Dark is the
+// default look (it matches the brand video); light only when chosen.
 const savedTheme = localStorage.getItem('theme')
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+if (savedTheme !== 'light') {
   document.documentElement.classList.add('dark')
 }
 

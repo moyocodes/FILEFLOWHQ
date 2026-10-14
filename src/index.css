@@ -18,16 +18,17 @@
 /* Dark mode is class-based (toggled + persisted via ThemeToggle.jsx),
    so retarget the same tokens under html.dark rather than only a media query. */
 html.dark {
-  --void: #0b0d10;
-  --panel: #12151a;
-  --panel-raised: #171b21;
-  --signal: #39ff9e;
-  --signal-dim: #39ff9e17;
-  --text: #e8ecef;
-  --text-dim: #7c8792;
-  --border: #1a1e24;
-  --border-strong: #252b33;
-  --mono-text: #39ff9e;
+  /* Matched to the launch video: near-black with a cool tint, logo mint green. */
+  --void: #040608;
+  --panel: #0b0f0f;
+  --panel-raised: #121918;
+  --signal: #3be698;
+  --signal-dim: #3be6981a;
+  --text: #eef3f1;
+  --text-dim: #8b9894;
+  --border: #18201f;
+  --border-strong: #22302d;
+  --mono-text: #3be698;
 }
 
 html {
@@ -146,4 +147,31 @@ html.dark {
   --series-views: #3987e5;
   --series-uploads: #d95926;
   --series-downloads: #199e70;
+}
+
+/* Home page motion, echoing the launch video. */
+@keyframes float-chip {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)); }
+  50% { transform: translate3d(0, -14px, 0) rotate(calc(var(--r, 0deg) + 4deg)); }
+}
+.float-chip { animation: float-chip var(--d, 7s) ease-in-out infinite; animation-delay: var(--delay, 0s); }
+
+/* Horizontal "speed lines" like the logo mark. */
+@keyframes streak {
+  0% { transform: translateX(-30vw); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(130vw); opacity: 0; }
+}
+.streak { animation: streak var(--d, 6s) linear infinite; animation-delay: var(--delay, 0s); }
+
+@keyframes scan-sweep {
+  0%, 100% { top: 6%; }
+  50% { top: 88%; }
+}
+.scan-sweep { animation: scan-sweep 3.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .float-chip, .streak, .scan-sweep { animation: none; }
+  .streak { display: none; }
 }
