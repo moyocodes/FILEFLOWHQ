@@ -36,12 +36,18 @@ html {
 
 body {
   @apply bg-void text-text font-body antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.006em;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 ::selection {
-  background-color: var(--signal);
-  color: var(--void);
+  background-color: var(--signal-dim);
+  color: var(--text);
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 /* focus visibility for a11y */

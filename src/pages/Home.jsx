@@ -38,16 +38,29 @@ export default function Home() {
   return (
     <div className="flex min-h-full flex-col pb-6">
       {/* Hero */}
-      <section className="relative flex-shrink-0 overflow-hidden border-b border-border px-6 py-8 sm:px-10">
+      <section className="relative flex-shrink-0 overflow-hidden border-b border-border px-6 py-14 sm:px-10 sm:py-20">
+        {/* Layered ambient glow + fine grid for depth */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.22]"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(60% 80% at 10% 0%, var(--signal-dim), transparent 70%), radial-gradient(40% 60% at 90% 10%, var(--signal-dim), transparent 70%)'
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-signal opacity-[0.12] blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
           style={{
             backgroundImage:
               'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-            maskImage: 'radial-gradient(ellipse 70% 60% at 20% 20%, black, transparent 75%)',
-            WebkitMaskImage: 'radial-gradient(ellipse 70% 60% at 20% 20%, black, transparent 75%)'
+            backgroundSize: '40px 40px',
+            maskImage: 'radial-gradient(ellipse 70% 70% at 30% 30%, black, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 70% 70% at 30% 30%, black, transparent 75%)'
           }}
         />
 
@@ -55,27 +68,29 @@ export default function Home() {
           initial="hidden"
           animate="visible"
           variants={heroVariants}
-          className="relative max-w-[780px]"
+          className="relative max-w-[820px]"
         >
-          <span className="mb-3.5 inline-flex items-center gap-2 rounded-[3px] border border-signal-dim bg-signal-dim px-[0.7rem] py-[0.3rem] font-mono text-[0.64rem] uppercase tracking-[0.16em] text-mono-text">
-            <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_6px_var(--signal)]" />
-            Mostly local processing
+          <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-[color-mix(in_srgb,var(--panel)_70%,transparent)] px-3 py-1 text-[0.75rem] font-medium text-text-dim shadow-card backdrop-blur">
+            <span className="signal-dot h-1.5 w-1.5 rounded-full bg-signal shadow-[0_0_8px_var(--signal)]" />
+            Mostly local processing · free · no sign-up
           </span>
 
-          <h1 className="font-display mb-3 max-w-[22ch] text-[clamp(1.6rem,3.2vw,2.4rem)] font-semibold leading-[1.08] tracking-wide">
-            Every file, <span className="text-signal">re-encoded</span> on your machine.
+          <h1 className="mb-4 max-w-[20ch] text-[clamp(2rem,4.6vw,3.4rem)] font-bold leading-[1.05] tracking-tight">
+            Every file,{' '}
+            <span className="bg-gradient-to-r from-signal to-mono-text bg-clip-text text-transparent">re-encoded</span>{' '}
+            on your machine.
           </h1>
 
-          <p className="mb-5 max-w-[52ch] font-body text-[0.92rem] normal-case text-text-dim">
+          <p className="mb-8 max-w-[56ch] text-[1rem] leading-relaxed text-text-dim">
             FileFlowHQ reads, decodes, and re-writes images, PDFs, and data files in your browser.
             Nearly every tool runs locally, so your files stay on your device.
           </p>
 
-          <div className="flex flex-wrap gap-8">
+          <div className="grid max-w-[640px] grid-cols-1 gap-3 sm:grid-cols-3">
             {stats.map((s) => (
-              <div key={s.l}>
-                <div className="mb-1 font-mono text-xl font-semibold leading-none text-signal">{s.n}</div>
-                <div className="max-w-[18ch] text-[0.72rem] leading-snug text-text-dim">{s.l}</div>
+              <div key={s.l} className="rounded-card border border-border bg-[color-mix(in_srgb,var(--panel)_70%,transparent)] px-4 py-3.5 shadow-card backdrop-blur">
+                <div className="mb-1 text-2xl font-bold leading-none tracking-tight text-signal">{s.n}</div>
+                <div className="text-[0.78rem] leading-snug text-text-dim">{s.l}</div>
               </div>
             ))}
           </div>
@@ -83,16 +98,16 @@ export default function Home() {
       </section>
 
       {/* Tools grid */}
-      <section className="flex flex-1 flex-col px-6 pt-6 sm:px-10">
-        <div className="mb-3.5 flex flex-shrink-0 items-baseline justify-between">
-          <h2 className="font-display text-[1.05rem] font-semibold tracking-wide">All tools</h2>
-          <span className="font-mono text-[0.72rem] text-text-dim">{tools.length} available</span>
+      <section className="flex flex-1 flex-col px-6 pt-10 sm:px-10">
+        <div className="mb-5 flex flex-shrink-0 items-center justify-between">
+          <h2 className="text-[1.25rem] font-semibold tracking-tight">All tools</h2>
+          <span className="rounded-full bg-signal-dim px-2.5 py-0.5 text-[0.75rem] font-medium text-mono-text">{tools.length} available</span>
         </div>
         <motion.div
           initial="hidden"
           animate="visible"
           variants={gridVariants}
-          className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
         >
           {tools.map((tool) => (
             <ToolCard key={tool.id} tool={tool} />
@@ -104,7 +119,7 @@ export default function Home() {
           links, giving search engines keyword-rich text and internal links. */}
       <section className="mt-10 border-t border-border px-6 pt-8 sm:px-10">
         <div className="max-w-[70ch] text-text-dim">
-          <h2 className="font-display mb-3 text-[1.1rem] font-semibold tracking-wide text-text">
+          <h2 className="mb-3 text-[1.1rem] font-semibold text-text">
             Free online file converter — private, no sign-up
           </h2>
           <p className="mb-4 text-[0.9rem] leading-relaxed">
@@ -141,7 +156,7 @@ export default function Home() {
             uploaded to a server, so your data stays private. (The one exception is Word
             conversion in PDF to Word, which uses a secure cloud API.)
           </p>
-          <h3 className="mb-2 font-display text-[0.95rem] font-semibold tracking-wide text-text">
+          <h3 className="mb-2 text-[0.95rem] font-semibold text-text">
             Why FileFlowHQ?
           </h3>
           <ul className="list-disc space-y-1.5 pl-5 text-[0.88rem] leading-relaxed">

@@ -16,17 +16,39 @@ import { applySeo, setFaqJsonLd } from '../utils/useSeo.js'
 function ComingSoonTool({ tool }) {
   return (
     <div className="flex min-h-full flex-col px-6 py-8 sm:px-9">
-      <div className="mb-5 flex flex-shrink-0 flex-wrap items-center gap-3">
-        <h1 className="font-display text-[clamp(1.2rem,2vw,1.5rem)] tracking-wide">{tool.name}</h1>
-        <StampBadge formats={tool.formats} />
-      </div>
+      <ToolHeader tool={tool} />
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p className="font-display text-[1rem] tracking-wide text-text">Under construction</p>
+        <p className="text-[1rem] text-text">Under construction</p>
         <p className="max-w-sm text-[0.8rem] leading-relaxed text-text-dim">
           {tool.name} is still being built. Check back soon.
         </p>
       </div>
       <ToolSeoContent tool={tool} />
+    </div>
+  )
+}
+
+function ToolHeader({ tool }) {
+  const Icon = tool.icon
+  return (
+    <div className="relative mb-6 flex flex-shrink-0 items-start gap-4 overflow-hidden rounded-card border border-border bg-panel p-5 shadow-card">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(60% 120% at 0% 0%, var(--signal-dim), transparent 70%)' }}
+      />
+      {Icon && (
+        <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-signal-dim bg-gradient-to-br from-signal-dim to-transparent text-signal">
+          <Icon className="h-6 w-6" strokeWidth={1.75} />
+        </div>
+      )}
+      <div className="relative min-w-0">
+        <div className="mb-1 flex flex-wrap items-center gap-3">
+          <h1 className="text-[clamp(1.3rem,2.2vw,1.7rem)] font-bold tracking-tight">{tool.name}</h1>
+          <StampBadge formats={tool.formats} />
+        </div>
+        {tool.description && <p className="text-[0.88rem] text-text-dim">{tool.description}</p>}
+      </div>
     </div>
   )
 }
@@ -45,7 +67,7 @@ function ToolSeoContent({ tool }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="font-display text-[0.95rem] font-semibold tracking-wide text-text">
+        <span className="text-[0.95rem] font-semibold text-text">
           {tool.seoTitle || `More about ${tool.name}`}
         </span>
         <motion.span
@@ -71,7 +93,7 @@ function ToolSeoContent({ tool }) {
 
           {tool.howTo && tool.howTo.length > 0 && (
             <div className="mb-8">
-              <h3 className="mb-2.5 font-display text-[0.95rem] font-semibold tracking-wide text-text">
+              <h3 className="mb-2.5 text-[0.95rem] font-semibold text-text">
                 How to use {tool.name}
               </h3>
               <ol className="list-decimal space-y-1.5 pl-5 text-[0.88rem] leading-relaxed">
@@ -84,7 +106,7 @@ function ToolSeoContent({ tool }) {
 
           {tool.faq && tool.faq.length > 0 && (
             <div>
-              <h3 className="mb-2.5 font-display text-[0.95rem] font-semibold tracking-wide text-text">
+              <h3 className="mb-2.5 text-[0.95rem] font-semibold text-text">
                 Frequently asked questions
               </h3>
               <div className="space-y-2">
@@ -140,10 +162,7 @@ export default function ToolPage({ tool }) {
 
   return (
     <div className="flex min-h-full flex-col px-6 py-8 sm:px-9">
-      <div className="mb-5 flex flex-shrink-0 flex-wrap items-center gap-3">
-        <h1 className="font-display text-[clamp(1.2rem,2vw,1.5rem)] tracking-wide">{tool.name}</h1>
-        <StampBadge formats={tool.formats} />
-      </div>
+      <ToolHeader tool={tool} />
       <ToolSeoContent tool={tool} />
       <div className="flex flex-1 flex-col">{workspace}</div>
     </div>

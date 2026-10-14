@@ -22,35 +22,34 @@ function activeToolFromPath(pathname) {
 
 function WsHeader({ activeTool, onOpenMenu }) {
   const navigate = useNavigate()
-  const coords = activeTool ? `FILEFLOWHQ / ${activeTool.id.toUpperCase().replace(/-/g, '_')}` : 'FILEFLOWHQ / HOME'
+  const link = 'rounded-md px-2.5 py-1.5 text-[0.8rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text'
 
   return (
-    <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-6 py-[0.85rem] sm:px-9">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-10 flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-[color-mix(in_srgb,var(--void)_80%,transparent)] px-4 backdrop-blur sm:px-8">
+      <div className="flex min-w-0 items-center gap-3">
         <MobileMenuButton onClick={onOpenMenu} />
-        <div className="flex items-center gap-2 font-mono text-[0.7rem] text-text-dim">
-          <button onClick={() => navigate('/')} className="transition-colors hover:text-signal">
-            FileFlowHQ
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-[0.82rem]">
+          <button onClick={() => navigate('/')} className="text-text-dim transition-colors hover:text-text">
+            Home
           </button>
           {activeTool && (
             <>
               <span className="text-border-strong">/</span>
-              <span className="text-text">{activeTool.name}</span>
+              <span className="truncate font-medium text-text">{activeTool.name}</span>
             </>
           )}
-        </div>
+        </nav>
       </div>
-      <div className="flex items-center gap-4 font-mono text-[0.65rem] text-text-dim">
-        <span className="hidden sm:inline">{coords}</span>
+      <div className="flex items-center gap-1">
         <InstallButton />
-        <button onClick={() => navigate('/contact')} className="underline transition-colors hover:text-signal">
+        <button onClick={() => navigate('/contact')} className={link}>
           Contact
         </button>
-        <button onClick={() => navigate('/privacy')} className="underline transition-colors hover:text-signal">
+        <button onClick={() => navigate('/privacy')} className={link}>
           Privacy
         </button>
       </div>
-    </div>
+    </header>
   )
 }
 
@@ -69,8 +68,8 @@ function SettingsPane({ activeTool }) {
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="fixed inset-x-0 bottom-0 z-20 flex max-h-[70vh] w-full flex-col overflow-hidden border-t border-border bg-panel md:static md:inset-auto md:z-auto md:h-[100dvh] md:max-h-none md:w-[280px] md:flex-shrink-0 md:border-l md:border-t-0"
         >
-          <div className="flex-shrink-0 border-b border-border px-5 py-[0.85rem] font-mono text-[0.66rem] uppercase tracking-[0.1em] text-text-dim">
-            {activeTool.name} settings
+          <div className="flex h-14 flex-shrink-0 items-center border-b border-border px-5 text-[0.82rem] font-semibold text-text">
+            Settings
           </div>
           <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">{settingsContent}</div>
         </motion.aside>

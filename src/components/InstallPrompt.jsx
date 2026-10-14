@@ -107,9 +107,9 @@ export function InstallButton() {
   return (
     <button
       onClick={promptInstall}
-      className="inline-flex items-center gap-1 underline transition-colors hover:text-signal"
+      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[0.8rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text"
     >
-      <Download className="h-3 w-3" strokeWidth={2} />
+      <Download className="h-3.5 w-3.5" strokeWidth={2} />
       Install app
     </button>
   )

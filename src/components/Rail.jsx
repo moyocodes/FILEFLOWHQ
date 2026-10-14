@@ -51,9 +51,9 @@ export default function Rail({ isOpen, onClose }) {
 
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-40 flex flex-shrink-0 flex-col overflow-visible border-r border-border bg-panel px-3 py-[1.1rem] transition-[transform,width] duration-200',
-          collapsed ? 'md:w-[60px]' : 'md:w-[208px]',
-          'w-[208px]',
+          'fixed inset-y-0 left-0 z-40 flex flex-shrink-0 flex-col overflow-visible border-r border-border bg-panel px-3 py-3 transition-[transform,width] duration-200',
+          collapsed ? 'md:w-[64px]' : 'md:w-[232px]',
+          'w-[248px]',
           'md:sticky md:top-0 md:h-[100dvh] md:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         ].join(' ')}
@@ -62,7 +62,7 @@ export default function Rail({ isOpen, onClose }) {
           onClick={() => setCollapsed((v) => !v)}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="absolute -right-3 top-[1.35rem] z-10 hidden h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-border bg-panel text-text-dim shadow-card transition-colors hover:border-signal hover:text-signal md:flex"
+          className="absolute -right-3 top-[1.1rem] z-10 hidden h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-border bg-panel text-text-dim shadow-card transition-colors hover:border-signal hover:text-signal md:flex"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-3.5 w-3.5" strokeWidth={2} />
@@ -71,17 +71,17 @@ export default function Rail({ isOpen, onClose }) {
           )}
         </button>
 
-        <div className={['mb-7 flex items-center gap-2.5 px-1', collapsed ? 'md:justify-center' : ''].join(' ')}>
+        <div className={['mb-5 flex h-8 items-center gap-2.5 px-1.5', collapsed ? 'md:justify-center' : ''].join(' ')}>
           <button
             onClick={goHome}
             className="flex flex-1 items-center gap-2.5 rounded py-0 text-left md:flex-initial"
             aria-label="FileFlowHQ home"
           >
-            <span className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[3px] bg-signal font-mono text-[0.78rem] font-bold text-void">
+            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-text text-[0.8rem] font-bold text-void">
               F
             </span>
             <span
-              className={['font-display text-[0.92rem] font-semibold tracking-wide text-text', collapsed ? 'md:hidden' : ''].join(' ')}
+              className={['text-[0.92rem] font-semibold tracking-tight text-text', collapsed ? 'md:hidden' : ''].join(' ')}
             >
               FileFlowHQ
             </span>
@@ -102,9 +102,9 @@ export default function Rail({ isOpen, onClose }) {
           title={collapsed ? 'Home' : undefined}
           className={({ isActive }) =>
             [
-              'relative mb-3 flex flex-shrink-0 items-center gap-[0.65rem] rounded px-[0.6rem] py-[0.55rem] text-left transition-colors',
+              'relative mb-3 flex flex-shrink-0 items-center gap-[0.65rem] rounded-lg px-2.5 py-[0.45rem] text-left transition-colors',
               collapsed ? 'md:justify-center' : '',
-              isActive ? 'bg-signal-dim text-signal' : 'text-text-dim hover:bg-panel-raised hover:text-text'
+              isActive ? 'bg-panel-raised text-text' : 'text-text-dim hover:bg-panel-raised hover:text-text'
             ].join(' ')
           }
         >
@@ -113,12 +113,12 @@ export default function Rail({ isOpen, onClose }) {
               {isActive && (
                 <motion.span
                   layoutId="rail-active-bar"
-                  className="absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-[2px] bg-signal"
+                  className="absolute -left-3 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-signal"
                   transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                 />
               )}
               <Home className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-              <span className={['flex-1 truncate text-[0.78rem] font-medium', collapsed ? 'md:hidden' : ''].join(' ')}>
+              <span className={['flex-1 truncate text-[0.82rem] font-medium', collapsed ? 'md:hidden' : ''].join(' ')}>
                 Home
               </span>
             </>
@@ -127,7 +127,7 @@ export default function Rail({ isOpen, onClose }) {
 
         <div
           className={[
-            'mb-2 px-1 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-text-dim',
+            'mb-1.5 px-2.5 text-[0.7rem] font-medium text-text-dim',
             collapsed ? 'md:hidden' : ''
           ].join(' ')}
         >
@@ -145,10 +145,10 @@ export default function Rail({ isOpen, onClose }) {
                 title={collapsed ? tool.name : undefined}
                 className={({ isActive }) =>
                   [
-                    'relative flex flex-shrink-0 items-center gap-[0.65rem] rounded px-[0.6rem] py-[0.55rem] text-left transition-colors',
+                    'relative flex flex-shrink-0 items-center gap-[0.65rem] rounded-lg px-2.5 py-[0.45rem] text-left transition-colors',
                     collapsed ? 'md:justify-center' : '',
                     isActive
-                      ? 'bg-signal-dim text-signal'
+                      ? 'bg-panel-raised text-text'
                       : 'text-text-dim hover:bg-panel-raised hover:text-text'
                   ].join(' ')
                 }
@@ -158,18 +158,18 @@ export default function Rail({ isOpen, onClose }) {
                     {isActive && (
                       <motion.span
                         layoutId="rail-active-bar"
-                        className="absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-[2px] bg-signal"
+                        className="absolute -left-3 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-signal"
                         transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                       />
                     )}
                     <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                    <span className={['flex-1 truncate text-[0.78rem] font-medium', collapsed ? 'md:hidden' : ''].join(' ')}>
+                    <span className={['flex-1 truncate text-[0.82rem] font-medium', collapsed ? 'md:hidden' : ''].join(' ')}>
                       {tool.name}
                     </span>
                     {tool.comingSoon && (
                       <span
                         className={[
-                          'flex-shrink-0 font-mono text-[0.55rem] uppercase tracking-wide text-text-dim',
+                          'flex-shrink-0 rounded-full bg-panel-raised px-1.5 py-0.5 text-[0.6rem] font-medium text-text-dim',
                           collapsed ? 'md:hidden' : ''
                         ].join(' ')}
                       >
@@ -189,10 +189,10 @@ export default function Rail({ isOpen, onClose }) {
             collapsed ? 'md:flex-col md:gap-2' : ''
           ].join(' ')}
         >
-          <span className={['font-mono text-[0.62rem] leading-[1.4] text-text-dim', collapsed ? 'md:hidden' : ''].join(' ')}>
-            mostly local
+          <span className={['text-[0.7rem] leading-[1.4] text-text-dim', collapsed ? 'md:hidden' : ''].join(' ')}>
+            Free &amp; private
             <br />
-            free &amp; private
+            Runs in your browser
           </span>
           <ThemeToggle />
         </div>
@@ -205,7 +205,7 @@ export function MobileMenuButton({ onClick }) {
   return (
     <button
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-text-dim md:hidden"
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-text-dim md:hidden"
       aria-label="Open menu"
     >
       <Menu className="h-5 w-5" strokeWidth={2.25} />
