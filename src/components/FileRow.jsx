@@ -10,7 +10,7 @@ import { formatBytes } from '../utils/fileHelpers.js'
  */
 export default function FileRow({ name, size, thumbnail, status = 'idle', onRemove, onRename, rightSlot }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-border bg-panel px-3 py-2.5">
+    <div className="flex items-start gap-3 rounded-xl bg-panel-raised px-3 py-2.5">
       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-panel-raised">
         {thumbnail ? (
           <img src={thumbnail} alt="" className="h-full w-full object-cover" />

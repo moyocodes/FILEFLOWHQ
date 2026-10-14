@@ -10,7 +10,7 @@ export default defineConfig({
     // Native iOS/Android builds don't use this — Capacitor wraps the same dist/.
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'logo.svg', 'logofull.svg', 'logofull-light.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'FileFlowHQ — File Converter',
         short_name: 'FileFlowHQ',

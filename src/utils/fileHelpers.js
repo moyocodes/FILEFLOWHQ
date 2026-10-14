@@ -103,6 +103,22 @@ export async function loadImage(file) {
   return decodeImage(file, file.name)
 }
 
+// AVIF canvas encoding only ships in Chromium browsers today (not Safari/
+// Firefox) — probe once so the option can be disabled with an explanation
+// rather than silently producing a PNG/empty blob on unsupported browsers.
+let avifSupportPromise = null
+export function checkAvifSupport() {
+  if (!avifSupportPromise) {
+    avifSupportPromise = new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1
+      canvas.height = 1
+      canvas.toBlob((blob) => resolve(!!blob && blob.type === 'image/avif'), 'image/avif')
+    })
+  }
+  return avifSupportPromise
+}
+
 /** True for TIFF files, which browsers can't decode natively (needs UTIF). */
 export function isTiff(file) {
   const ext = getExtension(file.name)
@@ -171,8 +187,15 @@ export function canvasToBlob(canvas, mimeType, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
-        if (blob) resolve(blob)
-        else reject(new Error('Conversion failed while encoding the image.'))
+        if (!blob) {
+          reject(new Error('Conversion failed while encoding the image. It may be too large for this device.'))
+        } else if (mimeType && blob.type !== mimeType) {
+          // Safari silently returns a PNG for formats it can't encode (e.g. WebP/AVIF on older iOS).
+          const label = mimeType.replace('image/', '').toUpperCase()
+          reject(new Error(`This browser can't export ${label}. Try PNG or JPG, or use Chrome on a computer.`))
+        } else {
+          resolve(blob)
+        }
       },
       mimeType,
       quality
@@ -184,4 +207,22 @@ let idCounter = 0
 export function uid() {
   idCounter += 1
   return `id-${Date.now()}-${idCounter}`
+}
+
+/**
+ * iOS Safari caps total canvas memory (~384 MB) and frees canvases lazily, so
+ * multi-page/multi-file loops can hit "canvas memory exceeded" and produce
+ * blank output. Shrinking a canvas to 0×0 releases its backing store at once.
+ */
+export function releaseCanvas(canvas) {
+  if (!canvas) return
+  canvas.width = 0
+  canvas.height = 0
+}
+
+/** iOS refuses canvases over ~16.7M pixels; returns a scale (≤ 1) that keeps w×h under it. */
+export const MAX_CANVAS_PIXELS = 16_000_000
+export function canvasFitScale(width, height, maxPixels = MAX_CANVAS_PIXELS) {
+  const area = width * height
+  return area > maxPixels ? Math.sqrt(maxPixels / area) : 1
 }

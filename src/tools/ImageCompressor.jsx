@@ -14,7 +14,9 @@ import {
   stripExtension,
   formatBytes,
   readAsArrayBuffer,
-  uid
+  uid,
+  releaseCanvas,
+  canvasFitScale
 } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
@@ -76,6 +78,7 @@ async function compressPdf(file, targetBytes, onPageProgress) {
     await page.render({ canvasContext: ctx, viewport }).promise
 
     const { blob } = await compressToTargetSize(canvas, 'image/jpeg', pageBudget)
+    releaseCanvas(canvas)
     if (blob.size > pageBudget) hitTarget = false
     const jpgBytes = new Uint8Array(await blob.arrayBuffer())
 
@@ -174,22 +177,36 @@ export default function useImageCompressor() {
           }
         } else {
           const { img, url } = await loadImage(item.file)
+          const fit = canvasFitScale(img.naturalWidth, img.naturalHeight)
           const canvas = document.createElement('canvas')
-          canvas.width = img.naturalWidth
-          canvas.height = img.naturalHeight
+          canvas.width = Math.round(img.naturalWidth * fit)
+          canvas.height = Math.round(img.naturalHeight * fit)
           const ctx = canvas.getContext('2d')
 
           const originalIsPng = /png/i.test(item.file.type)
           // PNG is lossless (no quality knob) — to hit a size target we need to
           // encode as JPEG instead, regardless of "keep original format".
-          const mime = keepFormat && !originalIsPng ? item.file.type || 'image/jpeg' : 'image/jpeg'
+          let mime = keepFormat && !originalIsPng ? item.file.type || 'image/jpeg' : 'image/jpeg'
           if (mime === 'image/jpeg') {
             ctx.fillStyle = '#FFFFFF'
             ctx.fillRect(0, 0, canvas.width, canvas.height)
           }
-          ctx.drawImage(img, 0, 0)
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
 
-          const { blob } = await compressToTargetSize(canvas, mime, targetBytes)
+          let blob
+          try {
+            ;({ blob } = await compressToTargetSize(canvas, mime, targetBytes))
+          } catch (encodeErr) {
+            if (mime === 'image/jpeg') throw encodeErr
+            // e.g. Safari can't encode WebP — JPEG works everywhere.
+            mime = 'image/jpeg'
+            ctx.globalCompositeOperation = 'destination-over'
+            ctx.fillStyle = '#FFFFFF'
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+            ;({ blob } = await compressToTargetSize(canvas, mime, targetBytes))
+          } finally {
+            releaseCanvas(canvas)
+          }
           URL.revokeObjectURL(url)
 
           if (originalIsPng && keepFormat) {

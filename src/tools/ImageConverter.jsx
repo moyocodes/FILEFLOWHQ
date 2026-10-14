@@ -4,7 +4,7 @@ import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
-import { validateFiles, loadImage, canvasToBlob, downloadBlob, stripExtension, uid, isTiff, decodeTiffToCanvas } from '../utils/fileHelpers.js'
+import { validateFiles, loadImage, canvasToBlob, downloadBlob, stripExtension, uid, isTiff, decodeTiffToCanvas, checkAvifSupport, releaseCanvas, canvasFitScale } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 const FORMATS = [
@@ -13,22 +13,6 @@ const FORMATS = [
   { id: 'webp', label: 'WebP', mime: 'image/webp' },
   { id: 'avif', label: 'AVIF', mime: 'image/avif' }
 ]
-
-// AVIF canvas encoding only ships in Chromium browsers today (not Safari/
-// Firefox) — probe once so the option can be disabled with an explanation
-// rather than silently producing a PNG/empty blob on unsupported browsers.
-let avifSupportPromise = null
-function checkAvifSupport() {
-  if (!avifSupportPromise) {
-    avifSupportPromise = new Promise((resolve) => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 1
-      canvas.height = 1
-      canvas.toBlob((blob) => resolve(!!blob && blob.type === 'image/avif'), 'image/avif')
-    })
-  }
-  return avifSupportPromise
-}
 
 /**
  * Tool "hook": owns all state/handlers for Image Converter and returns
@@ -58,7 +42,7 @@ export default function useImageConverter() {
   const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, {
       // TIFF often has an empty/`image/tiff` MIME that `image/*` may miss, so accept by extension too.
-      accept: ['image/*', '.tif', '.tiff', '.heic', '.heif']
+      accept: ['image/*', '.tif', '.tiff', '.heic', '.heif', '.avif']
     })
     setErrors(fileErrors)
     const newItems = valid.map((file) => ({
@@ -103,17 +87,23 @@ export default function useImageConverter() {
     let completed = 0
 
     const encodeCanvas = async (source, baseName, pageSuffix) => {
+      const srcW = source.naturalWidth ?? source.width
+      const srcH = source.naturalHeight ?? source.height
+      // Very large photos (e.g. 48 MP) exceed iOS's canvas limit and come out blank.
+      const fit = canvasFitScale(srcW, srcH)
       const canvas = document.createElement('canvas')
-      canvas.width = source.naturalWidth ?? source.width
-      canvas.height = source.naturalHeight ?? source.height
+      canvas.width = Math.round(srcW * fit)
+      canvas.height = Math.round(srcH * fit)
       const ctx = canvas.getContext('2d')
       // Flatten transparency onto white when converting to JPG (no alpha channel)
       if (format.id === 'jpg') {
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
       }
-      ctx.drawImage(source, 0, 0)
-      const blob = await canvasToBlob(canvas, format.mime, format.id === 'png' ? undefined : quality)
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
+      const blob = await canvasToBlob(canvas, format.mime, format.id === 'png' ? undefined : quality).finally(() =>
+        releaseCanvas(canvas)
+      )
       return { blob, name: `${baseName}${pageSuffix}.${format.id}` }
     }
 
@@ -186,12 +176,12 @@ export default function useImageConverter() {
     () => (
       <div className="space-y-6">
         <p className="text-sm text-text-dim">
-          Convert PNG, JPG, WebP, GIF, BMP, and TIFF images to PNG, JPG, WebP, or AVIF.
+          Convert PNG, JPG, WebP, AVIF, HEIC, GIF, BMP, and TIFF images to PNG, JPG, WebP, or AVIF.
           Multi-page TIFFs are split into one image per page. Everything happens on
           your device — no upload.
         </p>
 
-        <Dropzone accept="image/*,.tif,.tiff,.heic,.heif" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, GIF, BMP, TIFF, HEIC" />
+        <Dropzone accept="image/*,.tif,.tiff,.heic,.heif,.avif" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, AVIF, HEIC, GIF, BMP, TIFF" />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
 

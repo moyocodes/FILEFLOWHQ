@@ -1,33 +1,44 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { ArrowRight } from 'lucide-react'
+import ProcessIllustration from './ProcessIllustration.jsx'
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } }
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } }
 }
 
+/**
+ * Compact, borderless tool card (icon, name, one-line tagline) with the
+ * tool's process illustration faded into the right edge. Small enough that
+ * the whole catalogue fits on the home screen without scrolling.
+ */
 export default function ToolCard({ tool }) {
   const Icon = tool.icon
-  const tag = tool.formats?.[0] || ''
+
+  const body = (
+    <>
+      <ProcessIllustration
+        tool={tool}
+        className="pointer-events-none absolute -right-4 top-1/2 h-[120%] -translate-y-1/2 opacity-[0.22] transition-opacity duration-300 [mask-image:linear-gradient(to_right,transparent,black_45%)] group-hover:opacity-60"
+      />
+      <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-signal-dim text-signal">
+        <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
+      </span>
+      <span className="relative min-w-0 flex-1">
+        <span className="block truncate text-[0.9rem] font-semibold tracking-tight text-text">{tool.name}</span>
+        <span className="block truncate text-[0.76rem] text-text-dim">
+          {tool.comingSoon ? 'Coming soon' : tool.tagline || tool.description}
+        </span>
+      </span>
+    </>
+  )
 
   if (tool.comingSoon) {
     return (
       <motion.div variants={cardVariants}>
-        <div
-          aria-disabled="true"
-          className="group relative flex h-full cursor-not-allowed flex-col overflow-hidden rounded-card border border-dashed border-border bg-panel p-5 opacity-60"
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-signal-dim bg-gradient-to-br from-signal-dim to-transparent text-signal">
-              <Icon className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[0.62rem] text-text-dim">{tag}</span>
-          </div>
-
-          <h3 className="mb-1.5 text-[0.95rem] font-semibold tracking-tight">{tool.name}</h3>
-          <p className="flex-1 text-[0.82rem] leading-relaxed text-text-dim">{tool.description}</p>
-
-          <span className="mt-4 text-[0.8rem] font-medium text-text-dim">Coming soon</span>
+        <div aria-disabled="true" className="relative flex cursor-not-allowed items-center gap-3 overflow-hidden rounded-2xl bg-panel px-3.5 py-3 opacity-60 shadow-card">
+          {body}
         </div>
       </motion.div>
     )
@@ -37,21 +48,13 @@ export default function ToolCard({ tool }) {
     <motion.div variants={cardVariants}>
       <Link
         to={tool.path}
-        className="group relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-panel p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-signal hover:shadow-[0_18px_40px_-18px_var(--signal)]"
+        className="group relative flex items-center gap-3 overflow-hidden rounded-2xl bg-panel px-3.5 py-3 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
       >
-        <span className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-signal opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-20" />
-
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-signal-dim bg-gradient-to-br from-signal-dim to-transparent text-signal">
-            <Icon className="h-5 w-5" strokeWidth={1.75} />
-          </div>
-          <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[0.62rem] text-text-dim">{tag}</span>
-        </div>
-
-        <h3 className="mb-1.5 text-[0.95rem] font-semibold tracking-tight">{tool.name}</h3>
-        <p className="flex-1 text-[0.82rem] leading-relaxed text-text-dim">{tool.description}</p>
-
-        <span className="mt-4 inline-flex items-center gap-1 text-[0.8rem] font-medium text-signal transition-transform duration-200 group-hover:translate-x-0.5">Open tool →</span>
+        {body}
+        <ArrowRight
+          className="relative h-4 w-4 flex-shrink-0 text-signal opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
+          strokeWidth={2.25}
+        />
       </Link>
     </motion.div>
   )

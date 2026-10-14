@@ -10,11 +10,13 @@ import {
   QrCode,
   FileOutput,
   Volume2,
-  Link2
+  Link2,
+  PenTool
 } from 'lucide-react'
 
 import useImageConverter from './tools/ImageConverter.jsx'
 import useImageCompressor from './tools/ImageCompressor.jsx'
+import useSvgToPng from './tools/SvgToPng.jsx'
 import useImagesToPdf from './tools/ImagesToPdf.jsx'
 import usePdfToImages from './tools/PdfToImages.jsx'
 import useMergeSplitPdf from './tools/MergeSplitPdf.jsx'
@@ -26,11 +28,19 @@ import useDocumentScanner from './tools/DocumentScanner.jsx'
 import useQrScanner from './tools/QrScanner.jsx'
 import useUrlShortener from './tools/UrlShortener.jsx'
 
+// Home page / nav grouping, in display order.
+export const categories = [
+  { id: 'images', label: 'Images' },
+  { id: 'pdf', label: 'PDF & documents' },
+  { id: 'utilities', label: 'Scan & utilities' }
+]
+
 // Single source of truth: order here controls sidebar order, home page
 // card order, and route registration.
 export const tools = [
   {
     id: 'image-converter',
+    category: 'images',
     path: '/tools/image-converter',
     name: 'Image Converter',
     tagline: 'Convert between PNG, JPG, and WebP',
@@ -65,7 +75,44 @@ export const tools = [
     ],
   },
   {
+    id: 'svg-to-png',
+    category: 'images',
+    path: '/tools/svg-to-png',
+    name: 'SVG to PNG',
+    tagline: 'Render SVG vectors as sharp PNG images',
+    description: 'Convert SVG files to high-resolution PNG, WebP, or AVIF at any size.',
+    icon: PenTool,
+    component: useSvgToPng,
+    formats: ['SVG', 'PNG'],
+    seoTitle: 'SVG to PNG Converter — High Resolution, Free Online',
+    seoDescription:
+      'Free online SVG to PNG converter. Export SVG files as crisp PNG images at 1×–4× or any custom width, with a transparent or solid background. Runs in your browser, no uploads.',
+    keywords: 'svg to png, convert svg to png, svg to png high resolution, svg to png transparent, svg converter',
+    intro:
+      'Convert SVG vector graphics into PNG images at exactly the size you need. FileFlowHQ renders the vectors at full output resolution, so logos and icons stay sharp at 4× or 4000px wide. Everything runs in your browser — your files are never uploaded.',
+    howTo: [
+      'Drop one or more SVG files into the box above, or click to browse.',
+      'Pick a scale (1×–4×) or type an exact width in pixels, and choose a transparent or solid background.',
+      'Click Convert, then download your PNGs.',
+    ],
+    faq: [
+      {
+        q: 'Will the PNG be blurry?',
+        a: 'No. The SVG is rendered directly at the output size you choose rather than being upscaled, so edges stay crisp at any resolution.',
+      },
+      {
+        q: 'Can I keep a transparent background?',
+        a: 'Yes. Transparent is the default. You can also pick white or any custom color if you need a solid background.',
+      },
+      {
+        q: 'Why does some text or an embedded image look different?',
+        a: 'Browsers render SVGs as standalone images without loading external fonts or linked files. Convert text to outlines and embed images in the SVG for an exact match.',
+      },
+    ],
+  },
+  {
     id: 'image-compressor',
+    category: 'images',
     path: '/tools/image-compressor',
     name: 'Image & PDF Compressor',
     tagline: 'Shrink image or PDF file size to a target',
@@ -101,6 +148,7 @@ export const tools = [
   },
   {
     id: 'images-to-pdf',
+    category: 'pdf',
     path: '/tools/images-to-pdf',
     name: 'Images to PDF',
     tagline: 'Combine images into one PDF',
@@ -136,6 +184,7 @@ export const tools = [
   },
   {
     id: 'pdf-to-images',
+    category: 'pdf',
     path: '/tools/pdf-to-images',
     name: 'PDF to Images',
     tagline: 'Split PDF pages into image files',
@@ -171,6 +220,7 @@ export const tools = [
   },
   {
     id: 'merge-split-pdf',
+    category: 'pdf',
     path: '/tools/merge-split-pdf',
     name: 'Merge / Split PDF',
     tagline: 'Combine PDFs or pull out page ranges',
@@ -206,6 +256,8 @@ export const tools = [
   },
   {
     id: 'pdf-to-word',
+    category: 'pdf',
+    usesServer: true, // sends data to a server (excluded from the 'never upload' count)
     path: '/tools/pdf-to-word',
     name: 'PDF to Word',
     tagline: 'Editable .docx, or plain .txt extraction',
@@ -247,6 +299,7 @@ export const tools = [
   },
   {
     id: 'word-to-pdf',
+    category: 'pdf',
     path: '/tools/word-to-pdf',
     name: 'Word to PDF',
     tagline: 'Convert .docx to PDF',
@@ -282,6 +335,7 @@ export const tools = [
   },
   {
     id: 'pdf-read-aloud',
+    category: 'pdf',
     path: '/tools/pdf-read-aloud',
     name: 'PDF Read Aloud',
     tagline: 'Text-to-speech, page by page',
@@ -321,6 +375,7 @@ export const tools = [
   },
   {
     id: 'csv-json',
+    category: 'utilities',
     path: '/tools/csv-json',
     name: 'CSV ⇄ JSON',
     tagline: 'Convert tabular data both ways',
@@ -356,6 +411,7 @@ export const tools = [
   },
   {
     id: 'document-scanner',
+    category: 'utilities',
     path: '/tools/document-scanner',
     name: 'Document Scanner',
     tagline: 'Scan pages with your camera to PDF',
@@ -392,6 +448,7 @@ export const tools = [
   },
   {
     id: 'qr-scanner',
+    category: 'utilities',
     path: '/tools/qr-scanner',
     name: 'QR & Barcode Scanner',
     tagline: 'Read QR codes and barcodes with your camera',
@@ -428,6 +485,8 @@ export const tools = [
   },
   {
     id: 'url-shortener',
+    category: 'utilities',
+    usesServer: true, // sends data to a server (excluded from the 'never upload' count)
     path: '/tools/url-shortener',
     name: 'URL Shortener',
     tagline: 'Turn a long link into a short one',

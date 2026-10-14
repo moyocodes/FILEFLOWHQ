@@ -1,55 +1,62 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import StampBadge from '../components/StampBadge.jsx'
-import { useSettingsPanel } from '../context/SettingsPanelContext.jsx'
+import ProcessIllustration from '../components/ProcessIllustration.jsx'
 import { applySeo, setFaqJsonLd } from '../utils/useSeo.js'
 
 /**
  * Generic tool route wrapper. Each tool in src/tools/ is a custom hook
  * (e.g. useImageConverter()) that owns all state/handlers and returns
- * { workspace, settings } JSX sharing that state closure. ToolPage calls
- * the hook, renders `workspace` inline (into the center pane it occupies),
- * and pushes `settings` up into the shell's right-hand settings pane via
- * SettingsPanelContext so App.jsx doesn't need to know about tool internals.
+ * { workspace, settings } JSX sharing that state closure. ToolPage lays them
+ * out side by side: workspace on the left, settings in a sticky card on the
+ * right (stacked below the workspace on phones).
  */
 function ComingSoonTool({ tool }) {
   return (
-    <div className="flex min-h-full flex-col px-6 py-8 sm:px-9">
-      <ToolHeader tool={tool} />
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-        <p className="text-[1rem] text-text">Under construction</p>
-        <p className="max-w-sm text-[0.8rem] leading-relaxed text-text-dim">
-          {tool.name} is still being built. Check back soon.
-        </p>
+    <>
+      <ToolHero tool={tool} />
+      <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
+        <p className="text-lg font-semibold">Under construction</p>
+        <p className="mx-auto mt-1 max-w-sm text-[0.9rem] text-text-dim">{tool.name} is still being built. Check back soon.</p>
       </div>
-      <ToolSeoContent tool={tool} />
-    </div>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <ToolSeoContent tool={tool} />
+      </div>
+    </>
   )
 }
 
-function ToolHeader({ tool }) {
+/** Tinted hero band: name + description on the left, process illustration behind/right. */
+function ToolHero({ tool }) {
   const Icon = tool.icon
   return (
-    <div className="relative mb-6 flex flex-shrink-0 items-start gap-4 overflow-hidden rounded-card border border-border bg-panel p-5 shadow-card">
+    <section className="relative overflow-hidden bg-gradient-to-b from-signal-dim to-transparent">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(60% 120% at 0% 0%, var(--signal-dim), transparent 70%)' }}
+        className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-signal opacity-[0.10] blur-3xl"
       />
-      {Icon && (
-        <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-signal-dim bg-gradient-to-br from-signal-dim to-transparent text-signal">
-          <Icon className="h-6 w-6" strokeWidth={1.75} />
+      <div className="relative mx-auto flex max-w-7xl items-center gap-6 px-4 pb-8 pt-8 sm:px-6 sm:pt-10 lg:px-8">
+        <div className="min-w-0 flex-1">
+          <div className="mb-4 flex items-center gap-3">
+            {Icon && (
+              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-panel text-signal shadow-card">
+                <Icon className="h-5 w-5" strokeWidth={1.9} />
+              </span>
+            )}
+            <StampBadge formats={tool.formats} />
+          </div>
+          <h1 className="text-[clamp(1.7rem,3.4vw,2.6rem)] font-bold leading-[1.1] tracking-tight">{tool.name}</h1>
+          {tool.description && (
+            <p className="mt-2 max-w-[56ch] text-[0.95rem] leading-relaxed text-text-dim">{tool.description}</p>
+          )}
         </div>
-      )}
-      <div className="relative min-w-0">
-        <div className="mb-1 flex flex-wrap items-center gap-3">
-          <h1 className="text-[clamp(1.3rem,2.2vw,1.7rem)] font-bold tracking-tight">{tool.name}</h1>
-          <StampBadge formats={tool.formats} />
-        </div>
-        {tool.description && <p className="text-[0.88rem] text-text-dim">{tool.description}</p>}
+        <ProcessIllustration
+          tool={tool}
+          className="pointer-events-none absolute -right-10 top-1/2 w-[340px] -translate-y-1/2 opacity-25 sm:static sm:w-[300px] sm:translate-y-0 sm:opacity-100 lg:w-[380px]"
+        />
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -60,12 +67,12 @@ function ToolSeoContent({ tool }) {
   if (!hasContent) return null
 
   return (
-    <section className="mb-6 rounded-card border border-border text-text-dim">
+    <section className="mb-10 rounded-card bg-panel text-text-dim shadow-card">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
       >
         <span className="text-[0.95rem] font-semibold text-text">
           {tool.seoTitle || `More about ${tool.name}`}
@@ -88,7 +95,7 @@ function ToolSeoContent({ tool }) {
         transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
         className="overflow-hidden"
       >
-        <div className="max-w-[68ch] px-4 pb-4">
+        <div className="max-w-[68ch] px-5 pb-5">
           {tool.intro && <p className="mb-6 text-[0.9rem] leading-relaxed">{tool.intro}</p>}
 
           {tool.howTo && tool.howTo.length > 0 && (
@@ -111,7 +118,7 @@ function ToolSeoContent({ tool }) {
               </h3>
               <div className="space-y-2">
                 {tool.faq.map((item, i) => (
-                  <details key={i} className="group rounded-lg border border-border bg-panel px-4 py-3">
+                  <details key={i} className="group rounded-xl bg-panel-raised px-4 py-3">
                     <summary className="cursor-pointer list-none text-[0.88rem] font-medium text-text marker:hidden">
                       {item.q}
                     </summary>
@@ -130,7 +137,6 @@ function ToolSeoContent({ tool }) {
 export default function ToolPage({ tool }) {
   const useTool = tool.component
   const { workspace, settings } = useTool()
-  const { setSettingsContent, clearSettingsContent } = useSettingsPanel()
 
   useEffect(() => {
     applySeo({
@@ -147,24 +153,25 @@ export default function ToolPage({ tool }) {
     return () => setFaqJsonLd(null)
   }, [tool])
 
-  useLayoutEffect(() => {
-    if (tool.comingSoon) {
-      clearSettingsContent()
-      return
-    }
-    setSettingsContent(settings)
-    return () => clearSettingsContent()
-  }, [settings, setSettingsContent, clearSettingsContent, tool.comingSoon])
-
   if (tool.comingSoon) {
     return <ComingSoonTool tool={tool} />
   }
 
   return (
-    <div className="flex min-h-full flex-col px-6 py-8 sm:px-9">
-      <ToolHeader tool={tool} />
-      <ToolSeoContent tool={tool} />
-      <div className="flex flex-1 flex-col">{workspace}</div>
-    </div>
+    <>
+      <ToolHero tool={tool} />
+      <div className="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-8">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 rounded-card bg-panel p-4 shadow-card sm:p-6">{workspace}</div>
+          <aside className="rounded-card bg-panel p-5 shadow-card lg:sticky lg:top-20">
+            <div className="mb-4 text-[0.95rem] font-semibold">Settings</div>
+            <div className="flex flex-col gap-6">{settings}</div>
+          </aside>
+        </div>
+        <div className="mt-10">
+          <ToolSeoContent tool={tool} />
+        </div>
+      </div>
+    </>
   )
 }

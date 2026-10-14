@@ -6,7 +6,7 @@ import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import PdfThumbnail from '../components/PdfThumbnail.jsx'
 import pdfjsLib from '../utils/pdfjsSetup.js'
-import { validateFiles, readAsArrayBuffer, canvasToBlob, downloadBlob, stripExtension, uid } from '../utils/fileHelpers.js'
+import { validateFiles, readAsArrayBuffer, canvasToBlob, downloadBlob, stripExtension, uid, releaseCanvas } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 
 export default function usePdfToImages() {
@@ -49,7 +49,10 @@ export default function usePdfToImages() {
         const ctx = canvas.getContext('2d')
         await page.render({ canvasContext: ctx, viewport }).promise
         const blob = await canvasToBlob(canvas, 'image/png')
-        results.push({ id: uid(), index: i, thumb: canvas.toDataURL('image/png'), blob })
+        // An object URL instead of toDataURL avoids a second full-size copy in
+        // memory, and releasing the canvas keeps iOS under its canvas limit.
+        releaseCanvas(canvas)
+        results.push({ id: uid(), index: i, thumb: URL.createObjectURL(blob), blob })
         setProgress((i / pdf.numPages) * 100)
       }
       setPages(results)

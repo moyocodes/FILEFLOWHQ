@@ -1,119 +1,64 @@
-import { useEffect, useRef, useState } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useEffect } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { track } from '@vercel/analytics'
-import Rail, { MobileMenuButton } from './components/Rail.jsx'
+import TopNav from './components/TopNav.jsx'
+import SiteFooter from './components/SiteFooter.jsx'
 import Home from './pages/Home.jsx'
 import ToolPage from './pages/ToolPage.jsx'
 import Privacy from './pages/Privacy.jsx'
 import Contact from './pages/Contact.jsx'
 import { tools } from './toolsConfig.js'
-import { SettingsPanelProvider, useSettingsPanel } from './context/SettingsPanelContext.jsx'
 import { EmailGateProvider } from './context/EmailGateContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import EmailGateModal from './components/EmailGateModal.jsx'
 import ToastStack from './components/ToastStack.jsx'
 import ContactChat from './components/ContactChat.jsx'
-import InstallPrompt, { InstallButton } from './components/InstallPrompt.jsx'
+import InstallPrompt from './components/InstallPrompt.jsx'
+import StatsDashboard from './pages/StatsDashboard.jsx'
+import { trackView } from './utils/analytics.js'
 
-function activeToolFromPath(pathname) {
-  return tools.find((t) => t.path === pathname) || null
-}
-
-function WsHeader({ activeTool, onOpenMenu }) {
-  const navigate = useNavigate()
-  const link = 'rounded-md px-2.5 py-1.5 text-[0.8rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text'
-
-  return (
-    <header className="sticky top-0 z-10 flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-[color-mix(in_srgb,var(--void)_80%,transparent)] px-4 backdrop-blur sm:px-8">
-      <div className="flex min-w-0 items-center gap-3">
-        <MobileMenuButton onClick={onOpenMenu} />
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-[0.82rem]">
-          <button onClick={() => navigate('/')} className="text-text-dim transition-colors hover:text-text">
-            Home
-          </button>
-          {activeTool && (
-            <>
-              <span className="text-border-strong">/</span>
-              <span className="truncate font-medium text-text">{activeTool.name}</span>
-            </>
-          )}
-        </nav>
-      </div>
-      <div className="flex items-center gap-1">
-        <InstallButton />
-        <button onClick={() => navigate('/contact')} className={link}>
-          Contact
-        </button>
-        <button onClick={() => navigate('/privacy')} className={link}>
-          Privacy
-        </button>
-      </div>
-    </header>
-  )
-}
-
-function SettingsPane({ activeTool }) {
-  const { settingsContent } = useSettingsPanel()
-  const prefersReducedMotion = useReducedMotion()
-
-  return (
-    <AnimatePresence>
-      {activeTool && (
-        <motion.aside
-          key="settings"
-          initial={prefersReducedMotion ? false : { opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 16 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="fixed inset-x-0 bottom-0 z-20 flex max-h-[70vh] w-full flex-col overflow-hidden border-t border-border bg-panel md:static md:inset-auto md:z-auto md:h-[100dvh] md:max-h-none md:w-[280px] md:flex-shrink-0 md:border-l md:border-t-0"
-        >
-          <div className="flex h-14 flex-shrink-0 items-center border-b border-border px-5 text-[0.82rem] font-semibold text-text">
-            Settings
-          </div>
-          <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">{settingsContent}</div>
-        </motion.aside>
-      )}
-    </AnimatePresence>
-  )
-}
-
+/**
+ * Page shell: sticky top nav, the routed page, and a footer. The whole
+ * document scrolls normally (no fixed-height inner scroll panes), which keeps
+ * iOS Safari's address bar, rubber-banding and keyboard behaving.
+ */
 function Shell() {
-  const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
-  const activeTool = activeToolFromPath(location.pathname)
-  const scrollRef = useRef(null)
 
   useEffect(() => {
     track('pageview', { path: location.pathname })
+    if (!location.pathname.startsWith('/admin')) trackView(location.pathname)
   }, [location.pathname])
 
+  // New page → top. A #hash (e.g. "/#tools") scrolls to that section instead.
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, 0)
+    if (location.hash) {
+      const el = document.getElementById(location.hash.slice(1))
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+    }
     window.scrollTo(0, 0)
-  }, [location.pathname])
+  }, [location.pathname, location.hash])
 
   return (
-    <div className="flex w-full flex-col md:h-[100dvh] md:flex-row md:overflow-hidden">
-      <Rail isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
+    <div className="flex min-h-[100dvh] flex-col">
+      <TopNav />
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          {tools.map((tool) => (
+            <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
+          ))}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/admin/stats" element={<StatsDashboard />} />
+          <Route path="*" element={<Home />} />
+        </Routes>
+      </main>
+      <SiteFooter />
 
-      <div className="flex min-w-0 flex-1 flex-col md:h-[100dvh] md:overflow-hidden">
-        <WsHeader activeTool={activeTool} onOpenMenu={() => setMenuOpen(true)} />
-
-        <div ref={scrollRef} className="min-h-0 flex-1 md:overflow-y-auto">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            {tools.map((tool) => (
-              <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
-            ))}
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="*" element={<Home />} />
-          </Routes>
-        </div>
-      </div>
-
-      <SettingsPane activeTool={activeTool} />
       <EmailGateModal />
       <ToastStack />
       <ContactChat />
@@ -124,12 +69,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <SettingsPanelProvider>
-      <ToastProvider>
-        <EmailGateProvider>
-          <Shell />
-        </EmailGateProvider>
-      </ToastProvider>
-    </SettingsPanelProvider>
+    <ToastProvider>
+      <EmailGateProvider>
+        <Shell />
+      </EmailGateProvider>
+    </ToastProvider>
   )
 }

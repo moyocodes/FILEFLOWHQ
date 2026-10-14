@@ -10,8 +10,8 @@
   --signal-dim: #0e8f5c1a;
   --text: #10151a;
   --text-dim: #5b6670;
-  --border: #dbe1de;
-  --border-strong: #c3ccc7;
+  --border: #e6ebe8;
+  --border-strong: #d3dbd6;
   --mono-text: #3e7a5b;
 }
 
@@ -25,8 +25,8 @@ html.dark {
   --signal-dim: #39ff9e17;
   --text: #e8ecef;
   --text-dim: #7c8792;
-  --border: #1e232a;
-  --border-strong: #2a313a;
+  --border: #1a1e24;
+  --border-strong: #252b33;
   --mono-text: #39ff9e;
 }
 
@@ -36,8 +36,6 @@ html {
 
 body {
   @apply bg-void text-text font-body antialiased;
-  font-feature-settings: 'cv11', 'ss01';
-  letter-spacing: -0.006em;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -111,4 +109,41 @@ h1, h2, h3 {
   .gate-blob-b {
     animation: none;
   }
+}
+
+/* ProcessIllustration: the dotted flow line, travelling particles and the
+   spinning ring around the tool hub. */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -22; }
+}
+@keyframes flow-move {
+  0% { offset-distance: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes flow-spin {
+  to { transform: rotate(360deg); }
+}
+.flow-dash { animation: flow-dash 1.1s linear infinite; }
+.flow-dot { offset-rotate: 0deg; opacity: 0; animation: flow-move 2.7s ease-in-out infinite; }
+.flow-spin { animation: flow-spin 14s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash,
+  .flow-spin { animation: none; }
+  .flow-dot { display: none; }
+}
+
+/* Analytics dashboard series colours (validated categorical slots 1–3, with
+   separate dark-mode steps checked against the dark panel). */
+:root {
+  --series-views: #2a78d6;
+  --series-uploads: #eb6834;
+  --series-downloads: #1baf7a;
+}
+html.dark {
+  --series-views: #3987e5;
+  --series-uploads: #d95926;
+  --series-downloads: #199e70;
 }

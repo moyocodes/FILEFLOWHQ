@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { UploadCloud } from 'lucide-react'
+import { trackEvent } from '../utils/analytics.js'
 
 /**
  * Drag-and-drop file input with a "browse files" fallback button.
@@ -31,7 +32,10 @@ export default function Dropzone({
   const handleFiles = useCallback(
     (fileList) => {
       const files = Array.from(fileList || [])
-      if (files.length > 0) onFiles(files)
+      if (files.length > 0) {
+        trackEvent('upload', { n: files.length })
+        onFiles(files)
+      }
     },
     [onFiles]
   )
@@ -74,8 +78,8 @@ export default function Dropzone({
       <div
         {...sharedProps}
         className={[
-          'flex w-full cursor-pointer items-center gap-2 rounded-full border-[1.5px] border-dashed px-4 py-2 text-left transition-colors',
-          isDragging ? 'border-signal bg-signal-dim' : 'border-border-strong bg-panel hover:border-signal hover:bg-signal-dim'
+          'flex w-full cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-left transition-colors',
+          isDragging ? 'bg-signal-dim ring-2 ring-signal' : 'bg-panel-raised hover:bg-signal-dim'
         ].join(' ')}
       >
         <UploadCloud className="h-4 w-4 flex-shrink-0 text-text-dim" strokeWidth={2} />
@@ -97,8 +101,8 @@ export default function Dropzone({
       }
       transition={{ duration: 0.15 }}
       className={[
-        'flex min-h-[200px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-card border-[1.5px] border-dashed px-6 py-12 text-center transition-colors',
-        isDragging ? 'border-signal bg-signal-dim' : 'border-border-strong bg-panel hover:border-signal hover:bg-signal-dim'
+        'flex min-h-[220px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-card px-6 py-12 text-center transition-colors',
+        isDragging ? 'bg-signal-dim ring-2 ring-signal' : 'bg-panel-raised hover:bg-signal-dim'
       ].join(' ')}
     >
       <UploadCloud className="h-[26px] w-[26px] text-text-dim" strokeWidth={2} />
