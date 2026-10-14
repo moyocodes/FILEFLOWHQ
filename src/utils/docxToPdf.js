@@ -70,6 +70,23 @@ export async function convertDocxToPdf(file, onProgress) {
   `
   container.prepend(style)
 
+  // Capture link positions before rendering. Pages are sliced from one tall
+  // raster, so a link at container-y maps to page floor(y / contentHeight).
+  const pxToPt = (PAGE_WIDTH_PT - MARGIN_PT * 2) / container.offsetWidth
+  const contentHeightPt = PAGE_HEIGHT_PT - MARGIN_PT * 2
+  const containerRect = container.getBoundingClientRect()
+  const links = Array.from(container.querySelectorAll('a[href]')).flatMap((a) => {
+    const url = a.getAttribute('href')
+    if (!/^(https?:|mailto:|tel:)/i.test(url)) return []
+    return Array.from(a.getClientRects()).map((r) => ({
+      url,
+      x: (r.left - containerRect.left) * pxToPt,
+      y: (r.top - containerRect.top) * pxToPt,
+      w: r.width * pxToPt,
+      h: r.height * pxToPt,
+    }))
+  })
+
   try {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
     await new Promise((resolve, reject) => {
@@ -82,9 +99,16 @@ export async function convertDocxToPdf(file, onProgress) {
         autoPaging: 'slice',
         width: PAGE_WIDTH_PT - MARGIN_PT * 2,
         windowWidth: container.offsetWidth,
-        html2canvas: { scale: 0.75 },
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: { scale: 2 },
       }).catch(reject)
     })
+    for (const { url, x, y, w, h } of links) {
+      const pageIdx = Math.floor(y / contentHeightPt)
+      if (pageIdx >= doc.getNumberOfPages()) continue
+      doc.setPage(pageIdx + 1)
+      doc.link(MARGIN_PT + x, MARGIN_PT + (y - pageIdx * contentHeightPt), w, h, { url })
+    }
     onProgress?.(1)
     return doc.output('blob')
   } finally {

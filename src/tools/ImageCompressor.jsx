@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString } from 'pdf-lib'
 import { Download } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
@@ -57,7 +57,35 @@ const PDF_RENDER_SCALE = 2
  * rebuilding a PDF with pdf-lib from the compressed page images. This trades
  * away any existing text layer / selectability for file size, same tradeoff
  * every browser-side "compress PDF" tool makes without a native encoder.
+ * Link annotations (external URLs and in-document jumps) are read from the
+ * source and recreated over the new pages so hyperlinks stay clickable.
  */
+function addLinkAnnotation(outDoc, outPage, rect, action) {
+  const { context } = outDoc
+  const annot = context.obj({
+    Type: 'Annot',
+    Subtype: 'Link',
+    Rect: rect,
+    Border: [0, 0, 0],
+    ...action
+  })
+  const ref = context.register(annot)
+  const existing = outPage.node.Annots()
+  if (existing) existing.push(ref)
+  else outPage.node.set(PDFName.of('Annots'), context.obj([ref]))
+}
+
+async function resolveDestPageIndex(pdf, dest) {
+  try {
+    const arr = typeof dest === 'string' ? await pdf.getDestination(dest) : dest
+    if (!Array.isArray(arr) || arr.length === 0) return null
+    const target = arr[0]
+    return typeof target === 'number' ? target : await pdf.getPageIndex(target)
+  } catch {
+    return null
+  }
+}
+
 async function compressPdf(file, targetBytes, onPageProgress) {
   const buffer = await readAsArrayBuffer(file)
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
@@ -65,6 +93,7 @@ async function compressPdf(file, targetBytes, onPageProgress) {
 
   const outDoc = await PDFDocument.create()
   let hitTarget = true
+  const internalLinks = []
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
@@ -87,7 +116,43 @@ async function compressPdf(file, targetBytes, onPageProgress) {
     const outPage = outDoc.addPage([pointViewport.width, pointViewport.height])
     outPage.drawImage(embeddedImage, { x: 0, y: 0, width: pointViewport.width, height: pointViewport.height })
 
+    // Carry over hyperlinks. Rects are mapped through the viewport so page
+    // rotation / cropboxes line up, then flipped to PDF's bottom-left origin.
+    try {
+      const annotations = await page.getAnnotations({ intent: 'display' })
+      for (const a of annotations) {
+        if (a.subtype !== 'Link' || !a.rect) continue
+        const [x1, y1, x2, y2] = pointViewport.convertToViewportRectangle(a.rect)
+        const rect = [
+          Math.min(x1, x2),
+          pointViewport.height - Math.max(y1, y2),
+          Math.max(x1, x2),
+          pointViewport.height - Math.min(y1, y2)
+        ]
+        if (a.url) {
+          addLinkAnnotation(outDoc, outPage, rect, {
+            A: { Type: 'Action', S: 'URI', URI: PDFString.of(a.url) }
+          })
+        } else if (a.dest) {
+          internalLinks.push({ outPage, rect, dest: a.dest })
+        }
+      }
+    } catch {
+      // Links are best effort; never fail the compression over them.
+    }
+
     onPageProgress?.(i / pdf.numPages)
+  }
+
+  // In-document links need the destination page to exist, so resolve them last.
+  const outPages = outDoc.getPages()
+  for (const { outPage, rect, dest } of internalLinks) {
+    const idx = await resolveDestPageIndex(pdf, dest)
+    const targetPage = idx != null ? outPages[idx] : null
+    if (!targetPage) continue
+    addLinkAnnotation(outDoc, outPage, rect, {
+      Dest: [targetPage.ref, 'Fit']
+    })
   }
 
   const bytes = await outDoc.save()

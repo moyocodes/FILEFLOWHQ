@@ -7,6 +7,7 @@ import ProgressBar from '../components/ProgressBar.jsx'
 import PdfThumbnail from '../components/PdfThumbnail.jsx'
 import { validateFiles, readAsArrayBuffer, downloadBlob, formatBytes, uid } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { remapInternalLinks } from '../utils/pdfLinks.js'
 
 /**
  * Merge/Split PDF has two sub-modes with entirely different state, so the
@@ -102,8 +103,11 @@ function useMergePanel() {
       for (let i = 0; i < items.length; i++) {
         const buffer = await readAsArrayBuffer(items[i].file)
         const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
-        const copiedPages = await outDoc.copyPages(srcDoc, srcDoc.getPageIndices())
+        const indices = srcDoc.getPageIndices()
+        const copiedPages = await outDoc.copyPages(srcDoc, indices)
         copiedPages.forEach((p) => outDoc.addPage(p))
+        // Keep "go to page" links working (web links survive copyPages as-is).
+        remapInternalLinks(srcDoc, indices, copiedPages)
         setProgress(((i + 1) / items.length) * 100)
       }
       const bytes = await outDoc.save()
@@ -250,6 +254,7 @@ function useSplitPanel() {
       for (let p = s; p <= e; p++) indices.push(p - 1)
       const copiedPages = await outDoc.copyPages(srcDoc, indices)
       copiedPages.forEach((p) => outDoc.addPage(p))
+      remapInternalLinks(srcDoc, indices, copiedPages)
       const bytes = await outDoc.save()
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const trimmedName = outputName.trim() || `pages-${s}-${e}.pdf`
