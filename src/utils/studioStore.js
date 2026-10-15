@@ -1,0 +1,49 @@
+/**
+ * Keeps a Studio editor's open documents in this browser (IndexedDB), so a reload or a later
+ * visit reopens them. Only this device ever sees them. Every call fails quietly: private
+ * windows and blocked storage just mean nothing is kept.
+ */
+const DB = 'fileflowhq-studio'
+const STORE = 'documents'
+
+function open() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1)
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function run(mode, fn) {
+  const db = await open()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, mode)
+      const req = fn(tx.objectStore(STORE))
+      tx.oncomplete = () => resolve(req?.result)
+      tx.onerror = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+/** Replace the kept documents of editor `appId` with `docs` ([{ name, bytes: ArrayBuffer }]). */
+export async function keepDocuments(appId, docs) {
+  try {
+    await run('readwrite', (store) => (docs.length ? store.put({ docs, at: Date.now() }, appId) : store.delete(appId)))
+  } catch {
+    // storage unavailable or full: nothing kept
+  }
+}
+
+/** The documents kept for editor `appId`, or []. */
+export async function keptDocuments(appId) {
+  try {
+    const entry = await run('readonly', (store) => store.get(appId))
+    return Array.isArray(entry?.docs) ? entry.docs : []
+  } catch {
+    return []
+  }
+}

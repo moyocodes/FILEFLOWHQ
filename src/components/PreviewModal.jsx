@@ -124,7 +124,7 @@ function DocxPreview({ blob }) {
   return (
     <div className="mx-auto max-w-[720px] rounded-lg bg-white p-8 text-[#111] shadow-card">
       <div
-        className="docx-preview space-y-3 text-[0.92rem] leading-relaxed [&_a]:text-[#0e6fbf] [&_a]:underline [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_table]:w-full [&_td]:border [&_td]:border-[#ccc] [&_td]:p-1.5 [&_ul]:list-disc"
+        className="docx-preview space-y-3 text-[0.92rem] leading-relaxed [&_a]:text-[#0e6fbf] [&_a]:underline [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:font-medium [&_li]:ml-5 [&_ol]:list-decimal [&_table]:w-full [&_td]:border [&_td]:border-[#ccc] [&_td]:p-1.5 [&_ul]:list-disc"
         onClick={(e) => {
           const a = e.target.closest('a')
           if (a) {
@@ -252,7 +252,7 @@ export default function PreviewModal() {
                 <Eye className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.95rem] font-semibold">{current.name}</p>
+                <p className="truncate text-[0.95rem] font-medium">{current.name}</p>
                 <p className="text-[0.75rem] text-text-dim">{formatBytes(current.blob.size)}</p>
               </div>
               <button
@@ -276,7 +276,7 @@ export default function PreviewModal() {
 
             {current.onDownload && (
               <div className="flex flex-shrink-0 justify-end gap-2 bg-panel px-5 py-4 shadow-[0_-12px_24px_-16px_rgba(16,24,40,0.2)] sm:px-6">
-                <button onClick={close} className="rounded-full bg-panel-raised px-5 py-2.5 text-sm font-medium">
+                <button onClick={close} className="rounded-full bg-panel-raised px-5 py-2.5 text-sm font-normal">
                   Close
                 </button>
                 <button
@@ -284,7 +284,7 @@ export default function PreviewModal() {
                     current.onDownload()
                     close()
                   }}
-                  className="inline-flex items-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_-10px_var(--signal)] dark:text-void"
+                  className="inline-flex items-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_-10px_var(--signal)] dark:text-void"
                 >
                   <Download className="h-4 w-4" /> Download
                 </button>

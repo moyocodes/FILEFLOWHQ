@@ -184,7 +184,7 @@ export default function useDocumentScanner() {
         >
           <CameraIcon className="h-7 w-7 text-text-dim" strokeWidth={2} />
           <div>
-            <p className="text-[0.92rem] font-medium">
+            <p className="text-[0.92rem] font-normal">
               {pages.length === 0 ? 'Scan a page' : 'Add another page'}
             </p>
             <p className="mt-1 text-[0.76rem] text-text-dim">
@@ -229,14 +229,14 @@ export default function useDocumentScanner() {
                 className="flex items-center gap-3 rounded-lg border border-border bg-panel px-3 py-2.5"
               >
                 <GripVertical className="h-4 w-4 flex-shrink-0 cursor-grab text-text-dim" strokeWidth={2} />
-                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-medium text-signal">
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-normal text-signal">
                   {index + 1}
                 </span>
                 <button onClick={() => setEditingPageId(page.id)} className="flex-shrink-0">
                   <img src={page.thumb} alt="" className="h-10 w-10 rounded-md object-cover" />
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">Page {index + 1}</p>
+                  <p className="truncate text-sm font-normal">Page {index + 1}</p>
                 </div>
                 <button
                   onClick={() => setEditingPageId(page.id)}
@@ -296,7 +296,7 @@ export default function useDocumentScanner() {
             <button
               onClick={() => setPageSize('a4')}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium',
+                'rounded px-3 py-1.5 text-sm font-normal',
                 pageSize === 'a4' ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim',
               ].join(' ')}
             >
@@ -305,7 +305,7 @@ export default function useDocumentScanner() {
             <button
               onClick={() => setPageSize('fit')}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium',
+                'rounded px-3 py-1.5 text-sm font-normal',
                 pageSize === 'fit' ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim',
               ].join(' ')}
             >
@@ -327,7 +327,7 @@ export default function useDocumentScanner() {
 
         <button
           onClick={addPage}
-          className="flex w-full items-center justify-center gap-2 rounded border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:border-signal"
+          className="flex w-full items-center justify-center gap-2 rounded border border-border px-4 py-2.5 text-sm font-normal text-text transition-colors hover:border-signal"
         >
           <Plus className="h-4 w-4" strokeWidth={2} />
           Add page
@@ -336,7 +336,7 @@ export default function useDocumentScanner() {
         <button
           onClick={buildPdf}
           disabled={isBuilding || pages.length === 0}
-          className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           <Download className="h-4 w-4" strokeWidth={2} />
           Save as PDF

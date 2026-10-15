@@ -17,7 +17,7 @@ function ComingSoonTool({ tool }) {
     <>
       <ToolHero tool={tool} />
       <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <p className="text-lg font-semibold">Under construction</p>
+        <p className="text-lg font-medium">Under construction</p>
         <p className="mx-auto mt-1 max-w-sm text-[0.9rem] text-text-dim">{tool.name} is still being built. Check back soon.</p>
       </div>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -46,7 +46,7 @@ function ToolHero({ tool }) {
             )}
             <StampBadge formats={tool.formats} />
           </div>
-          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-semibold leading-[1.15] tracking-tight">{tool.name}</h1>
+          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-medium leading-[1.15] tracking-tight">{tool.name}</h1>
           {tool.description && (
             <p className="mt-2 max-w-[56ch] text-[0.95rem] leading-relaxed text-text-dim">{tool.description}</p>
           )}
@@ -74,7 +74,7 @@ function ToolSeoContent({ tool }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
       >
-        <span className="text-[0.95rem] font-semibold text-text">
+        <span className="text-[0.95rem] font-medium text-text">
           {tool.seoTitle || `More about ${tool.name}`}
         </span>
         <motion.span
@@ -100,7 +100,7 @@ function ToolSeoContent({ tool }) {
 
           {tool.howTo && tool.howTo.length > 0 && (
             <div className="mb-8">
-              <h3 className="mb-2.5 text-[0.95rem] font-semibold text-text">
+              <h3 className="mb-2.5 text-[0.95rem] font-medium text-text">
                 How to use {tool.name}
               </h3>
               <ol className="list-decimal space-y-1.5 pl-5 text-[0.88rem] leading-relaxed">
@@ -113,13 +113,13 @@ function ToolSeoContent({ tool }) {
 
           {tool.faq && tool.faq.length > 0 && (
             <div>
-              <h3 className="mb-2.5 text-[0.95rem] font-semibold text-text">
+              <h3 className="mb-2.5 text-[0.95rem] font-medium text-text">
                 Frequently asked questions
               </h3>
               <div className="space-y-2">
                 {tool.faq.map((item, i) => (
                   <details key={i} className="group rounded-xl bg-panel-raised px-4 py-3">
-                    <summary className="cursor-pointer list-none text-[0.88rem] font-medium text-text marker:hidden">
+                    <summary className="cursor-pointer list-none text-[0.88rem] font-normal text-text marker:hidden">
                       {item.q}
                     </summary>
                     <p className="mt-2 text-[0.85rem] leading-relaxed">{item.a}</p>
@@ -164,7 +164,7 @@ export default function ToolPage({ tool }) {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 rounded-card bg-panel p-4 shadow-card sm:p-6">{workspace}</div>
           <aside className="rounded-card bg-panel p-5 shadow-card lg:sticky lg:top-20">
-            <div className="mb-4 text-[0.95rem] font-semibold">Settings</div>
+            <div className="mb-4 text-[0.95rem] font-medium">Settings</div>
             <div className="flex flex-col gap-6">{settings}</div>
           </aside>
         </div>

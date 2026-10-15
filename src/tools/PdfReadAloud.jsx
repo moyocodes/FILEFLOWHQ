@@ -219,7 +219,7 @@ export default function usePdfReadAloud() {
         {file ? (
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1 rounded-card border border-border bg-panel px-4 py-2.5">
-              <p className="truncate text-sm font-medium">{file.name}</p>
+              <p className="truncate text-sm font-normal">{file.name}</p>
               <p className="text-xs text-text-dim">
                 {pageTexts.length > 0 ? `${pageTexts.length} page${pageTexts.length === 1 ? '' : 's'}` : 'Selected PDF'}
               </p>
@@ -273,7 +273,7 @@ export default function usePdfReadAloud() {
             <div className="grid gap-4 sm:grid-cols-2">
               {pageThumbs[currentPage] && (
                 <div>
-                  <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+                  <p className="mb-1.5 font-mono text-xs font-normal uppercase tracking-wide text-text-dim">
                     Preview
                   </p>
                   <img
@@ -285,7 +285,7 @@ export default function usePdfReadAloud() {
               )}
 
               <div>
-                <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+                <p className="mb-1.5 font-mono text-xs font-normal uppercase tracking-wide text-text-dim">
                   Page {currentPage + 1} text
                 </p>
                 <div className="scrollbar-thin max-h-80 overflow-auto whitespace-pre-wrap rounded-card border border-border bg-panel p-4 font-mono text-xs leading-relaxed">
@@ -364,7 +364,7 @@ export default function usePdfReadAloud() {
           {status === 'speaking' ? (
             <button
               onClick={pause}
-              className="flex flex-1 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+              className="flex flex-1 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90"
             >
               <Pause className="h-4 w-4" strokeWidth={2} />
               Pause
@@ -373,7 +373,7 @@ export default function usePdfReadAloud() {
             <button
               onClick={play}
               disabled={pageTexts.length === 0}
-              className="flex flex-1 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               <Play className="h-4 w-4" strokeWidth={2} />
               {status === 'paused' ? 'Resume' : 'Read this page'}

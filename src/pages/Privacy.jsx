@@ -6,7 +6,7 @@ const UPDATED = 'October 14, 2026'
 function Section({ title, children }) {
   return (
     <section className="rounded-card bg-panel p-6 shadow-card sm:p-7">
-      <h2 className="mb-2 text-[1.05rem] font-semibold tracking-tight">{title}</h2>
+      <h2 className="mb-2 text-[1.05rem] font-medium tracking-tight">{title}</h2>
       <div className="space-y-3 text-[0.9rem] leading-relaxed text-text-dim">{children}</div>
     </section>
   )
@@ -26,8 +26,8 @@ export default function Privacy() {
     <div>
       <section className="bg-gradient-to-b from-signal-dim to-transparent">
         <div className="mx-auto max-w-3xl px-4 pb-8 pt-12 sm:px-6">
-          <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-signal">Last updated {UPDATED}</p>
-          <h1 className="text-[clamp(1.8rem,3.4vw,2.5rem)] font-semibold leading-tight tracking-tight">Privacy Policy</h1>
+          <p className="mb-2 text-[0.75rem] font-medium uppercase tracking-[0.16em] text-signal">Last updated {UPDATED}</p>
+          <h1 className="text-[clamp(1.8rem,3.4vw,2.5rem)] font-medium leading-tight tracking-tight">Privacy Policy</h1>
           <p className="mt-3 max-w-[60ch] text-[0.95rem] leading-relaxed text-text-dim">
             This policy covers the FileFlowHQ website (fileflowhq.com), its mobile apps, and its Chrome extension.
             In short: almost everything happens on your device, and the few things that don&apos;t are listed below.
@@ -50,14 +50,25 @@ export default function Privacy() {
         </p>
       </Section>
 
-      <Section title="The one feature that uploads a file: PDF to Word">
+      <Section title="Studio editors">
         <p>
-          When you choose Word (.docx) output in PDF to Word, the PDF is sent to our server, which passes it to
-          Adobe PDF Services to perform the conversion, and the result is returned to you. We do not keep the
-          file: it is used only to produce your conversion. The plain-text extraction option runs in your
-          browser and uploads nothing. Adobe processes the file under its own terms and privacy policy.
+          The Studio editors (PDF Editor, Photo Editor, Video Editor and the others) run entirely in your browser.
+          Documents you open or create in them are never uploaded. When you save or export, the file goes from the
+          editor to this page on your device and is downloaded from there.
         </p>
       </Section>
+
+      <Section title="Payments and credits">
+        <p>
+          Some features use credits. To count them without accounts, we store a one-way hash of your IP address
+          with your credit balance; the IP address itself is never stored. When you buy credits, the payment is
+          processed by Paystack: you enter your card or bank details on Paystack&apos;s checkout, never on our
+          site, and we never see or store them. We send Paystack the email address you give for your receipt and
+          keep the payment reference so we can credit your balance. Paystack handles your payment under its own
+          terms and privacy policy.
+        </p>
+      </Section>
+
 
       <Section title="URL shortener">
         <p>
@@ -110,8 +121,8 @@ export default function Privacy() {
       <Section title="What we don't do">
         <p>
           We do not sell your data, use it for advertising, or use it to determine creditworthiness or lending
-          eligibility. We do not transfer it to third parties except the service providers named above (Adobe
-          for PDF to Word, Mailjet for email, Vercel for hosting and analytics, Google Fonts for typefaces),
+          eligibility. We do not transfer it to third parties except the service providers named above (Mailjet for email, Paystack for payments, Upstash for storing credit balances and short
+          links, Vercel for hosting and analytics, Google Fonts for typefaces),
           solely to provide the features you use.
         </p>
       </Section>

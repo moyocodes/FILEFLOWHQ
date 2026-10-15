@@ -73,7 +73,7 @@ export default function InstallPrompt() {
           <div className="flex items-start gap-3">
             <img src="/pwa-192x192.png" alt="" className="h-10 w-10 flex-shrink-0 rounded-xl" />
             <div className="min-w-0 flex-1">
-              <p className="text-[0.95rem] font-semibold text-text">
+              <p className="text-[0.95rem] font-medium text-text">
                 Install FileFlowHQ
               </p>
               <p className="mt-1 text-[0.82rem] leading-relaxed text-text-dim">
@@ -82,11 +82,11 @@ export default function InstallPrompt() {
               {ios && (
                 <ol className="mt-2.5 space-y-1.5 text-[0.82rem] text-text">
                   <li className="flex items-center gap-2">
-                    <span className="grid h-5 w-5 place-items-center rounded-full bg-signal-dim text-[0.7rem] font-semibold text-signal">1</span>
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-signal-dim text-[0.7rem] font-medium text-signal">1</span>
                     Tap <Share className="h-4 w-4 text-signal" aria-label="Share" /> Share in Safari
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="grid h-5 w-5 place-items-center rounded-full bg-signal-dim text-[0.7rem] font-semibold text-signal">2</span>
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-signal-dim text-[0.7rem] font-medium text-signal">2</span>
                     Choose <SquarePlus className="h-4 w-4 text-signal" aria-hidden="true" /> Add to Home Screen
                   </li>
                 </ol>
@@ -103,7 +103,7 @@ export default function InstallPrompt() {
 
           {ios ? (
             <div className="mt-3 flex justify-end">
-              <button onClick={dismiss} className="rounded-full bg-signal px-4 py-2 text-sm font-semibold text-void">
+              <button onClick={dismiss} className="rounded-full bg-signal px-4 py-2 text-sm font-medium text-void">
                 Got it
               </button>
             </div>
@@ -117,7 +117,7 @@ export default function InstallPrompt() {
             </button>
             <button
               onClick={install}
-              className="inline-flex items-center gap-1.5 rounded-full bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-full bg-signal px-4 py-2 text-sm font-medium text-void transition-opacity hover:opacity-90"
             >
               <Download className="h-4 w-4" strokeWidth={2} />
               Install
@@ -137,7 +137,7 @@ export function InstallButton() {
   return (
     <button
       onClick={promptInstall}
-      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[0.8rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text"
+      className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[0.88rem] font-medium text-text transition-colors hover:bg-panel-raised"
     >
       <Download className="h-3.5 w-3.5" strokeWidth={2} />
       Install app

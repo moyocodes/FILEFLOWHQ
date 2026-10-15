@@ -1,0 +1,1294 @@
+diff --git a/.DS_Store b/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..49157167b73620175f5f51441b7970d995dd7595
+GIT binary patch
+literal 10244
+zcmeHMziSjh6n>LzE*A|FEd#=$jW%jPEcFbh5d{&FCW4q;F1h@=>~VVmt8fGbMMNd$
+zAF!}71i{)yEhILIpoOK42!e&8f}-!u%<jI~ojWCkKVbIQeV2XT+wZ$?e(cT$0L0*8
+zc>ur%fIRLL`+D(U*(gtYX6w*rPGA&R4^V+%zA`X85maj#v^(J(a1J;JoCD4Q=fJ<<
+z0N%4{%WqZD9i0Qt0p~#M0L>3R?i33;HdT~U2Oi`S0HcSe<%ZvJ9UyCb9Sb@(Rg|T8
+zO|^Oux>V>ThEV00_X&=%pkq@-RSrUxgV4-EuTX?!$2woaK@?PUN9TZZAnO3F-E*)H
+zCSV-umi7CtbiNuCi>3LXgy-|SmuAktI`ZUb7E}HurZ&yr6Ub59Ep-I208=mn74uC(
+zCk^}*f@}G@9Bav-5;d(+7Cj#7si2YuS0b)ldV@;h9M|xydV2MELHfb+3A-)NdBxRx
+zcxm}7B`-|FB9u5g!04wef@^qr-SB~3ry3+mTBEog0IA2rzEQ(ZXejBv@lg7pb6mr_
+z;%w9};#$sb%NxA;59C7*c|-h6LL<dJbaFJE=lrXW7b1S+8eBswjG^O<PdYp(L4cn*
+z<M)gGWuD{wTMpGC{<xNN+wul)M~!%Uaa7W1XyC}4K@E%eEx_+)JBS_{e=V_G*WUHB
+zBR|x5ZG%sG$?xC|-Rka}L)~?3y9TzLp;cTw_Yt)kd9H7*bS?5Ng-JBE!f+j8t&jZk
+zpp3qSsqq_*tn(b_|MuwVQg1YVbuDi<Ti)OeWxEk?fF2mX9h&!VYF?S+ykAzTQM<&o
+zoY$7;ys#|COCJ5cfWB98tj?#s2iWl$`7;=<<MoS`$bSniX@hn+Ll=x8CG?=4ar9#j
+zk2D`Gq~><7zhFmkZ9h)kinLj-$K7g=H1u_iAu;xo8oE`7DPw%Y=uV#FTE0)jTH;!+
+zz?L_7BVR%}!t2Pc?!RSI!TSwV(1Sgg<^hJ{T5dm&`;HZvv|4+lp-&tjU%DkT%{{fu
+z3=G?8)=43_uF1=>M;TP2sWr;b15!^8Rj8*Fyd!X@X8Y&5P>qr2S{`g1yfdW6bqbRx
+zX@%iBX5aRaFI_mwNJ*HwBY5kF%`Dfj?QZM`tLMGOj^O;D`YUO0n{&W9;2dxcI0rWC
+zK&LA7>HYt)*8l(C?B!jZbHF+9A2=Yq;&5>gh0-fF+tz_6ecZ=zr;Tt;6=ew?2tw!O
+z>v;TwUdQjz=j6k?{$9|rsiG{$I$4fUz0Lmv{|t!V4e)1l+xnhAq1*EO`CPd5f5`pN
+SJ;t(L=c_kx>;J#7{{IPiixY7G
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/photocraft-web/Cargo.toml b/apps/photocraft-web/Cargo.toml
+index a4ded64..f1f9177 100644
+--- a/apps/photocraft-web/Cargo.toml
++++ b/apps/photocraft-web/Cargo.toml
+@@ -34,7 +34,7 @@ rfd = { workspace = true }
+ wasm-bindgen = "0.2"
+ wasm-bindgen-futures = "0.4"
+ js-sys = "0.3"
+-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "Location", "CssStyleDeclaration", "Storage", "Event", "EventTarget", "MouseEvent", "PointerEvent", "BeforeUnloadEvent", "AbortController", "AbortSignal", "DomException", "Response", "IdbFactory", "IdbOpenDbRequest", "IdbDatabase", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbObjectStore", "IdbCursor", "IdbCursorWithValue", "RequestInit", "Navigator"] }
++web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "Location", "CssStyleDeclaration", "Storage", "Event", "EventTarget", "MouseEvent", "PointerEvent", "BeforeUnloadEvent", "AbortController", "AbortSignal", "DomException", "Response", "IdbFactory", "IdbOpenDbRequest", "IdbDatabase", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbObjectStore", "IdbCursor", "IdbCursorWithValue", "RequestInit", "Navigator", "MessageEvent"] }
+ 
+ [dev-dependencies]
+ serde_json = { workspace = true }
+diff --git a/apps/photocraft-web/index.html b/apps/photocraft-web/index.html
+index 5e73400..e2db1c7 100644
+--- a/apps/photocraft-web/index.html
++++ b/apps/photocraft-web/index.html
+@@ -3,10 +3,12 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+-  <title>PhotoCraft</title>
++  <title>Photo Editor — FileFlowHQ</title>
++  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E %3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%230b0f0f%22 /%3E %3Cg fill=%22%233BE698%22 transform=%22translate%282.1 7.35%29 scale%280.32%29%22%3E %3Cpath d=%22M32.4763 -0.000152588H85.8613C85.0164 0.785692 84.0489 1.81123 83.2208 2.63928L78.7958 7.02676L75.4283 10.3806C74.828 10.9798 73.9312 11.8387 73.3949 12.4691C70.3196 12.4281 67.159 12.4653 64.0781 12.4652L46.3099 12.4674C46.2409 15.4503 46.3043 18.6812 46.305 21.6839C52.2535 21.6852 58.3849 21.7652 64.318 21.6755C63.9214 22.0143 63.3846 22.5848 62.9954 22.9727L60.5995 25.3601C57.7359 28.209 54.8341 31.165 51.9446 33.9736C50.0827 34.007 48.1764 33.9699 46.3062 33.9863C46.2751 35.8496 46.2947 37.7667 46.2975 39.6322C45.9842 39.8806 45.1652 40.7319 44.8478 41.0471L42.0194 43.8575L32.4842 53.398L32.4739 33.6314C34.7783 33.577 37.2286 33.632 39.5527 33.6186C39.5579 33.1346 39.5594 32.6507 39.5572 32.1668L7.25487 32.158C7.24324 30.4991 7.24198 28.8401 7.25125 27.1812C8.11783 27.1375 9.1781 27.1676 10.063 27.1679L15.1266 27.1695L32.4777 27.1589L32.4737 21.6885C33.9618 21.6632 35.5054 21.6829 36.9979 21.6818C36.987 21.2312 37.0041 20.7134 37.008 20.2576L18.9642 20.2126L18.9641 15.0246C23.4545 14.9755 27.9794 15.0501 32.4766 15.017L32.4745 9.74612C35.4975 9.6853 38.7091 9.74067 41.7472 9.74077L41.7465 8.34878C32.6891 8.25842 23.5695 8.42688 14.5135 8.3228L14.5191 3.09689L32.4771 3.09275L32.4763 -0.000152588Z%22 /%3E %3Cpath d=%22M0.108346 15.0691C3.20149 15.0452 6.83719 14.9869 9.90649 15.0837C9.97526 16.5429 9.93326 18.7331 9.91052 20.213C6.71603 20.2381 3.29867 20.2247 0.104492 20.1777C0.169166 18.6401 0.108668 16.6434 0.108346 15.0691Z%22 /%3E %3C/g%3E %3C/svg%3E">
+   <link data-trunk rel="rust" data-bin="photocraft-web" data-cargo-profile="wasm-release" data-cargo-features="heif" data-wasm-opt="z" data-weak-refs />
+   <style>
+-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #262626; }
++    /* Transparent until the app paints: the embedding page shows its own loader behind it. */
++    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+     #photocraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+     #photocraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+       padding: 0 16px; text-align: center; color: #b8b8b8; font: 14px system-ui, sans-serif; pointer-events: none; }
+@@ -21,8 +23,8 @@
+ <body>
+   <canvas id="photocraft_canvas"></canvas>
+   <div id="photocraft_loading">
+-    <p>Loading PhotoCraft&hellip;</p>
+-    <p id="photocraft_stalled">This is taking longer than usual. If PhotoCraft doesn't start, its files may have failed to
++    <p>Loading Photo Editor&hellip;</p>
++    <p id="photocraft_stalled">This is taking longer than usual. If the Photo Editor doesn't start, its files may have failed to
+       download or come from a different version of this page. <a href="">Reload</a> to try again; the browser
+       console lists what failed.</p>
+   </div>
+diff --git a/apps/photocraft-web/src/host.rs b/apps/photocraft-web/src/host.rs
+new file mode 100644
+index 0000000..c280689
+--- /dev/null
++++ b/apps/photocraft-web/src/host.rs
+@@ -0,0 +1,88 @@
++//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//!
++//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
++//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
++//!               charges for it, then hands the file to the user.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!
++//! Opened on its own (not embedded), the editor works but can't save or export.
++
++use js_sys::{Array, Object, Reflect, Uint8Array};
++use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// The embedding page's window: a different window than ours, on our own origin.
++fn parent() -> Option<web_sys::Window> {
++    let window = web_sys::window()?;
++    let parent = window.parent().ok().flatten()?;
++    if Object::is(&parent, &window) {
++        return None;
++    }
++    // Reading another origin's location throws: that page isn't ours.
++    let theirs = parent.location().origin().ok()?;
++    (theirs == window.location().origin().ok()?).then_some(parent)
++}
++
++/// Whether a FileFlowHQ page embeds the editor.
++pub fn embedded() -> bool {
++    parent().is_some()
++}
++
++fn message(fields: &[(&str, JsValue)]) -> Option<Object> {
++    let o = Object::new();
++    for (k, v) in fields {
++        Reflect::set(&o, &JsValue::from_str(k), v).ok()?;
++    }
++    Some(o)
++}
++
++fn post(fields: &[(&str, JsValue)], transfer: Option<&JsValue>) -> Result<(), String> {
++    let parent = parent().ok_or("not embedded in fileflowhq.com")?;
++    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).ok_or("no origin")?;
++    let m = message(fields).ok_or("couldn't build the message")?;
++    match transfer {
++        Some(t) => parent.post_message_with_transfer(&m, &origin, &Array::of1(t)),
++        None => parent.post_message(&m, &origin),
++    }
++    .map_err(|e| format!("{e:?}"))
++}
++
++pub fn post_ready() {
++    let _ = post(&[("type", "pdfcraft:ready".into())], None);
++}
++
++pub fn post_failed(error: &str) {
++    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
++}
++
++/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
++pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++    let buffer = Uint8Array::from(bytes).buffer();
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++    let Some(window) = web_sys::window() else { return };
++    let own_origin = window.location().origin().unwrap_or_default();
++    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
++        let from_parent = match (parent(), e.source()) {
++            (Some(p), Some(src)) => Object::is(&p, &src),
++            _ => false,
++        };
++        if !from_parent || e.origin() != own_origin {
++            return;
++        }
++        let data = e.data();
++        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
++        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
++            return;
++        }
++        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++            open(name, Uint8Array::new(&bytes).to_vec());
++        }
++    });
++    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
++        cb.forget();
++    }
++}
+diff --git a/apps/photocraft-web/src/main.rs b/apps/photocraft-web/src/main.rs
+index 5ba75f5..9a5d799 100644
+--- a/apps/photocraft-web/src/main.rs
++++ b/apps/photocraft-web/src/main.rs
+@@ -22,6 +22,9 @@ mod preset_bridge;
+ #[cfg(target_arch = "wasm32")]
+ mod indexed_presets;
+ 
++#[cfg(target_arch = "wasm32")]
++mod host;
++
+ #[cfg(target_arch = "wasm32")]
+ mod web;
+ 
+diff --git a/apps/photocraft-web/src/web.rs b/apps/photocraft-web/src/web.rs
+index 6c99396..ad35a6f 100644
+--- a/apps/photocraft-web/src/web.rs
++++ b/apps/photocraft-web/src/web.rs
+@@ -54,6 +54,8 @@ pub fn start() {
+         };
+         let q = query();
+         let force_cpu = q.contains("cpu");
++        // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme.
++        let theme = if q.contains("theme=light") { ThemeKind::ProLight } else { ThemeKind::Pro };
+         let mut options = eframe::WebOptions::default();
+         photocraft_ui_egui::gpu_canvas::use_adapter_limits(&mut options.wgpu_options.wgpu_setup);
+         if q.contains("webgl")
+@@ -77,7 +79,7 @@ pub fn start() {
+                 canvas,
+                 options,
+                 Box::new(move |cc| {
+-                    PhotocraftApp::setup_context(&cc.egui_ctx, ThemeKind::Pro);
++                    PhotocraftApp::setup_context(&cc.egui_ctx, theme);
+                     let inbox: Inbox = Arc::default();
+                     let served: Served = Arc::default();
+                     load_font_manifest(served.clone(), cc.egui_ctx.clone());
+@@ -88,7 +90,13 @@ pub fn start() {
+                         photocraft_ui_egui::notices::post(&mut app, i18n::t("Some brush presets could not be loaded"), preset_warnings, true, None);
+                     }
+                     listen_pen(&pen_target, app.stylus.feed.clone());
+-                    app.set_theme(&cc.egui_ctx, ThemeKind::Pro);
++                    app.set_theme(&cc.egui_ctx, theme);
++                    // Files the FileFlowHQ page sends in open like dropped files.
++                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
++                    crate::host::listen(move |name, bytes| {
++                        open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
++                        wake.request_repaint();
++                    });
+                     if let Some(rs) = cc.wgpu_render_state.clone()
+                         && !force_cpu
+                     {
+@@ -101,10 +109,14 @@ pub fn start() {
+                 }),
+             )
+             .await;
++        match &result {
++            Ok(()) => crate::host::post_ready(),
++            Err(e) => crate::host::post_failed(&format!("{e:?}")),
++        }
+         if let Some(el) = document.get_element_by_id("photocraft_loading") {
+             match result {
+                 Ok(()) => el.remove(),
+-                Err(e) => el.set_inner_html(&format!("<p>PhotoCraft failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
++                Err(e) => el.set_inner_html(&format!("<p>Photo Editor failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
+             }
+         }
+     });
+@@ -385,7 +397,16 @@ fn services(inbox: Inbox) -> Services {
+                 reply.send(Some(FileDialogAnswer::SaveTo(name)));
+             }
+         })),
+-        write: Some(Box::new(|path: &str, bytes: &[u8]| download(path, bytes))),
++        // FileFlowHQ: files leave the editor only through the page that embeds it, which takes
++        // payment first. Opened on its own, the editor works but can't save or export.
++        write: Some(Box::new(|path: &str, bytes: &[u8]| {
++            let name = std::path::Path::new(path).file_name().map_or_else(|| "image".to_string(), |n| n.to_string_lossy().to_string());
++            if crate::host::embedded() {
++                crate::host::export(&name, bytes)
++            } else {
++                Err("Saving and exporting work at fileflowhq.com/studio/photo-editor".to_string())
++            }
++        })),
+         encode_png: Some(Box::new(|w, h, rgba| {
+             let img = Image::from_u8(w, h, ChannelLayout::Rgba, rgba.to_vec()).map_err(|e| e.to_string())?;
+             photocraft_codecs::encode(&img, photocraft_codecs::Format::Png, &EncodeOptions::default()).map_err(|e| e.to_string())
+@@ -404,46 +425,6 @@ fn local_storage() -> Option<web_sys::Storage> {
+     web_sys::window()?.local_storage().ok().flatten()
+ }
+ 
+-/// Trigger a browser download of `bytes` named after the last component of `path`.
+-fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
+-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
+-    let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "photocraft".into());
+-    let window = web_sys::window().ok_or("no window")?;
+-    let document = window.document().ok_or("no document")?;
+-    let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
+-    let opts = web_sys::BlobPropertyBag::new();
+-    opts.set_type(mime_for(&name));
+-    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(js)?;
+-    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(js)?;
+-    let a: web_sys::HtmlAnchorElement = document.create_element("a").map_err(js)?.dyn_into().map_err(|_| "not an anchor")?;
+-    a.set_href(&url);
+-    a.set_download(&name);
+-    a.style().set_property("display", "none").map_err(js)?;
+-    let body = document.body().ok_or("no body")?;
+-    body.append_child(&a).map_err(js)?;
+-    a.click();
+-    a.remove();
+-    // Revoke after the click has been dispatched; the download keeps its own reference.
+-    let revoke = wasm_bindgen::closure::Closure::once_into_js(move || {
+-        web_sys::Url::revoke_object_url(&url).ok();
+-    });
+-    window.set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 10_000).map_err(js)?;
+-    Ok(())
+-}
+-
+-fn mime_for(name: &str) -> &'static str {
+-    match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
+-        Some("png") => "image/png",
+-        Some("jpg" | "jpeg") => "image/jpeg",
+-        Some("tif" | "tiff") => "image/tiff",
+-        Some("webp") => "image/webp",
+-        Some("gif") => "image/gif",
+-        Some("psd" | "psb") => "image/vnd.adobe.photoshop",
+-        Some("ora") => "image/openraster",
+-        _ => "application/octet-stream",
+-    }
+-}
+-
+ /// Rust bindings to the browser's user-activated EyeDropper API; unsupported browsers keep
+ /// the document picker and its normal canvas zoom. The browser owns its screen magnifier.
+ fn screen_color_service() -> Option<photocraft_ui_egui::screen_picker::Service> {
+diff --git a/assets/app-icon/hicolor/128x128/apps/ai.storyteller.photocraft.png b/assets/app-icon/hicolor/128x128/apps/ai.storyteller.photocraft.png
+index a28597fc9b08bcc5b00dae49ee2cbfbc765e02d1..c37092398e1ae8ce019c52c1f9984b5e245d65e0 100644
+GIT binary patch
+delta 2039
+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
+VIVOHB2cQ4|002ovPDHLkV1fh3pojnf
+
+literal 19873
+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
+Y0f$b|h@DzhtN;K207*qoM6N<$g7~5-_y7O^
+
+diff --git a/crates/ui-egui/src/brand.rs b/crates/ui-egui/src/brand.rs
+index a601e95..fa91f1a 100644
+--- a/crates/ui-egui/src/brand.rs
++++ b/crates/ui-egui/src/brand.rs
+@@ -1,67 +1,31 @@
+-//! The PhotoCraft brand mark at the left of the title bar: the app icon (the kitsune,
+-//! `assets/app-icon/`, see its README), where Photoshop shows its "Ps" tile. The PNG carries the
+-//! icon's rounded corners; it is decoded once per context into a mipmapped texture, so it stays
+-//! crisp at the title bar's size on any display scale.
++//! The brand mark at the left of the title bar. FileFlowHQ build: the short FileFlowHQ logo from
++//! the shared `ffhq_brand` component (the same beside File in every Studio editor), where
++//! Photoshop shows its "Ps" tile.
+ 
+-use egui::{Color32, Context, Id, Rect, TextureHandle, TextureOptions, Ui, pos2};
+-use photocraft_codecs::{ChannelLayout, SampleType};
+-
+-/// 128 px: sharp at 20 pt on a 3× display, and the mipmaps keep it clean at 1×.
+-const ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.photocraft.png");
+-
+-/// The icon's pixels (one transparent pixel if it couldn't be decoded, which a test rules out).
+-fn decode() -> egui::ColorImage {
+-    let rgba = photocraft_codecs::decode(ICON_PNG).ok().map(|img| img.convert(ChannelLayout::Rgba, SampleType::U8));
+-    match rgba {
+-        Some(img) if img.data().len() == img.width() as usize * img.height() as usize * 4 => {
+-            egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.data())
+-        }
+-        _ => egui::ColorImage::filled([1, 1], Color32::TRANSPARENT),
+-    }
+-}
+-
+-/// The icon texture, uploaded on first use and kept in the context.
+-fn texture(ctx: &Context) -> TextureHandle {
+-    let id = Id::new("photocraft-brand-mark");
+-    if let Some(tex) = ctx.data(|d| d.get_temp::<TextureHandle>(id)) {
+-        return tex;
+-    }
+-    let options = TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..TextureOptions::LINEAR };
+-    let tex = ctx.load_texture("photocraft-brand-mark", decode(), options);
+-    ctx.data_mut(|d| d.insert_temp(id, tex.clone()));
+-    tex
+-}
++use egui::{Id, Rect, Ui};
+ 
+ /// Where the mark was painted this frame (tests and screenshots).
+ fn rect_id() -> Id {
+     Id::new("photocraft-brand-mark-rect")
+ }
+ 
+-/// Paint the mark into `r` (square).
++/// Paint the mark into `r`. FileFlowHQ build: the short FileFlowHQ logo, the same beside File in
++/// every Studio editor (the shared `ffhq_brand` component).
+ pub fn paint_mark(ui: &Ui, r: Rect) {
+-    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+-    ui.painter().image(texture(ui.ctx()).id(), r, uv, Color32::WHITE);
++    crate::ffhq_brand::paint_mark(ui, r);
+     ui.ctx().data_mut(|d| d.insert_temp(rect_id(), r));
+ }
+ 
+ /// The rect the mark was last painted into.
+ #[cfg(test)]
+-pub fn mark_rect(ctx: &Context) -> Option<Rect> {
++pub fn mark_rect(ctx: &egui::Context) -> Option<Rect> {
+     ctx.data(|d| d.get_temp(rect_id()))
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-
+-    #[test]
+-    fn the_icon_decodes_to_a_rounded_128_px_tile() {
+-        let img = decode();
+-        assert_eq!(img.size, [128, 128]);
+-        // Rounded corners: the corner pixel is transparent, the centre opaque.
+-        assert_eq!(img.pixels[0].a(), 0);
+-        assert_eq!(img.pixels[64 * 128 + 64].a(), 255);
+-    }
++    use egui::Context;
+ 
+     #[test]
+     fn the_title_bar_paints_the_icon_from_one_cached_texture() {
+@@ -73,7 +37,7 @@ mod tests {
+         app.custom_titlebar = true;
+         let mut frame = || {
+             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::title_bar(&mut app, ui));
+-            let uploads = out.textures_delta.set.values().flat_map(|d| d.iter()).filter(|d| d.image.size() == [128, 128]).count();
++            let uploads = out.textures_delta.set.values().flat_map(|d| d.iter()).filter(|d| d.image.size() == [155, 96]).count();
+             out.textures_delta.clear();
+             uploads
+         };
+diff --git a/crates/ui-egui/src/canvas.rs b/crates/ui-egui/src/canvas.rs
+index 804744d..d9cb9f2 100644
+--- a/crates/ui-egui/src/canvas.rs
++++ b/crates/ui-egui/src/canvas.rs
+@@ -2378,18 +2378,8 @@ fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+     let open_label = crate::shortcuts::command_label(app, "Open…", "file.open");
+     ui.scope_builder(egui::UiBuilder::new().max_rect(card), |ui| {
+         ui.vertical_centered(|ui| {
+-            ui.horizontal(|ui| {
+-                let title = ui.painter().layout_no_wrap(tl!("PhotoCraft").into(), crate::theme::semibold(38.0), t.text);
+-                let by = ui.painter().layout_no_wrap(tl!("open source").into(), egui::FontId::proportional(13.0), t.text_faint);
+-                let total = title.size().x + by.size().x + 10.0;
+-                ui.add_space(((card.width() - total) / 2.0).max(0.0));
+-                let (r, _) = ui.allocate_exact_size(title.size(), Sense::hover());
+-                ui.painter().galley(r.min, title, t.text);
+-                let (r2, _) = ui.allocate_exact_size(egui::vec2(by.size().x + 10.0, r.height()), Sense::hover());
+-                ui.painter().galley(egui::pos2(r2.left() + 10.0, r.bottom() - by.size().y - 8.0), by, t.text_faint);
+-            });
+-            ui.add_space(6.0);
+-            ui.label(egui::RichText::new(tl!("Create a new document or open an existing file.")).color(t.text_dim).size(14.0));
++            // The FileFlowHQ logo, the editor's name and one line (every Studio editor's heading).
++            crate::ffhq_brand::start_header(ui, tl!("Photo Editor"), tl!("Create a new document or open an existing file."));
+             ui.add_space(22.0);
+             ui.horizontal(|ui| {
+                 ui.add_space(((card.width() - 2.0 * 190.0 - 12.0) / 2.0).max(0.0));
+@@ -2416,8 +2406,6 @@ fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                 home_recent(app, ui, &recent);
+             }
+             ui.add_space(26.0);
+-            crate::links::discord_button(app, ui, 190.0);
+-            ui.add_space(10.0);
+             crate::links::link_row(app, ui);
+         });
+     });
+diff --git a/crates/ui-egui/src/credits_tests.rs b/crates/ui-egui/src/credits_tests.rs
+index 4ac3f3e..d242722 100644
+--- a/crates/ui-egui/src/credits_tests.rs
++++ b/crates/ui-egui/src/credits_tests.rs
+@@ -214,7 +214,7 @@ fn about_window(tab: &str, table: bool) -> (f32, f32, f32) {
+     h.run_steps(6);
+     let ok = h.query_all_by_role(Role::Button).find(|n| n.accesskit_node().label().as_deref() == Some("OK")).map(|n| n.rect()).expect("the OK button");
+     // The dialog's contents: everything between its title and the OK button.
+-    let title = h.query_all_by_label("About PhotoCraft").map(|n| n.rect()).find(|r| r.top() < ok.top()).expect("the dialog title");
++    let title = h.query_all_by_label("About Photo Editor").map(|n| n.rect()).find(|r| r.top() < ok.top()).expect("the dialog title");
+     let lowest = h
+         .query_all(egui_kittest::kittest::by().predicate(|n| n.bounding_box().is_some()))
+         .map(|n| n.rect())
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index 1573d5e..b488708 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -418,12 +418,15 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
+         "contributors" => crate::credits::contributors_ui(app, ui),
+         "models" => crate::credits::models_ui(ui),
+         _ => {
+-            ui.label(tl!("PhotoCraft — an open-source, native image editor written in Rust."));
++            ui.label(tl!("Photo Editor — part of FileFlowHQ Studio. Runs entirely in your browser."));
+             ui.label(crate::i18n::fmt(tl!("Version {version}"), &[("version", &photocraft_engine::build_info::long_version())]));
++            ui.add_space(6.0);
++            // The upstream licenses (MIT OR Apache-2.0) ship with the app; credit the project too.
++            if ui.link(tl!("Built on PhotoCraft, open source (MIT / Apache-2.0)")).on_hover_text(crate::links::UPSTREAM).clicked() {
++                crate::links::open(app, ui.ctx(), crate::links::UPSTREAM);
++            }
+             ui.add_space(12.0);
+             ui.vertical_centered(|ui| {
+-                crate::links::discord_button(app, ui, 220.0);
+-                ui.add_space(8.0);
+                 crate::links::link_row(app, ui);
+             });
+             ui.add_space(10.0);
+@@ -450,7 +453,7 @@ pub fn title(d: &Dialog) -> String {
+     match d.kind {
+         DialogKind::NewDocument => "New Document".into(),
+         DialogKind::About if d.fields.get("systemInfo").and_then(Value::as_bool) == Some(true) => "System Info".into(),
+-        DialogKind::About => "About PhotoCraft".into(),
++        DialogKind::About => "About Photo Editor".into(),
+         DialogKind::LayerStyle => "Layer Style".into(),
+         DialogKind::Command => d.fields.get("__label").and_then(Value::as_str).unwrap_or("Command").trim_end_matches('…').to_string(),
+         DialogKind::Error => "Error".into(),
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 2042e1e..b96e240 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -27,6 +27,7 @@ pub mod artboard_ui;
+ mod blend_keys;
+ pub(crate) mod blend_preview;
+ mod brand;
++mod ffhq_brand;
+ pub(crate) mod brush_cursor;
+ pub mod brush_panel;
+ pub mod brush_picker;
+diff --git a/crates/ui-egui/src/links.rs b/crates/ui-egui/src/links.rs
+index e01a19d..66622d9 100644
+--- a/crates/ui-egui/src/links.rs
++++ b/crates/ui-egui/src/links.rs
+@@ -1,20 +1,17 @@
+-//! Community and project links: the Help menu, the About dialog, the start screen and the title
+-//! bar all open these. URLs follow the crafting-app pattern (`getartcraft.com/apps/<app>`,
+-//! `github.com/storytold/<app>`).
++//! FileFlowHQ links: the Help menu, the About dialog and the start screen open these.
++//! (FileFlowHQ build: the upstream community links — Discord, ArtCraft, GitHub — are removed.)
+ 
+ use serde_json::{Value, json};
+ 
+ use crate::PhotocraftApp;
+ 
+-pub const DISCORD: &str = "https://discord.gg/artcraft";
+-pub const ARTCRAFT_WEBSITE: &str = "https://getartcraft.com";
+-pub const APP_PAGE: &str = "https://getartcraft.com/apps/photocraft";
+-pub const GITHUB: &str = "https://github.com/storytold/photocraft";
+-pub const ISSUES: &str = "https://github.com/storytold/photocraft/issues";
++pub const WEBSITE: &str = "https://fileflowhq.com";
++pub const CONTACT: &str = "https://fileflowhq.com/contact";
++/// The open-source project this editor is built from (its license asks us to say so).
++pub const UPSTREAM: &str = "https://github.com/storytold/photocraft";
+ 
+ /// Help-menu link commands: (id, url). Labels live in `menus::UI_COMMANDS`.
+-pub const COMMANDS: &[(&str, &str)] =
+-    &[("help.discord", DISCORD), ("help.website", APP_PAGE), ("help.artcraftWebsite", ARTCRAFT_WEBSITE), ("help.github", GITHUB), ("help.reportIssue", ISSUES)];
++pub const COMMANDS: &[(&str, &str)] = &[("help.website", WEBSITE), ("help.contact", CONTACT)];
+ 
+ pub fn url_for(id: &str) -> Option<&'static str> {
+     COMMANDS.iter().find(|c| c.0 == id).map(|c| c.1)
+@@ -32,24 +29,15 @@ pub fn open(app: &mut PhotocraftApp, ctx: &egui::Context, url: &str) -> Value {
+     json!({"url": url})
+ }
+ 
+-/// The prominent "Join us on Discord" button.
+-pub fn discord_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, min_width: f32) -> egui::Response {
+-    let r = crate::widgets::primary_button(ui, tl!("Join us on Discord"), min_width).on_hover_text(DISCORD);
+-    if r.clicked() {
+-        open(app, ui.ctx(), DISCORD);
+-    }
+-    r
+-}
+-
+-/// "PhotoCraft website · GitHub · ArtCraft" as links, centred. Clicks route through [`open`] (the
+-/// platform browser service) rather than `ui.hyperlink_to`, which uses the unreliable `ctx.open_url`.
++/// "FileFlowHQ · Contact" as links, centred. Clicks route through [`open`] (the platform
++/// browser service) rather than `ui.hyperlink_to`, which uses the unreliable `ctx.open_url`.
+ pub fn link_row(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+     let t = crate::theme::Tokens::get(ui.ctx());
+-    let links = [(tl!("PhotoCraft website"), APP_PAGE), (tl!("GitHub"), GITHUB), (tl!("ArtCraft"), ARTCRAFT_WEBSITE)];
++    let links = [(tl!("FileFlowHQ"), WEBSITE), (tl!("Contact"), CONTACT)];
+     let font = egui::FontId::proportional(12.5);
+     let sep = "  ·  ";
+     let width: f32 = links.iter().map(|(l, _)| ui.painter().layout_no_wrap((*l).into(), font.clone(), t.text).size().x).sum::<f32>()
+-        + 2.0 * ui.painter().layout_no_wrap(sep.into(), font.clone(), t.text).size().x;
++        + ui.painter().layout_no_wrap(sep.into(), font.clone(), t.text).size().x;
+     let mut clicked: Option<&str> = None;
+     ui.horizontal(|ui| {
+         ui.spacing_mut().item_spacing.x = 0.0;
+@@ -74,7 +62,7 @@ mod tests {
+ 
+     #[test]
+     fn links_open_through_the_platform_service() {
+-        // Issue #14: links (Help menu, Discord button, start-page links) must open in the browser.
++        // Issue #14: links (Help menu, start-page links) must open in the browser.
+         // They route through the `open_url` service rather than the unreliable `ctx.open_url`.
+         use std::sync::{Arc, Mutex};
+         let opened: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+@@ -93,16 +81,16 @@ mod tests {
+             crate::menus::invoke(&mut app, &ctx, id, json!({})).unwrap();
+             assert_eq!(opened.lock().unwrap().last().map(String::as_str), Some(*url), "{id}");
+         }
+-        // The direct open() helper (Discord button / start-page links) also uses it.
+-        open(&mut app, &ctx, DISCORD);
+-        assert_eq!(opened.lock().unwrap().last().map(String::as_str), Some(DISCORD));
++        // The direct open() helper (start-page links) also uses it.
++        open(&mut app, &ctx, CONTACT);
++        assert_eq!(opened.lock().unwrap().last().map(String::as_str), Some(CONTACT));
+     }
+ 
+     #[test]
+     fn help_menu_lists_links_then_separator_then_system_info_and_about() {
+         let app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+         let help: Vec<String> = crate::menus::menu_items(&app).into_iter().filter(|i| i.path == ["Help"]).map(|i| i.id).collect();
+-        assert_eq!(help, ["help.discord", "help.website", "help.artcraftWebsite", "help.github", "help.reportIssue", "---", "help.systemInfo", "help.about"]);
++        assert_eq!(help, ["help.website", "help.contact", "---", "help.systemInfo", "help.about"]);
+         for (id, _) in COMMANDS {
+             assert!(crate::menus::is_live(id) && crate::menus::is_enabled(&app, id), "{id}");
+         }
+@@ -112,11 +100,7 @@ mod tests {
+     fn link_commands_open_their_urls() {
+         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+         let ctx = egui::Context::default();
+-        for (id, url) in [
+-            ("help.discord", "https://discord.gg/artcraft"),
+-            ("help.website", "https://getartcraft.com/apps/photocraft"),
+-            ("help.github", "https://github.com/storytold/photocraft"),
+-        ] {
++        for (id, url) in [("help.website", "https://fileflowhq.com"), ("help.contact", "https://fileflowhq.com/contact")] {
+             let r = crate::menus::invoke(&mut app, &ctx, id, serde_json::json!({})).unwrap();
+             assert_eq!(r["url"], url);
+             assert_eq!(app.ui.status, format!("Opened {url}"));
+diff --git a/crates/ui-egui/src/menus.rs b/crates/ui-egui/src/menus.rs
+index 18f1d6a..3875a88 100644
+--- a/crates/ui-egui/src/menus.rs
++++ b/crates/ui-egui/src/menus.rs
+@@ -91,13 +91,10 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
+     ("window.theme.breezeDark", "Breeze Dark Theme", &["Window", "Theme"], None),
+     ("window.theme.system", "Sync with system", &["Window", "Theme"], None),
+     ("edit.search", "Search…", &["Edit"], Some("Cmd+F")),
+-    ("help.discord", "Join the ArtCraft Discord…", &["Help"], None),
+-    ("help.website", "PhotoCraft Website", &["Help"], None),
+-    ("help.artcraftWebsite", "ArtCraft Website", &["Help"], None),
+-    ("help.github", "PhotoCraft on GitHub", &["Help"], None),
+-    ("help.reportIssue", "Report an Issue…", &["Help"], None),
++    ("help.website", "FileFlowHQ Website", &["Help"], None),
++    ("help.contact", "Contact FileFlowHQ…", &["Help"], None),
+     ("help.systemInfo", "System Info…", &["Help"], None),
+-    ("help.about", "About PhotoCraft", &["Help"], None),
++    ("help.about", "About Photo Editor", &["Help"], None),
+ ];
+ 
+ /// Window › <document>: the open documents, listed at the end of the Window menu as in Photoshop.
+@@ -1790,7 +1787,7 @@ mod tests {
+                 }
+                 h.run_steps(3);
+             };
+-            let open = |h: &Harness<'_, PhotocraftApp>| h.query_by_label_contains("About PhotoCraft").is_some();
++            let open = |h: &Harness<'_, PhotocraftApp>| h.query_by_label_contains("About Photo Editor").is_some();
+             let field_id = egui::Id::new("help-menu-search").with("field");
+             let help = h.get_by_label("Help").rect().center();
+             click(&mut h, help);
+diff --git a/crates/ui-egui/src/panels.rs b/crates/ui-egui/src/panels.rs
+index 0f6a1b8..b4dd141 100644
+--- a/crates/ui-egui/src/panels.rs
++++ b/crates/ui-egui/src/panels.rs
+@@ -541,7 +541,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                 let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
+                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
+             }
+-            let title = app.session.active().map(|d| format!("{}{}", d.doc.name, if d.is_dirty() { "  •" } else { "" })).unwrap_or_else(|| "PhotoCraft".into());
++            let title = app.session.active().map(|d| format!("{}{}", d.doc.name, if d.is_dirty() { "  •" } else { "" })).unwrap_or_else(|| "Photo Editor".into());
+             // The menus and the far-end controls are laid out first; the title is centred in
+             // whatever room is left between them (`free`, left to right: menus then controls, or
+             // controls then menus in a right-to-left UI), shortened or dropped rather than drawn
+@@ -555,7 +555,8 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                 }
+                 if !system {
+                     let side = if t.pro { 18.0 } else { 20.0 };
+-                    let (mark, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
++                    // The FileFlowHQ mark is wider than tall (155 × 96).
++                    let (mark, _) = ui.allocate_exact_size(vec2(side * 155.0 / 96.0, side), Sense::hover());
+                     crate::brand::paint_mark(ui, mark);
+                     ui.add_space(6.0);
+                 }
+@@ -623,25 +624,6 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                         }
+                         button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
+                     }
+-                    // The community Discord, one click away while the bar has room for it
+-                    // (narrow windows drop it first; it is also Help › Discord).
+-                    if ui.available_width() >= DISCORD_ROOM {
+-                        let discord = egui::Button::image_and_text(
+-                            icons::image("message-square", 14.0, t.text_dim),
+-                            egui::RichText::new(tl!("Discord")).color(t.text_dim).size(12.0),
+-                        )
+-                        .frame(false);
+-                        if ui
+-                            .add(discord)
+-                            .on_hover_text({
+-                                let template = "Join the ArtCraft Discord ({url})";
+-                                crate::i18n::fmt(tl!(template), &[("url", crate::links::DISCORD)])
+-                            })
+-                            .clicked()
+-                        {
+-                            crate::links::open(app, ui.ctx(), crate::links::DISCORD);
+-                        }
+-                    }
+                     if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
+                 };
+                 free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
+@@ -683,7 +665,7 @@ pub fn system_title_bar(app: &PhotocraftApp) -> bool {
+ /// marks unsaved changes, like the `•` in the app-drawn title), or just the app name with no
+ /// document open.
+ pub fn window_title(app: &PhotocraftApp) -> String {
+-    app.session.active().map(|d| format!("{}{} \u{2014} PhotoCraft", if d.is_dirty() { "*" } else { "" }, d.doc.name)).unwrap_or_else(|| "PhotoCraft".into())
++    app.session.active().map(|d| format!("{}{} \u{2014} Photo Editor", if d.is_dirty() { "*" } else { "" }, d.doc.name)).unwrap_or_else(|| "Photo Editor".into())
+ }
+ 
+ /// Keep the OS window title (and the taskbar / Alt-Tab entry) on the active file. Sends
+@@ -699,7 +681,6 @@ pub fn sync_window_title(app: &mut PhotocraftApp, ctx: &egui::Context) {
+ /// Minimum space kept between the window title and the menus or controls beside it.
+ const TITLE_GAP: f32 = 16.0;
+ /// Free room the title bar needs after its other controls to show the Discord button.
+-const DISCORD_ROOM: f32 = 120.0;
+ /// The workspace switcher's narrowest width, and one 28 pt title-bar icon with its spacing.
+ const WORKSPACE_MIN: f32 = 90.0;
+ const ICON_SLOT: f32 = 34.0;
+@@ -760,19 +741,19 @@ mod title_tests {
+ 
+     #[test]
+     fn window_title_with_no_document_is_the_app_name() {
+-        assert_eq!(window_title(&app(true)), "PhotoCraft");
++        assert_eq!(window_title(&app(true)), "Photo Editor");
+     }
+ 
+     #[test]
+     fn window_title_follows_the_active_file() {
+         let mut app = app(true);
+         open_named(&mut app, "foo.psd");
+-        assert_eq!(window_title(&app), "foo.psd \u{2014} PhotoCraft");
++        assert_eq!(window_title(&app), "foo.psd \u{2014} Photo Editor");
+         // Unsaved changes gain a `*` prefix, like the `•` in the app-drawn title.
+         if let Some(st) = app.session.active_mut() {
+             st.revision += 1;
+         }
+-        assert_eq!(window_title(&app), "*foo.psd \u{2014} PhotoCraft");
++        assert_eq!(window_title(&app), "*foo.psd \u{2014} Photo Editor");
+     }
+ 
+     #[test]
+@@ -810,11 +791,11 @@ mod title_tests {
+         let ctx = egui::Context::default();
+         crate::PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
+         super::sync_window_title(&mut app, &ctx);
+-        assert_eq!(app.last_window_title, "PhotoCraft");
++        assert_eq!(app.last_window_title, "Photo Editor");
+         let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+         out.textures_delta.clear();
+         let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+-        assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "PhotoCraft")), "{cmds:?}");
++        assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "Photo Editor")), "{cmds:?}");
+         // Same document state again: the cached title stops a repeat command.
+         super::sync_window_title(&mut app, &ctx);
+         let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+@@ -823,7 +804,7 @@ mod title_tests {
+         assert!(!cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(_))), "repeat Title: {cmds:?}");
+         open_named(&mut app, "foo.psd");
+         super::sync_window_title(&mut app, &ctx);
+-        assert_eq!(app.last_window_title, "foo.psd \u{2014} PhotoCraft");
++        assert_eq!(app.last_window_title, "foo.psd \u{2014} Photo Editor");
+     }
+ }
+ 
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index bee0104..deee548 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -239,65 +239,72 @@ impl Tokens {
+                 ..Tokens::for_kind(ThemeKind::Pro)
+             },
+             // Photoshop's lightest brightness: #F0F0F0 panels, dark text, a light-grey canvas.
++            // FileFlowHQ: the site's light palette (near-white, deep green accent).
+             ThemeKind::ProLight => Tokens {
+                 kind,
+-                chrome: Color32::from_rgb(240, 240, 240),
+-                canvas: Color32::from_rgb(214, 214, 214),
+-                canvas_dot: Color32::from_rgb(214, 214, 214),
+-                dock: Color32::from_rgb(226, 226, 226),
+-                card: Color32::from_rgb(240, 240, 240),
+-                card_border: Color32::from_rgb(214, 214, 214),
++                chrome: Color32::WHITE,
++                canvas: Color32::from_rgb(0xe9, 0xed, 0xeb),
++                canvas_dot: Color32::from_rgb(0xe9, 0xed, 0xeb),
++                dock: Color32::from_rgb(0xf4, 0xf6, 0xf5),
++                card: Color32::WHITE,
++                card_border: Color32::from_rgb(0xe6, 0xeb, 0xe8),
+                 field: Color32::WHITE,
+-                field_border: Color32::from_rgb(186, 186, 186),
+-                hover: Color32::from_rgb(226, 226, 226),
+-                pressed: Color32::from_rgb(206, 206, 206),
+-                text: Color32::from_rgb(20, 20, 20),
+-                text_dim: Color32::from_rgb(64, 64, 64),
+-                text_faint: Color32::from_rgb(120, 120, 120),
+-                icon: Color32::from_rgb(46, 46, 46),
+-                accent_soft: Color32::from_rgb(214, 214, 214),
+-                accent_text: Color32::from_rgb(16, 98, 196),
+-                separator: Color32::from_rgb(214, 214, 214),
+-                shadow: Color32::from_black_alpha(50),
+-                tab_strip: Color32::from_rgb(226, 226, 226),
+-                row_selected: Color32::from_rgb(204, 204, 204),
++                field_border: Color32::from_rgb(0xd3, 0xdb, 0xd6),
++                hover: Color32::from_rgb(0xee, 0xf2, 0xf0),
++                pressed: Color32::from_rgb(0xe2, 0xe8, 0xe5),
++                text: Color32::from_rgb(0x10, 0x15, 0x1a),
++                text_dim: Color32::from_rgb(0x5b, 0x66, 0x70),
++                text_faint: Color32::from_rgb(0x8a, 0x94, 0x9c),
++                icon: Color32::from_rgb(0x2b, 0x33, 0x38),
++                accent: Color32::from_rgb(0x0e, 0x8f, 0x5c),
++                accent_soft: Color32::from_rgb(0xdc, 0xf1, 0xe7),
++                accent_border: Color32::from_rgb(0x0e, 0x8f, 0x5c),
++                accent_text: Color32::from_rgb(0x0e, 0x8f, 0x5c),
++                separator: Color32::from_rgb(0xe6, 0xeb, 0xe8),
++                shadow: Color32::from_black_alpha(40),
++                primary_bg: Color32::from_rgb(0x0e, 0x8f, 0x5c),
++                primary_text: Color32::WHITE,
++                tab_strip: Color32::from_rgb(0xf4, 0xf6, 0xf5),
++                row_selected: Color32::from_rgb(0xdc, 0xf1, 0xe7),
++                histogram_bg: Color32::from_rgb(0xf4, 0xf6, 0xf5),
+                 ..Tokens::for_kind(ThemeKind::Pro)
+             },
++            // FileFlowHQ: the site's dark palette (soft charcoal, mint green accent).
+             ThemeKind::Pro => Tokens {
+                 kind,
+-                chrome: Color32::from_rgb(50, 50, 50),
+-                canvas: Color32::from_rgb(40, 40, 40),
+-                canvas_dot: Color32::from_rgb(40, 40, 40),
+-                dock: Color32::from_rgb(30, 30, 30),
+-                card: Color32::from_rgb(50, 50, 50),
+-                card_border: Color32::from_rgb(30, 30, 30),
+-                field: Color32::from_rgb(36, 36, 36),
+-                field_border: Color32::from_rgb(74, 74, 74),
+-                hover: Color32::from_rgb(66, 66, 66),
+-                pressed: Color32::from_rgb(78, 78, 78),
+-                text: Color32::from_rgb(222, 222, 222),
+-                text_dim: Color32::from_rgb(178, 178, 178),
+-                text_faint: Color32::from_rgb(128, 128, 128),
+-                icon: Color32::from_rgb(200, 200, 200),
+-                accent: Color32::from_rgb(55, 142, 240),
+-                accent_soft: Color32::from_rgb(78, 78, 78),
+-                accent_border: Color32::from_rgb(55, 142, 240),
+-                accent_text: Color32::WHITE,
+-                separator: Color32::from_rgb(30, 30, 30),
++                chrome: Color32::from_rgb(0x1a, 0x20, 0x21),
++                canvas: Color32::from_rgb(0x12, 0x17, 0x18),
++                canvas_dot: Color32::from_rgb(0x12, 0x17, 0x18),
++                dock: Color32::from_rgb(0x12, 0x17, 0x18),
++                card: Color32::from_rgb(0x1a, 0x20, 0x21),
++                card_border: Color32::from_rgb(0x29, 0x32, 0x2f),
++                field: Color32::from_rgb(0x12, 0x17, 0x18),
++                field_border: Color32::from_rgb(0x35, 0x41, 0x3d),
++                hover: Color32::from_rgb(0x22, 0x2a, 0x2a),
++                pressed: Color32::from_rgb(0x29, 0x32, 0x2f),
++                text: Color32::from_rgb(0xf1, 0xf5, 0xf3),
++                text_dim: Color32::from_rgb(0xa3, 0xaf, 0xab),
++                text_faint: Color32::from_rgb(0x74, 0x80, 0x7c),
++                icon: Color32::from_rgb(0xd5, 0xde, 0xda),
++                accent: Color32::from_rgb(0x3b, 0xe6, 0x98),
++                accent_soft: Color32::from_rgb(0x1f, 0x3b, 0x31),
++                accent_border: Color32::from_rgb(0x3b, 0xe6, 0x98),
++                accent_text: Color32::from_rgb(0x0b, 0x0f, 0x0f),
++                separator: Color32::from_rgb(0x29, 0x32, 0x2f),
+                 shadow: Color32::from_black_alpha(150),
+-                primary_bg: Color32::from_rgb(55, 142, 240),
+-                primary_text: Color32::WHITE,
++                primary_bg: Color32::from_rgb(0x3b, 0xe6, 0x98),
++                primary_text: Color32::from_rgb(0x0b, 0x0f, 0x0f),
+                 danger: Color32::from_rgb(236, 91, 98),
+                 warning: Color32::from_rgb(232, 176, 70),
+-                radius_sm: 3.0,
+-                radius: 4.0,
+-                radius_lg: 6.0,
++                radius_sm: 4.0,
++                radius: 6.0,
++                radius_lg: 10.0,
+                 bevel: false,
+                 pro: true,
+                 round_chips: false,
+-                tab_strip: Color32::from_rgb(38, 38, 38),
+-                row_selected: Color32::from_rgb(82, 82, 82),
+-                histogram_bg: Color32::from_rgb(40, 40, 40),
++                tab_strip: Color32::from_rgb(0x16, 0x1c, 0x1c),
++                row_selected: Color32::from_rgb(0x1f, 0x3b, 0x31),
++                histogram_bg: Color32::from_rgb(0x12, 0x17, 0x18),
+                 histogram_level: 225,
+                 caption_close: Color32::from_rgb(196, 43, 28),
+                 caption_close_text: Color32::WHITE,
+diff --git a/crates/ui-egui/src/titlebar.rs b/crates/ui-egui/src/titlebar.rs
+index d02536a..b2a3d8b 100644
+--- a/crates/ui-egui/src/titlebar.rs
++++ b/crates/ui-egui/src/titlebar.rs
+@@ -309,9 +309,8 @@ mod tests {
+             for a in &widgets {
+                 assert!(a.right() <= min.left(), "{a:?} runs into the caption buttons at {width}");
+             }
+-            // Wide windows show the whole group; the narrowest drops Discord (also Help › Discord).
+-            let has_discord = texts(&out).iter().any(|(t, _)| t == "Discord");
+-            assert_eq!(has_discord, width > 1000.0, "Discord at {width}");
++            // FileFlowHQ build: no community (Discord) button at any width.
++            assert!(!texts(&out).iter().any(|(t, _)| t == "Discord"), "Discord at {width}");
+         }
+     }
+ 

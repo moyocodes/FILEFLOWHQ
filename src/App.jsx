@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { track } from '@vercel/analytics'
 import TopNav from './components/TopNav.jsx'
@@ -8,7 +8,10 @@ import ToolPage from './pages/ToolPage.jsx'
 import Privacy from './pages/Privacy.jsx'
 import Contact from './pages/Contact.jsx'
 import { tools } from './toolsConfig.js'
+import { studioApps, studioPath } from './studioApps.js'
+import { StudioHome, StudioAppPage } from './pages/Studio.jsx'
 import { EmailGateProvider } from './context/EmailGateContext.jsx'
+import { UsageProvider } from './context/UsageContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import EmailGateModal from './components/EmailGateModal.jsx'
 import ToastStack from './components/ToastStack.jsx'
@@ -26,6 +29,19 @@ import { trackView } from './utils/analytics.js'
  */
 function Shell() {
   const location = useLocation()
+  // On any Studio editor the site's nav and footer step aside: the FileFlowHQ Studio bar
+  // (Studio.jsx) is the page's only bar.
+  const onEditor = studioApps.some((app) => location.pathname === studioPath(app))
+  // Rebranded editors render outside <main> (kept mounted, below); the others are routed in it.
+  const current = studioApps.find((app) => app.branded && location.pathname === studioPath(app))
+  const immersive = Boolean(current)
+  // Rebranded editors opened this visit stay mounted (hidden) when the visitor goes elsewhere on
+  // the site, so their open documents and unsaved edits are still there on return.
+  const [kept, setKept] = useState([])
+  const keptIds = current && !kept.includes(current.id) ? [...kept, current.id] : kept
+  useEffect(() => {
+    if (current) setKept((ids) => (ids.includes(current.id) ? ids : [...ids, current.id]))
+  }, [current])
 
   useEffect(() => {
     track('pageview', { path: location.pathname })
@@ -46,12 +62,20 @@ function Shell() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <TopNav />
-      <main className="flex-1">
+      {!onEditor && <TopNav />}
+      <main className={immersive ? 'hidden' : 'flex-1'}>
         <Routes>
           <Route path="/" element={<Home />} />
           {tools.map((tool) => (
             <Route key={tool.id} path={tool.path} element={<ToolPage key={tool.id} tool={tool} />} />
+          ))}
+          <Route path="/studio" element={<StudioHome />} />
+          {studioApps.map((app) => (
+            <Route
+              key={app.id}
+              path={studioPath(app)}
+              element={app.branded ? null : <StudioAppPage key={app.id} app={app} />}
+            />
           ))}
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/contact" element={<Contact />} />
@@ -59,12 +83,17 @@ function Shell() {
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
-      <SiteFooter />
+      {keptIds.map((id) => {
+        const app = studioApps.find((a) => a.id === id)
+        return <StudioAppPage key={id} app={app} active={current?.id === id} />
+      })}
+      {!onEditor && <SiteFooter />}
 
       <PreviewModal />
       <EmailGateModal />
       <ToastStack />
-      <ContactChat />
+      {/* The floating bubble would sit on top of a Studio editor's own toolbar. */}
+      {!location.pathname.startsWith('/studio/') && <ContactChat />}
       <InstallPrompt />
     </div>
   )
@@ -73,11 +102,13 @@ function Shell() {
 export default function App() {
   return (
     <ToastProvider>
-      <EmailGateProvider>
-        <PreviewProvider>
-          <Shell />
-        </PreviewProvider>
-      </EmailGateProvider>
+      <UsageProvider>
+        <EmailGateProvider>
+          <PreviewProvider>
+            <Shell />
+          </PreviewProvider>
+        </EmailGateProvider>
+      </UsageProvider>
     </ToastProvider>
   )
 }

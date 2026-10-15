@@ -25,12 +25,12 @@ export default function FileRow({ name, size, thumbnail, status = 'idle', onRemo
               value={name}
               onChange={(e) => onRename(e.target.value)}
               aria-label="File name"
-              className="w-full min-w-0 break-all bg-transparent text-sm font-medium leading-snug outline-none"
+              className="w-full min-w-0 break-all bg-transparent text-sm font-normal leading-snug outline-none"
             />
             <Pencil className="h-3 w-3 flex-shrink-0 text-text-dim group-focus-within:text-signal" strokeWidth={2} />
           </label>
         ) : (
-          <p className="break-all text-sm font-medium leading-snug">{name}</p>
+          <p className="break-all text-sm font-normal leading-snug">{name}</p>
         )}
         <p className="mt-0.5 text-xs text-text-dim">{formatBytes(size)}</p>
       </div>

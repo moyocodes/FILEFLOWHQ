@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Editor — FileFlowHQ</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    
+<script type="module">
+import init, * as bindings from './pdfcraft-web-95b141fbb50aaa49.js';
+const wasm = await init({ module_or_path: './pdfcraft-web-95b141fbb50aaa49_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    <style>
+      /* Transparent until the app paints: the embedding page shows its loader behind it. */
+      html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+      canvas { width: 100%; height: 100%; display: block; outline: none; }
+    </style>
+  <link rel="modulepreload" href="./pdfcraft-web-95b141fbb50aaa49.js" crossorigin="anonymous" integrity="sha384-NUNlrl1TDK0vthk7CRsbmUasA9Lhz6yUuIkPC3Dpdp3iTExLDkaqX1OzHHGtwMgA"><link rel="preload" href="./pdfcraft-web-95b141fbb50aaa49_bg.wasm" crossorigin="anonymous" integrity="sha384-Kv6/Qx5V41LaX+LaHWtJbG0TnuIQsVZyenC5V/Nw+OoYeCrfZc5UH/muAgCeUN0G" as="fetch" type="application/wasm"></head>
+  <body>
+    <canvas id="pdfcraft"></canvas>
+  </body>
+</html>

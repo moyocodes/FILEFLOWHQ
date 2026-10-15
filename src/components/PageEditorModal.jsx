@@ -194,11 +194,11 @@ export default function PageEditorModal({ blob, onSave, onRetake, onClose }) {
           >
             <X className="h-4.5 w-4.5" strokeWidth={2.25} />
           </button>
-          <p className="text-sm font-medium">Edit page</p>
+          <p className="text-sm font-normal">Edit page</p>
           <button
             onClick={handleSave}
             disabled={isSaving || !img}
-            className="flex items-center gap-1.5 rounded-full bg-signal px-4 py-1.5 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-signal px-4 py-1.5 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
             Done

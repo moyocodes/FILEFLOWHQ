@@ -57,7 +57,7 @@ export default function ContactChat() {
                   <MessageCircle className="h-4 w-4" strokeWidth={2.25} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-display text-base font-semibold tracking-wide">Contact FileFlowHQ</p>
+                  <p className="font-display text-base font-medium tracking-wide">Contact FileFlowHQ</p>
                   <p className="text-xs text-text-dim">Not live chat — we reply by email</p>
                 </div>
                 <button
@@ -74,7 +74,7 @@ export default function ContactChat() {
 
                 <p className="mt-6 border-t border-border pt-4 text-xs leading-relaxed text-text-dim">
                   Prefer email? Write to{' '}
-                  <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-signal underline">
+                  <a href={`mailto:${CONTACT_EMAIL}`} className="font-normal text-signal underline">
                     {CONTACT_EMAIL}
                   </a>
                   .

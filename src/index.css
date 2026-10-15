@@ -18,16 +18,16 @@
 /* Dark mode is class-based (toggled + persisted via ThemeToggle.jsx),
    so retarget the same tokens under html.dark rather than only a media query. */
 html.dark {
-  /* Matched to the launch video: near-black with a cool tint, logo mint green. */
-  --void: #040608;
-  --panel: #0b0f0f;
-  --panel-raised: #121918;
+  /* Soft charcoal with a cool green tint (lighter than the launch video's near-black), logo mint green. */
+  --void: #121718;
+  --panel: #1a2021;
+  --panel-raised: #222a2a;
   --signal: #3be698;
-  --signal-dim: #3be6981a;
-  --text: #eef3f1;
-  --text-dim: #8b9894;
-  --border: #18201f;
-  --border-strong: #22302d;
+  --signal-dim: #3be6981f;
+  --text: #f1f5f3;
+  --text-dim: #a3afab;
+  --border: #29322f;
+  --border-strong: #35413d;
   --mono-text: #3be698;
 }
 
@@ -149,22 +149,6 @@ html.dark {
   --series-downloads: #199e70;
 }
 
-/* Home page motion, echoing the launch video. */
-@keyframes float-chip {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)); }
-  50% { transform: translate3d(0, -14px, 0) rotate(calc(var(--r, 0deg) + 4deg)); }
-}
-.float-chip { animation: float-chip var(--d, 7s) ease-in-out infinite; animation-delay: var(--delay, 0s); }
-
-/* Horizontal "speed lines" like the logo mark. */
-@keyframes streak {
-  0% { transform: translateX(-30vw); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { transform: translateX(130vw); opacity: 0; }
-}
-.streak { animation: streak var(--d, 6s) linear infinite; animation-delay: var(--delay, 0s); }
-
 @keyframes scan-sweep {
   0%, 100% { top: 6%; }
   50% { top: 88%; }
@@ -172,15 +156,38 @@ html.dark {
 .scan-sweep { animation: scan-sweep 3.2s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .float-chip, .streak, .scan-sweep { animation: none; }
-  .streak { display: none; }
+  .scan-sweep { animation: none; }
 }
 
+/* The hero's background video fades in (a slide would show a gap at the hero's edge). */
 @keyframes video-in {
-  from { opacity: 0; translate: 0 24px; }
-  to { opacity: 1; translate: 0 0; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .video-in { animation: video-in 0.7s 0.15s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .video-in { animation: none; }
+}
+
+/* Studio editor loader: an indeterminate bar while the editor downloads and starts. */
+@keyframes studio-load {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.studio-load-bar {
+  animation: studio-load 1.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-load-bar {
+    animation: none;
+    transform: none;
+    width: 100%;
+    opacity: 0.5;
+  }
 }

@@ -26,3 +26,6 @@ android/app/src/main/assets/capacitor.plugins.json
 # Chrome extension build output
 dist-extension
 fileflowhq-extension.zip
+
+# Studio editors (downloaded at build time by scripts/fetch-studio-apps.mjs)
+.studio-cache

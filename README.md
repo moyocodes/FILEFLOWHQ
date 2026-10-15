@@ -1,14 +1,18 @@
 # FileFlowHQ — file conversion, mostly client-side
 
 A React + Tailwind app that converts images, PDFs, and data files. Most tools
-run **entirely in the browser** — nothing is sent to a server — but three
-features do call a small serverless backend: **PDF to Word** (Word output,
-via Adobe PDF Services) uploads the file for conversion, a post-download
-confirmation email is sent via Mailjet, and the **URL Shortener** stores links in
+run **entirely in the browser** — nothing is sent to a server — but two
+features do call a small serverless backend: a post-download confirmation
+email is sent via Mailjet, and the **URL Shortener** stores links in
 Upstash Redis. Live as a web app (Vercel); it also
 builds as a Chrome extension (in Web Store review) and, via Capacitor, as
 iOS/Android apps (native projects are in the repo, but the apps are not yet
 published to the App Store or Google Play).
+
+It also has **Studio** (`/studio`): 13 full in-browser editors (PDF, photo,
+video, vector, audio, documents, slides, spreadsheets, CAD, …) that run as
+static WebAssembly apps on our own domain. Editing is free; saving and
+exporting from rebranded editors costs paid credits (Paystack).
 
 ## Tools included
 
@@ -19,13 +23,87 @@ published to the App Store or Google Play).
 | Images to PDF | Combine images into one PDF | `jspdf` (client-side) |
 | PDF to Images | Split PDF pages into PNGs | `pdfjs-dist` (client-side) |
 | Merge / Split PDF | Combine PDFs or extract page ranges | `pdf-lib` (client-side) |
-| PDF to Word | Convert to `.docx` (Adobe PDF Services) or extract plain text | `api/pdf-to-word.js` (server) / `pdfjs-dist` (client) |
-| Word to PDF | Convert `.docx` to PDF | client-side |
+| PDF to Word | Convert to `.docx`, `.pptx`, `.html`, `.rtf`, or extract plain text | Studio PDF engine (pdfcraft, WebAssembly) / `pdfjs-dist` for `.txt` |
+| Word to PDF | `.docx`, `.doc`, `.odt`, `.rtf`, `.md`, `.html`, `.txt` to PDF | Studio Word engine (wordcraft, WebAssembly) |
 | PDF Read Aloud | Read PDF text aloud | client-side |
 | Document Scanner | Capture/crop a document into a PDF or image | client-side |
 | QR & Barcode Scanner | Scan codes via camera | client-side |
 | CSV ⇄ JSON | Convert tabular data both directions | plain JS (client-side) |
 | URL Shortener | Turn a long link into a short `/s/<code>` link | `api/shorten.js` + `api/s.js` (server, Upstash Redis) |
+
+## Studio (in-browser editors)
+
+| Editor | Route | Built from | Branded + paid exports |
+|---|---|---|---|
+| PDF Editor | `/studio/pdf-editor` | pdfcraft | ✅ |
+| Photo Editor | `/studio/photo-editor` | photocraft | — |
+| Photo Library & RAW | `/studio/raw-editor` | lightcraft | — |
+| Vector Editor | `/studio/vector-editor` | vectorcraft | — |
+| Video Editor | `/studio/video-editor` | filmcraft | — |
+| Motion & Effects | `/studio/motion-editor` | effectcraft | — |
+| Audio Studio | `/studio/audio-editor` | soundcraft | — |
+| Page Layout | `/studio/layout-editor` | designcraft | — |
+| UI Design | `/studio/ui-designer` | figcraft | — |
+| Word Processor | `/studio/word-processor` | wordcraft | — |
+| Slides | `/studio/slides` | deckcraft | — |
+| Spreadsheet | `/studio/spreadsheet` | gridcraft | — |
+| CAD Drafting | `/studio/cad` | cadcraft | — |
+
+**How it works**
+
+- `src/studioApps.js` lists every editor (name, route, upstream repo, pinned version).
+- Editors are static sites served at `/studio-apps/<id>/<version>/app` and embedded
+  in an iframe by `src/pages/Studio.jsx`. No server code; the version in the URL
+  lets everything be cached forever.
+- **Upstream builds** (not yet rebranded) are downloaded at build time from the
+  pinned GitHub release by `scripts/fetch-studio-apps.mjs` into `.studio-cache/`
+  (git-ignored) and copied into `dist/studio-apps/`. ~440 MB, nothing committed.
+- **Rebranded builds** (`branded: true`) are built from source with our patch in
+  `studio/patches/<repo>.patch` and committed under `studio-builds/<id>/`, so
+  Vercel never needs Rust.
+
+**Run locally**
+
+```bash
+npm run studio:fetch   # once: download the upstream editors into .studio-cache/
+npm run dev            # then open /studio
+```
+
+**Rebrand another editor** (needs `rustup` with the `wasm32-unknown-unknown`
+target and `brew install trunk`):
+
+1. Edit the source in `~/Developer/craft-apps/<repo>` (name, links, colors, and
+   route every download through the `ffhq:export` hook — see the pdfcraft patch),
+   then save it: `git -C ~/Developer/craft-apps/<repo> diff > studio/patches/<repo>.patch`.
+2. `scripts/build-branded-studio-app.sh <id> <repo> <tag>` → builds and installs
+   into `studio-builds/<id>/`.
+3. In `src/studioApps.js` set `branded: true` and bump `version`
+   (e.g. `0.7.1-ffhq.2`) so browsers fetch the new files.
+
+Details and next steps: [`docs/studio-plan.md`](docs/studio-plan.md).
+
+## Payments (Paystack credits)
+
+One credit balance for the whole site, tracked server-side per hashed IP in
+Upstash Redis (`api/_usage.js`):
+
+- 5 free uses, then **₦1,500 for 5 more** (Paystack). No subscription.
+- **Studio exports use paid credits only.** A rebranded editor hands every
+  save / export / print to the page (`ffhq:export` postMessage);
+  `src/components/StudioExportGate.jsx` spends one paid credit
+  (`/api/usage`, `paid: true`) and then downloads the file. With none left it
+  opens the Paystack popup (the document stays open) and releases the file once
+  `/api/pay-verify` confirms the payment.
+- Until the visitor has paid credits, a tiled FileFlowHQ watermark covers the
+  editor. The bare editor URL can't save at all.
+- `api/pay-webhook.js` is the backstop for users who close the tab mid-payment.
+- Fails open: if Redis or the API is unavailable, nothing is blocked.
+- The site owner is exempt: set `OWNER_KEY`, then visit `/?owner=<key>` once per device.
+- The converter tools don't consume credits yet (the hook is `requestUse` in
+  `src/context/UsageContext.jsx`; see the `paywall-wip` branch).
+
+Test payments locally with `vercel dev` (the `/api` functions don't run under
+`npm run dev`) and a Paystack **test** secret key.
 
 ## Project structure
 
@@ -41,14 +119,21 @@ fileflowhq/
 ├── capacitor.config.json
 ├── ios/, android/        # Capacitor native projects
 ├── api/                  # Vercel serverless functions
-│   ├── pdf-to-word.js      # Adobe PDF Services — PDF → Word
 │   ├── send-confirmation.js # Mailjet — post-download email
-│   └── contact-message.js   # Mailjet — contact form
+│   ├── contact-message.js   # Mailjet — contact form
+│   ├── usage.js, _usage.js  # credit balance (free + paid) in Redis
+│   └── pay-init.js, pay-verify.js, pay-webhook.js  # Paystack
+├── scripts/
+│   ├── fetch-studio-apps.mjs        # downloads upstream Studio editors
+│   └── build-branded-studio-app.sh  # builds a rebranded editor from source
+├── studio/patches/       # our source patches for rebranded editors
+├── studio-builds/        # committed rebranded editor builds (WASM)
 └── src/
     ├── main.jsx           # App entry; picks BrowserRouter (web) or HashRouter (native)
     ├── App.jsx             # Layout: sidebar + routed tool pages
     ├── index.css           # Tailwind directives + small globals
     ├── toolsConfig.js       # Single source of truth for all tools
+    ├── studioApps.js        # Single source of truth for Studio editors
     ├── components/           # Rail, Dropzone, ProgressBar, ErrorBanner, FileRow,
     │                           ToolCard, StampBadge, ThemeToggle, ContactChat,
     │                           EmailGateModal, EmailPolicyModal, PageEditorModal,
@@ -58,7 +143,7 @@ fileflowhq/
     │   ├── Home.jsx
     │   └── ToolPage.jsx
     ├── tools/                # one component per tool (see table above)
-    └── utils/                # fileHelpers, pdfjsSetup, docxToPdf, imagesToPdf,
+    └── utils/                # fileHelpers, pdfjsSetup, engines, imagesToPdf,
                                 pdfTextExtraction, platform (native vs. web checks)
 ```
 
@@ -113,11 +198,12 @@ fully wired up and isn't a supported target).
      URL shortener (`api/shorten.js`, `api/s.js`). Create a free Upstash Redis
      database under your Vercel project's **Storage** tab; Vercel injects these
      automatically. (`UPSTASH_REDIS_REST_URL` / `_TOKEN` also work.)
-   - `PDF_SERVICES_CLIENT_ID`, `PDF_SERVICES_CLIENT_SECRET` — Adobe PDF
-     Services, required by `api/pdf-to-word.js` (Word-output mode). Without
-     these the Word-conversion feature fails; the plain-text extraction mode
-     still works client-side.
-5. Deploy.
+   - `PAYSTACK_SECRET_KEY` — Paystack, required for payments. Also set the
+     webhook URL in the Paystack dashboard to `https://fileflowhq.com/api/pay-webhook`.
+   - `OWNER_KEY` (optional) — exempts you from the paywall; `USAGE_SALT`,
+     `SITE_URL` (optional).
+5. Deploy. The build downloads the upstream Studio editors (a few minutes) and
+   adds ~440 MB of static files.
 
 Or via CLI:
 
@@ -204,15 +290,19 @@ is already allowed in `api/_cors.js`.
 
 ## Notes on the PDF tools
 
-- **PDF to Images**, **PDF to Word** (text mode), and **PDF Read Aloud** use
+- **PDF to Images**, **PDF to Word**, and **PDF Read Aloud** use
   `pdfjs-dist`, which needs a web worker. Vite bundles this automatically via
   the `?url` import in `src/utils/pdfjsSetup.js` — no extra configuration
   needed after `npm install`.
-- **PDF to Word** has two modes: converting to an actual `.docx` uploads the
-  file to **Adobe PDF Services** (`api/pdf-to-word.js`), which preserves text
-  styling, tables, lists, links, and images, and is capped at 4.5MB per file.
-  Plain-text extraction runs entirely client-side via `pdfjs-dist` with no
-  size cap and no upload.
+- **Studio engines** (`engines/`, `src/utils/engines.js`): the Studio editors'
+  own Rust processors, built headless to WebAssembly and served from
+  `public/engines/<name>/<version>/`. A tool loads its engine in a worker the
+  first time it is used; nothing is uploaded and there is no JavaScript
+  fallback. **PDF to Word** uses pdfcraft's exporter (Word, PowerPoint, HTML,
+  RTF); **Word to PDF** uses wordcraft's page layout. Rebuild with
+  `engines/build.sh pdf|word` (needs the editor sources in
+  `~/Developer/craft-apps`; pdfcraft with `studio/patches/pdfcraft.patch`
+  applied, wordcraft at v0.6.1 in `engine-src/`).
 - Password-protected or scanned (image-only) PDFs are handled with a clear
   error/notice rather than failing silently.
 
@@ -238,3 +328,9 @@ is already allowed in `api/_cors.js`.
 ## License
 
 All rights reserved — see [LICENSE](LICENSE).
+
+**Exception — Studio editors.** The editors under `studio-builds/` and those
+downloaded into `dist/studio-apps/` are built from third-party open-source code
+licensed under MIT OR Apache-2.0 (with modifications by FileFlowHQ in
+`studio/patches/`). Their `LICENSE-*` and `NOTICE` files ship next to each
+editor and must be kept; those licenses, not ours, apply to that code.
