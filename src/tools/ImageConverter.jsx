@@ -1,19 +1,36 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Cpu } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import { PreviewButton } from '../components/PreviewModal.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import FileRow from '../components/FileRow.jsx'
-import { validateFiles, loadImage, canvasToBlob, downloadBlob, stripExtension, uid, isTiff, decodeTiffToCanvas, checkAvifSupport, releaseCanvas, canvasFitScale } from '../utils/fileHelpers.js'
+import { validateFiles, canvasToBlob, downloadBlob, stripExtension, uid, checkAvifSupport, releaseCanvas, canvasFitScale } from '../utils/fileHelpers.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
+import { runEngine, enginesSupported, ENGINES } from '../utils/engines.js'
 
+// Every format is written by the Studio image engine (photocraft's codecs), except AVIF: the
+// engine decodes, and the browser's own AVIF encoder writes it.
 const FORMATS = [
   { id: 'png', label: 'PNG', mime: 'image/png' },
-  { id: 'jpg', label: 'JPEG', mime: 'image/jpeg' },
-  { id: 'webp', label: 'WebP', mime: 'image/webp' },
-  { id: 'avif', label: 'AVIF', mime: 'image/avif' }
+  { id: 'jpg', label: 'JPEG', mime: 'image/jpeg', lossy: true },
+  { id: 'webp', label: 'WebP', mime: 'image/webp', lossy: true },
+  { id: 'avif', label: 'AVIF', mime: 'image/avif', lossy: true },
+  { id: 'tiff', label: 'TIFF', mime: 'image/tiff' },
+  { id: 'psd', label: 'PSD', mime: 'image/vnd.adobe.photoshop' },
+  { id: 'gif', label: 'GIF', mime: 'image/gif' },
+  { id: 'bmp', label: 'BMP', mime: 'image/bmp' }
 ]
+
+// What the engine opens: everyday formats, iPhone photos, camera RAW, Photoshop and HDR files.
+const INPUT_EXTS = [
+  'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'hif', 'avif', 'psd', 'psb', 'tga', 'ico', 'qoi', 'exr', 'hdr',
+  'svg', 'dng', 'cr2', 'cr3', 'nef', 'nrw', 'arw', 'pef', 'orf', 'rw2', 'raf', 'ora', 'pcx', 'pbm', 'pgm', 'ppm'
+]
+const ACCEPT = ['image/*', ...INPUT_EXTS.map((e) => `.${e}`)]
+// Only these get a thumbnail: the rest (HEIC, RAW, PSD, TIFF…) browsers can't show.
+const BROWSER_PREVIEWABLE = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg', 'ico'])
+const extOf = (name) => name.split('.').pop()?.toLowerCase() || ''
 
 /**
  * Tool "hook": owns all state/handlers for Image Converter and returns
@@ -31,9 +48,11 @@ export default function useImageConverter() {
   const [items, setItems] = useState([]) // { id, file, thumb, status, resultBlob, resultName }
   const [targetFormat, setTargetFormat] = useState('webp')
   const [quality, setQuality] = useState(0.9)
+  const [stripMetadata, setStripMetadata] = useState(false)
   const [errors, setErrors] = useState([])
   const [isConverting, setIsConverting] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [status, setStatus] = useState('')
   const [avifSupported, setAvifSupported] = useState(true)
 
   useEffect(() => {
@@ -42,14 +61,14 @@ export default function useImageConverter() {
 
   const handleFiles = useCallback((files) => {
     const { valid, errors: fileErrors } = validateFiles(files, {
-      // TIFF often has an empty/`image/tiff` MIME that `image/*` may miss, so accept by extension too.
-      accept: ['image/*', '.tif', '.tiff', '.heic', '.heif', '.avif']
+      // RAW, PSD, TIFF and HEIC often have an empty MIME that `image/*` misses: accept by extension too.
+      accept: ACCEPT
     })
     setErrors(fileErrors)
     const newItems = valid.map((file) => ({
       id: uid(),
       file,
-      thumb: isTiff(file) ? null : URL.createObjectURL(file), // browsers can't preview TIFF
+      thumb: BROWSER_PREVIEWABLE.has(extOf(file.name)) ? URL.createObjectURL(file) : null,
       status: 'idle',
       resultBlob: null,
       resultName: null
@@ -78,60 +97,45 @@ export default function useImageConverter() {
 
   const convertAll = useCallback(async () => {
     if (items.length === 0) return
+    if (!enginesSupported) {
+      setErrors(['Image conversion needs a current browser (WebAssembly).'])
+      return
+    }
     if (targetFormat === 'avif' && !(await checkAvifSupport())) {
       setErrors(['AVIF export isn’t supported in this browser. Try Chrome or Edge, or pick a different format.'])
       return
     }
     setIsConverting(true)
     setErrors([])
+    setStatus(`Loading the Studio image engine (${ENGINES.image.size}, first time only)…`)
     const format = FORMATS.find((f) => f.id === targetFormat)
+    const q = format.lossy ? Math.round(quality * 100) : 0
     let completed = 0
 
-    const encodeCanvas = async (source, baseName, pageSuffix) => {
-      const srcW = source.naturalWidth ?? source.width
-      const srcH = source.naturalHeight ?? source.height
-      // Very large photos (e.g. 48 MP) exceed iOS's canvas limit and come out blank.
-      const fit = canvasFitScale(srcW, srcH)
+    // The browser writes AVIF: the engine hands it lossless PNG pixels.
+    const encodeAvif = async (png) => {
+      const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }))
+      const fit = canvasFitScale(bitmap.width, bitmap.height)
       const canvas = document.createElement('canvas')
-      canvas.width = Math.round(srcW * fit)
-      canvas.height = Math.round(srcH * fit)
-      const ctx = canvas.getContext('2d')
-      // Flatten transparency onto white when converting to JPG (no alpha channel)
-      if (format.id === 'jpg') {
-        ctx.fillStyle = '#FFFFFF'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-      }
-      ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
-      const blob = await canvasToBlob(canvas, format.mime, format.id === 'png' ? undefined : quality).finally(() =>
-        releaseCanvas(canvas)
-      )
-      return { blob, name: `${baseName}${pageSuffix}.${format.id}` }
+      canvas.width = Math.round(bitmap.width * fit)
+      canvas.height = Math.round(bitmap.height * fit)
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      bitmap.close()
+      return canvasToBlob(canvas, format.mime, quality).finally(() => releaseCanvas(canvas))
     }
 
     const updated = [...items]
     for (let i = 0; i < updated.length; i++) {
       const item = updated[i]
-      const baseName = stripExtension(item.file.name)
       try {
-        const results = []
-        if (isTiff(item.file)) {
-          // TIFF can't go through <img>; decode to one canvas per page, and a
-          // multi-page TIFF becomes one output file per page (name-1, name-2…).
-          const canvases = await decodeTiffToCanvas(item.file)
-          const multi = canvases.length > 1
-          for (let p = 0; p < canvases.length; p++) {
-            results.push(await encodeCanvas(canvases[p], baseName, multi ? `-${p + 1}` : ''))
-          }
-        } else {
-          const { img, url } = await loadImage(item.file)
-          results.push(await encodeCanvas(img, baseName, ''))
-          URL.revokeObjectURL(url)
-        }
-
-        updated[i] = { ...item, status: 'done', results }
+        const input = new Uint8Array(await item.file.arrayBuffer())
+        const bytes = await runEngine('image', 'convert', input, item.file.name, format.id === 'avif' ? 'png' : format.id, q, stripMetadata)
+        setStatus('Converting with the Studio image engine…')
+        const blob = format.id === 'avif' ? await encodeAvif(bytes) : new Blob([bytes], { type: format.mime })
+        updated[i] = { ...item, status: 'done', results: [{ blob, name: `${stripExtension(item.file.name)}.${format.id}` }] }
       } catch (err) {
         updated[i] = { ...item, status: 'error' }
-        setErrors((prev) => [...prev, err.message])
+        setErrors((prev) => [...prev, `${item.file.name}: ${err.message}`])
       }
       completed += 1
       setProgress((completed / updated.length) * 100)
@@ -139,7 +143,7 @@ export default function useImageConverter() {
     }
 
     setIsConverting(false)
-  }, [items, targetFormat, quality])
+  }, [items, targetFormat, quality, stripMetadata])
 
   const downloadOne = useCallback(
     (item) => {
@@ -177,12 +181,19 @@ export default function useImageConverter() {
     () => (
       <div className="space-y-6">
         <p className="text-sm text-text-dim">
-          Convert PNG, JPG, WebP, AVIF, HEIC, GIF, BMP, and TIFF images to PNG, JPG, WebP, or AVIF.
-          Multi-page TIFFs are split into one image per page. Everything happens on
-          your device — no upload.
+          Convert any image, including iPhone HEIC photos, camera RAW, Photoshop PSD, TIFF and HDR, to PNG, JPEG, WebP,
+          AVIF, TIFF, PSD, GIF or BMP. Everything happens on your device — no upload.
         </p>
 
-        <Dropzone accept="image/*,.tif,.tiff,.heic,.heif,.avif" multiple onFiles={handleFiles} hint="PNG, JPEG, WebP, AVIF, HEIC, GIF, BMP, TIFF" />
+        <div className="flex items-start gap-2 rounded-card border border-signal-dim bg-signal-dim px-4 py-3 text-sm text-text">
+          <Cpu className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" strokeWidth={2} />
+          <p>
+            <strong>Powered by the Studio image engine.</strong> The same file readers and encoders as our Photo
+            Editor, running on your device. It downloads once ({ENGINES.image.size}).
+          </p>
+        </div>
+
+        <Dropzone accept={ACCEPT.join(',')} multiple onFiles={handleFiles} hint="JPEG, PNG, WebP, HEIC, RAW (DNG, CR2, NEF, ARW…), PSD, TIFF, AVIF, GIF, BMP, EXR" />
 
         <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
@@ -193,7 +204,7 @@ export default function useImageConverter() {
           </p>
         )}
 
-        {isConverting && <ProgressBar label="Converting images…" progress={progress} />}
+        {isConverting && <ProgressBar label={status} progress={progress} />}
 
         {items.length > 0 && (
           <>
@@ -234,7 +245,7 @@ export default function useImageConverter() {
             </div>
 
             {doneCount > 1 && (
-              <button onClick={downloadAll} className="text-sm font-medium text-signal hover:underline">
+              <button onClick={downloadAll} className="text-sm font-normal text-signal hover:underline">
                 Download all converted files
               </button>
             )}
@@ -247,6 +258,7 @@ export default function useImageConverter() {
       errors,
       isConverting,
       progress,
+      status,
       doneCount,
       allAlreadyTarget,
       targetFormat,
@@ -276,7 +288,7 @@ export default function useImageConverter() {
                   disabled={disabled}
                   title={disabled ? 'AVIF export needs Chrome or Edge' : undefined}
                   className={[
-                    'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                    'rounded px-3 py-1.5 text-sm font-normal transition-colors',
                     disabled
                       ? 'cursor-not-allowed bg-panel-raised text-text-dim opacity-40'
                       : targetFormat === f.id
@@ -291,7 +303,7 @@ export default function useImageConverter() {
           </div>
         </div>
 
-        {targetFormat !== 'png' && (
+        {FORMATS.find((f) => f.id === targetFormat)?.lossy && (
           <div className="field">
             <label className="mb-2.5 flex justify-between font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim">
               <span>Quality</span>
@@ -309,10 +321,15 @@ export default function useImageConverter() {
           </div>
         )}
 
+        <label className="field flex cursor-pointer items-center gap-2.5 text-sm text-text-dim">
+          <input type="checkbox" checked={stripMetadata} onChange={(e) => setStripMetadata(e.target.checked)} className="accent-signal" />
+          Remove camera and location data
+        </label>
+
         <button
           onClick={allDone ? downloadAll : convertAll}
           disabled={isConverting || items.length === 0}
-          className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {allDone
             ? `Download ${doneCount > 1 ? `all ${doneCount} files` : 'converted file'}`
@@ -320,7 +337,7 @@ export default function useImageConverter() {
         </button>
       </>
     ),
-    [targetFormat, quality, isConverting, items.length, convertAll, allDone, doneCount, downloadAll]
+    [targetFormat, quality, stripMetadata, isConverting, items.length, convertAll, allDone, doneCount, downloadAll, avifSupported]
   )
 
   return { workspace, settings }

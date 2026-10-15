@@ -88,7 +88,7 @@ export default function ContactForm({ onDone }) {
         </p>
         <button
           onClick={onDone}
-          className="w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+          className="w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-medium text-void transition-opacity hover:opacity-90"
         >
           Done
         </button>
@@ -107,7 +107,7 @@ export default function ContactForm({ onDone }) {
                 onClick={() => pickTemplate(t)}
                 aria-pressed={template === t.id}
                 className={[
-                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-full border px-3 py-1.5 text-xs font-normal transition-colors',
                   template === t.id
                     ? 'border-signal bg-signal-dim text-signal'
                     : 'border-border text-text-dim hover:border-signal hover:text-signal',
@@ -141,7 +141,7 @@ export default function ContactForm({ onDone }) {
         <button
           type="submit"
           disabled={sending}
-          className="w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {sending ? 'Sending…' : 'Send message'}
         </button>

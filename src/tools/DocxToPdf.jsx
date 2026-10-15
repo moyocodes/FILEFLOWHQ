@@ -1,15 +1,17 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Info } from 'lucide-react'
+import { Cpu } from 'lucide-react'
 import Dropzone from '../components/Dropzone.jsx'
 import ErrorBanner from '../components/ErrorBanner.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import ResultCard from '../components/ResultCard.jsx'
 import { validateFiles, downloadBlob, stripExtension } from '../utils/fileHelpers.js'
-import { convertDocxToPdf } from '../utils/docxToPdf.js'
 import { useEmailGate } from '../context/EmailGateContext.jsx'
 import { usePreview } from '../context/PreviewContext.jsx'
+import { runEngine, enginesSupported, ENGINES } from '../utils/engines.js'
 
-const ACCEPT = ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+// Everything the Studio Word engine (wordcraft) reads.
+const EXTS = ['.docx', '.doc', '.odt', '.rtf', '.md', '.html', '.htm', '.txt']
+const ACCEPT = [...EXTS, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']
 
 export default function useDocxToPdf() {
   const { gatedDownload } = useEmailGate()
@@ -19,6 +21,7 @@ export default function useDocxToPdf() {
   const [errors, setErrors] = useState([])
   const [isWorking, setIsWorking] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [status, setStatus] = useState('')
   const [result, setResult] = useState(null)
 
   const handleFiles = useCallback((files) => {
@@ -38,13 +41,18 @@ export default function useDocxToPdf() {
     setResult(null)
     setProgress(0)
     try {
-      const blob = await convertDocxToPdf(file, (f) => setProgress(f * 100))
+      if (!enginesSupported) throw new Error('This conversion needs a current browser (WebAssembly).')
+      setStatus(`Loading the Studio Word engine (${ENGINES.word.size}, first time only)…`)
+      setProgress(15)
+      const slow = setTimeout(() => setStatus('Laying out pages with the Studio Word engine…'), 1500)
+      const bytes = await runEngine('word', 'convert', new Uint8Array(await file.arrayBuffer()), file.name, 'pdf').finally(() => clearTimeout(slow))
+      const blob = new Blob([bytes], { type: 'application/pdf' })
       const trimmedName = outputName.trim() || stripExtension(file.name)
       const resultName = trimmedName.endsWith('.pdf') ? trimmedName : `${trimmedName}.pdf`
       showPreview({ blob: blob, name: resultName, onDownload: () => gatedDownload(() => downloadBlob(blob, resultName), resultName, 'Word to PDF') })
       setResult({ name: resultName, size: blob.size, blob })
     } catch (err) {
-      setErrors([err.message || `Couldn't convert "${file.name}". It may be corrupted or not a valid .docx file.`])
+      setErrors([err.message || `Couldn't convert "${file.name}". It may be corrupted or not a supported document.`])
     }
     setIsWorking(false)
   }, [file, outputName, gatedDownload, showPreview])
@@ -52,7 +60,7 @@ export default function useDocxToPdf() {
   const downloadAgain = useCallback(() => {
     if (!result) return
     gatedDownload(() => downloadBlob(result.blob, result.name), result.name, 'Word to PDF')
-  }, [result, gatedDownload, showPreview])
+  }, [result, gatedDownload])
 
   const clearErrors = useCallback(() => setErrors([]), [])
 
@@ -60,36 +68,36 @@ export default function useDocxToPdf() {
     () => (
     <div className="space-y-6">
       <p className="text-sm text-text-dim">
-        Convert a Word document into a PDF, right in your browser.
+        Convert a Word document (or .odt, .rtf, .md, .html, .txt) into a PDF, right in your browser.
       </p>
 
       <div className="flex items-start gap-2 rounded-card border border-signal-dim bg-signal-dim px-4 py-3 text-sm text-text">
-        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" strokeWidth={2} />
+        <Cpu className="mt-0.5 h-4 w-4 flex-shrink-0 text-signal" strokeWidth={2} />
         <p>
-          <strong>Close, not pixel-perfect.</strong> Text, headings, lists, tables, and images are
-          reconstructed from the document and laid out on A4 pages. Complex layouts (columns, headers/footers,
-          precise positioning) are approximated.
+          <strong>Powered by the Studio Word engine.</strong> The same page layout as our Word Processor: fonts,
+          headers and footers, columns, tables and images, on your document's own page size. It runs on your device
+          and downloads once ({ENGINES.word.size}).
         </p>
       </div>
 
-      <Dropzone accept=".docx" onFiles={handleFiles} hint="One .docx file at a time" />
+      <Dropzone accept={EXTS.join(',')} onFiles={handleFiles} hint="One document at a time: .docx, .doc, .odt, .rtf, .md, .html, .txt" privacyNote="nothing leaves your device" />
       <ErrorBanner messages={errors} onDismiss={clearErrors} />
 
       {file && !result && (
         <div className="rounded-card border border-border bg-panel p-4">
-          <p className="truncate text-sm font-medium">{file.name}</p>
-          <p className="text-xs text-text-dim">Selected Word document</p>
+          <p className="truncate text-sm font-normal">{file.name}</p>
+          <p className="text-xs text-text-dim">Selected document</p>
         </div>
       )}
 
-      {isWorking && <ProgressBar label="Building PDF…" progress={progress} />}
+      {isWorking && <ProgressBar label={status} progress={progress} />}
 
       {result && file && (
         <ResultCard beforeName={file.name} beforeSize={file.size} afterName={result.name} afterSize={result.size} />
       )}
     </div>
     ),
-    [handleFiles, clearErrors, errors, file, isWorking, progress, result]
+    [handleFiles, clearErrors, errors, file, isWorking, progress, status, result]
   )
 
   const settings = useMemo(
@@ -111,7 +119,7 @@ export default function useDocxToPdf() {
       <button
         onClick={result ? downloadAgain : convert}
         disabled={isWorking || !file}
-        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {result ? 'Download again' : 'Convert to .pdf'}
       </button>

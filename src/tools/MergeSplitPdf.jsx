@@ -29,7 +29,7 @@ export default function useMergeSplitPdf() {
         <button
           onClick={() => setMode('merge')}
           className={[
-            'rounded px-4 py-2 text-sm font-medium',
+            'rounded px-4 py-2 text-sm font-normal',
             mode === 'merge' ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim'
           ].join(' ')}
         >
@@ -38,7 +38,7 @@ export default function useMergeSplitPdf() {
         <button
           onClick={() => setMode('split')}
           className={[
-            'rounded px-4 py-2 text-sm font-medium',
+            'rounded px-4 py-2 text-sm font-normal',
             mode === 'split' ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim'
           ].join(' ')}
         >
@@ -147,12 +147,12 @@ function useMergePanel() {
               className="flex items-center gap-3 rounded-lg border border-border bg-panel px-3 py-2.5"
             >
               <GripVertical className="h-4 w-4 flex-shrink-0 cursor-grab text-text-dim" strokeWidth={2} />
-              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-medium text-signal">
+              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-signal-dim font-mono text-[11px] font-normal text-signal">
                 {index + 1}
               </span>
               <PdfThumbnail file={item.file} className="h-10 w-8 flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{item.file.name}</p>
+                <p className="truncate text-sm font-normal">{item.file.name}</p>
                 <p className="text-xs text-text-dim">{formatBytes(item.file.size)}</p>
               </div>
               <button onClick={() => removeItem(item.id)} className="text-xs text-text-dim hover:text-red-500">
@@ -184,7 +184,7 @@ function useMergePanel() {
       <button
         onClick={merge}
         disabled={isWorking || items.length < 2}
-        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         Merge {items.length} PDFs
       </button>
@@ -283,7 +283,7 @@ function useSplitPanel() {
         <div className="flex items-center gap-3 rounded-card border border-border bg-panel p-4">
           <PdfThumbnail file={file} className="h-16 w-12 flex-shrink-0" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{file.name}</p>
+            <p className="truncate text-sm font-normal">{file.name}</p>
             <p className="text-xs text-text-dim">{pageCount} pages</p>
           </div>
         </div>
@@ -344,7 +344,7 @@ function useSplitPanel() {
       <button
         onClick={split}
         disabled={isWorking || !file}
-        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         Extract pages
       </button>

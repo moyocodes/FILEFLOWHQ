@@ -158,14 +158,14 @@ export default function useQrScanner() {
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   onClick={start}
-                  className="flex items-center gap-2 rounded bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+                  className="flex items-center gap-2 rounded bg-signal px-4 py-2 text-sm font-medium text-void transition-opacity hover:opacity-90"
                 >
                   <Play className="h-4 w-4" strokeWidth={2} />
                   Start scanning
                 </button>
                 <button
                   onClick={pickFile}
-                  className="flex items-center gap-2 rounded border border-border px-4 py-2 text-sm font-semibold text-text transition-colors hover:border-signal"
+                  className="flex items-center gap-2 rounded border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:border-signal"
                 >
                   <Upload className="h-4 w-4" strokeWidth={2} />
                   Upload image
@@ -194,7 +194,7 @@ export default function useQrScanner() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={copy}
-                className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-signal"
+                className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-normal transition-colors hover:border-signal"
               >
                 {copied ? (
                   <Check className="h-3.5 w-3.5 text-signal" strokeWidth={2.5} />
@@ -208,7 +208,7 @@ export default function useQrScanner() {
                   href={toHref(result)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-signal"
+                  className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-normal transition-colors hover:border-signal"
                 >
                   <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
                   Open link
@@ -257,7 +257,7 @@ export default function useQrScanner() {
         {scanning ? (
           <button
             onClick={stop}
-            className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded border border-border px-4 py-3 text-sm font-semibold text-text transition-colors hover:border-signal"
+            className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded border border-border px-4 py-3 text-sm font-medium text-text transition-colors hover:border-signal"
           >
             <Square className="h-4 w-4" strokeWidth={2} />
             Stop scanning
@@ -265,7 +265,7 @@ export default function useQrScanner() {
         ) : (
           <button
             onClick={start}
-            className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+            className="mt-auto flex w-full flex-shrink-0 items-center justify-center gap-2 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90"
           >
             <Play className="h-4 w-4" strokeWidth={2} />
             {result ? 'Scan again' : 'Start scanning'}

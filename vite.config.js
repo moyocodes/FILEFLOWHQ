@@ -52,8 +52,8 @@ export default defineConfig({
         short_name: 'FileFlowHQ',
         description:
           'Convert images, PDFs, and data files for free, right in your browser. No uploads, no server, no tracking.',
-        theme_color: '#0e8f5c',
-        background_color: '#f4f6f5',
+        theme_color: '#121718',
+        background_color: '#121718',
         display: 'standalone',
         start_url: '/',
         icons: [
@@ -76,7 +76,8 @@ export default defineConfig({
         // instead — always fresh when online, cached copy when offline.
         globPatterns: ['**/*.{js,css,svg,png,woff,woff2,mjs}'],
         // Studio editors are 15–80 MB each; the browser caches them on first open instead.
-        globIgnores: ['studio-apps/**'],
+        // Converter engines (public/engines/<name>/<version>/) download when a tool first needs them.
+        globIgnores: ['studio-apps/**', 'engines/*/**'],
         navigateFallback: null,
         runtimeCaching: [
           {

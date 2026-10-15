@@ -377,7 +377,7 @@ export default function useImageCompressor() {
           </div>
 
           {anyDone && !allDone && (
-            <button onClick={downloadAll} className="text-sm font-medium text-signal hover:underline">
+            <button onClick={downloadAll} className="text-sm font-normal text-signal hover:underline">
               Download {doneCount > 1 ? 'all' : ''} compressed {doneCount === 1 ? 'file' : 'files'}
             </button>
           )}
@@ -404,7 +404,7 @@ export default function useImageCompressor() {
                 setCustomTargetKb('')
               }}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                'rounded px-3 py-1.5 text-sm font-normal transition-colors',
                 targetPreset === p.id && !customTargetKb
                   ? 'bg-signal text-void'
                   : 'bg-panel-raised text-text-dim hover:text-text'
@@ -453,7 +453,7 @@ export default function useImageCompressor() {
       <button
         onClick={allDone ? downloadAll : convertAll}
         disabled={isConverting || items.length === 0}
-        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {allDone
           ? `Download ${doneCount > 1 ? `all ${doneCount} files` : 'compressed file'}`

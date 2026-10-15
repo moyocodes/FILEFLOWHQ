@@ -170,7 +170,7 @@ export default function useCsvJson() {
       </p>
 
       <div className="flex items-center gap-3">
-        <span className={['text-sm font-medium', direction === 'csv-to-json' ? 'text-signal' : 'text-text-dim'].join(' ')}>
+        <span className={['text-sm font-normal', direction === 'csv-to-json' ? 'text-signal' : 'text-text-dim'].join(' ')}>
           CSV
         </span>
         <button
@@ -180,7 +180,7 @@ export default function useCsvJson() {
         >
           <ArrowLeftRight className="h-4 w-4" strokeWidth={2} />
         </button>
-        <span className={['text-sm font-medium', direction === 'json-to-csv' ? 'text-signal' : 'text-text-dim'].join(' ')}>
+        <span className={['text-sm font-normal', direction === 'json-to-csv' ? 'text-signal' : 'text-text-dim'].join(' ')}>
           JSON
         </span>
       </div>
@@ -195,7 +195,7 @@ export default function useCsvJson() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className="mb-1.5 block font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+          <label className="mb-1.5 block font-mono text-xs font-normal uppercase tracking-wide text-text-dim">
             {direction === 'csv-to-json' ? 'CSV input' : 'JSON input'}
           </label>
           <textarea
@@ -207,7 +207,7 @@ export default function useCsvJson() {
           />
         </div>
         <div>
-          <label className="mb-1.5 block font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+          <label className="mb-1.5 block font-mono text-xs font-normal uppercase tracking-wide text-text-dim">
             {direction === 'csv-to-json' ? 'JSON output' : 'CSV output'}
           </label>
           <textarea
@@ -229,7 +229,7 @@ export default function useCsvJson() {
     <>
       <button
         onClick={() => runConvert()}
-        className="rounded bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+        className="rounded bg-signal px-4 py-2 text-sm font-medium text-void transition-opacity hover:opacity-90"
       >
         Convert
       </button>
@@ -250,7 +250,7 @@ export default function useCsvJson() {
       <button
         onClick={download}
         disabled={!output}
-        className="flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-normal disabled:opacity-40"
       >
         <Download className="h-3.5 w-3.5" strokeWidth={2} />
         Download
@@ -258,7 +258,7 @@ export default function useCsvJson() {
       <button
         onClick={copy}
         disabled={!output}
-        className="mt-auto flex flex-shrink-0 items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="mt-auto flex flex-shrink-0 items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-normal disabled:opacity-40"
       >
         <Copy className="h-3.5 w-3.5" strokeWidth={2} />
         {copied ? 'Copied!' : 'Copy'}

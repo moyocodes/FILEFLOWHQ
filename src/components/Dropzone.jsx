@@ -107,7 +107,7 @@ export default function Dropzone({
     >
       <UploadCloud className="h-[26px] w-[26px] text-text-dim" strokeWidth={2} />
       <div>
-        <p className="text-[0.92rem] font-medium">Drop {multiple ? 'files' : 'a file'} here</p>
+        <p className="text-[0.92rem] font-normal">Drop {multiple ? 'files' : 'a file'} here</p>
         <p className="mt-1 text-[0.76rem] text-text-dim">
           or click to browse — {privacyNote}{hint ? ` · ${hint}` : ''}
         </p>

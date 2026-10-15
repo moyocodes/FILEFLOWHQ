@@ -1,0 +1,742 @@
+diff --git a/apps/gridcraft-web/Cargo.toml b/apps/gridcraft-web/Cargo.toml
+index 0f69e38..10985c5 100644
+--- a/apps/gridcraft-web/Cargo.toml
++++ b/apps/gridcraft-web/Cargo.toml
+@@ -26,4 +26,4 @@ rfd = { workspace = true }
+ wasm-bindgen = "0.2"
+ wasm-bindgen-futures = "0.4"
+ js-sys = "0.3"
+-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "HtmlIFrameElement", "Blob", "BlobPropertyBag", "Url", "Location", "CssStyleDeclaration", "Clipboard", "ClipboardItem", "Navigator"] }
++web-sys = { version = "0.3", features = ["Window", "MessageEvent", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "HtmlIFrameElement", "Blob", "BlobPropertyBag", "Url", "Location", "CssStyleDeclaration", "Clipboard", "ClipboardItem", "Navigator"] }
+diff --git a/apps/gridcraft-web/index.html b/apps/gridcraft-web/index.html
+index 5fdd1ea..5bee6ed 100644
+--- a/apps/gridcraft-web/index.html
++++ b/apps/gridcraft-web/index.html
+@@ -3,11 +3,12 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+-  <title>GridCraft</title>
+-  <link data-trunk rel="icon" href="../../assets/app-icon/gridcraft.ico" />
++  <title>Spreadsheet — FileFlowHQ Studio</title>
++  <link data-trunk rel="icon" href="../../assets/app-icon/fileflowhq.png" />
+   <link data-trunk rel="rust" data-bin="gridcraft-web" data-wasm-opt="z" data-weak-refs />
+   <style>
+-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f3f3f3; }
++    /* Transparent until the app paints: the embedding page shows its own loader behind it. */
++    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+     #gridcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+     #gridcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+       color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
+@@ -15,6 +16,6 @@
+ </head>
+ <body>
+   <canvas id="gridcraft_canvas"></canvas>
+-  <div id="gridcraft_loading">Loading GridCraft&hellip;</div>
++  <div id="gridcraft_loading">Loading Spreadsheet&hellip;</div>
+ </body>
+ </html>
+diff --git a/apps/gridcraft-web/src/host.rs b/apps/gridcraft-web/src/host.rs
+new file mode 100644
+index 0000000..e99ee77
+--- /dev/null
++++ b/apps/gridcraft-web/src/host.rs
+@@ -0,0 +1,89 @@
++//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//!
++//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
++//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
++//!               charges for it, then hands the file to the user.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!
++//! Opened on its own (not embedded), the editor works but can't save or export.
++
++use js_sys::{Array, Object, Reflect, Uint8Array};
++use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// The embedding page's window: a different window than ours, on our own origin.
++fn parent() -> Option<web_sys::Window> {
++    let window = web_sys::window()?;
++    let parent = window.parent().ok().flatten()?;
++    if Object::is(&parent, &window) {
++        return None;
++    }
++    // Reading another origin's location throws: that page isn't ours.
++    let theirs = parent.location().origin().ok()?;
++    (theirs == window.location().origin().ok()?).then_some(parent)
++}
++
++/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
++pub fn embedded() -> bool {
++    parent().is_some()
++}
++
++fn message(fields: &[(&str, JsValue)]) -> Option<Object> {
++    let o = Object::new();
++    for (k, v) in fields {
++        Reflect::set(&o, &JsValue::from_str(k), v).ok()?;
++    }
++    Some(o)
++}
++
++fn post(fields: &[(&str, JsValue)], transfer: Option<&JsValue>) -> Result<(), String> {
++    let parent = parent().ok_or("not embedded in fileflowhq.com")?;
++    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).ok_or("no origin")?;
++    let m = message(fields).ok_or("couldn't build the message")?;
++    match transfer {
++        Some(t) => parent.post_message_with_transfer(&m, &origin, &Array::of1(t)),
++        None => parent.post_message(&m, &origin),
++    }
++    .map_err(|e| format!("{e:?}"))
++}
++
++pub fn post_ready() {
++    let _ = post(&[("type", "pdfcraft:ready".into())], None);
++}
++
++pub fn post_failed(error: &str) {
++    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
++}
++
++/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
++pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++    let buffer = Uint8Array::from(bytes).buffer();
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++    let Some(window) = web_sys::window() else { return };
++    let own_origin = window.location().origin().unwrap_or_default();
++    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
++        let from_parent = match (parent(), e.source()) {
++            (Some(p), Some(src)) => Object::is(&p, &src),
++            _ => false,
++        };
++        if !from_parent || e.origin() != own_origin {
++            return;
++        }
++        let data = e.data();
++        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
++        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
++            return;
++        }
++        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++            open(name, Uint8Array::new(&bytes).to_vec());
++        }
++    });
++    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
++        cb.forget();
++    }
++}
+diff --git a/apps/gridcraft-web/src/main.rs b/apps/gridcraft-web/src/main.rs
+index 58c4f43..ccae131 100644
+--- a/apps/gridcraft-web/src/main.rs
++++ b/apps/gridcraft-web/src/main.rs
+@@ -11,6 +11,9 @@
+ //! URL query flags: `?webgl` forces WebGL2; `?sample=sales|budget|grades` opens a sample.
+ #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+ 
++#[cfg(target_arch = "wasm32")]
++mod host;
++
+ #[cfg(target_arch = "wasm32")]
+ mod web;
+ 
+diff --git a/apps/gridcraft-web/src/web.rs b/apps/gridcraft-web/src/web.rs
+index e1350a1..df69409 100644
+--- a/apps/gridcraft-web/src/web.rs
++++ b/apps/gridcraft-web/src/web.rs
+@@ -3,7 +3,6 @@
+ use gridcraft_engine::Session;
+ use gridcraft_ui_egui::{Inbox, Services, SheetApp};
+ use wasm_bindgen::JsCast as _;
+-use wasm_bindgen::JsValue;
+ 
+ const CANVAS_ID: &str = "gridcraft_canvas";
+ const LOADING_ID: &str = "gridcraft_loading";
+@@ -39,7 +38,9 @@ pub fn start() {
+                         let _ = session.execute("file.new", serde_json::json!({"sample": "sales"}));
+                     }
+                     let mut app = SheetApp::new(session, services(inbox.clone(), cc.egui_ctx.clone()));
+-                    app.ui.system_theme = true;
++                    // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme.
++                    app.ui.system_theme = false;
++                    app.ui.dark = !q.contains("theme=light");
+                     // Follow the browser's language, except a CJK one: the web build has no system
+                     // CJK fonts (none are bundled), so that interface would render as tofu.
+                     let browser = gridcraft_ui_egui::i18n::Language::system();
+@@ -50,14 +51,24 @@ pub fn start() {
+                         app.ui.language = browser;
+                     }
+                     SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);
++                    // Files the FileFlowHQ page sends in open like dropped files.
++                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
++                    crate::host::listen(move |name, bytes| {
++                        open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
++                        wake.request_repaint();
++                    });
+                     Ok(Box::new(WebShell { app, inbox }))
+                 }),
+             )
+             .await;
++        match &result {
++            Ok(()) => crate::host::post_ready(),
++            Err(e) => crate::host::post_failed(&format!("{e:?}")),
++        }
+         if let Some(el) = document.get_element_by_id(LOADING_ID) {
+             match result {
+                 Ok(()) => el.remove(),
+-                Err(e) => el.set_inner_html(&format!("<p>GridCraft failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
++                Err(e) => el.set_inner_html(&format!("<p>Spreadsheet failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
+             }
+         }
+     });
+@@ -133,14 +144,16 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
+                 ctx.request_repaint();
+             });
+         })),
++        // FileFlowHQ: saves, exports and printouts leave the editor only through the page that
++        // embeds it, which takes payment first. Opened on its own, the editor can't save.
+         download: Some(Box::new(|name: &str, bytes: &[u8]| {
+-            if let Err(e) = download(name, bytes) {
+-                log::error!("download of {name} failed: {e}");
++            if let Err(e) = crate::host::export(name, bytes) {
++                log::error!("saving {name} works at fileflowhq.com/studio/spreadsheet: {e}");
+             }
+         })),
+         print: Some(Box::new(|bytes: &[u8]| {
+-            if let Err(e) = print_pdf(bytes) {
+-                log::error!("print failed: {e}");
++            if let Err(e) = crate::host::export("Print.pdf", bytes) {
++                log::error!("printing works at fileflowhq.com/studio/spreadsheet: {e}");
+             }
+         })),
+         open_url: Some(Box::new(|url: &str| {
+@@ -185,195 +198,3 @@ fn copy_html(html: &str, text: &str) -> Result<(), String> {
+     });
+     Ok(())
+ }
+-
+-/// Opens `bytes` (a PDF) as an object URL in a hidden iframe and calls the iframe's own
+-/// `print()` once it has finished loading — the standard way to drive the browser's native print
+-/// dialog on a PDF without a download or a popup window the browser might block. The blob URL and
+-/// the iframe are both cleaned up once the print dialog closes, so repeated prints don't leak
+-/// them.
+-fn print_pdf(bytes: &[u8]) -> Result<(), String> {
+-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
+-    let window = web_sys::window().ok_or("no window")?;
+-    let document = window.document().ok_or("no document")?;
+-
+-    let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
+-    let opts = web_sys::BlobPropertyBag::new();
+-    opts.set_type("application/pdf");
+-    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(js)?;
+-    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(js)?;
+-
+-    let iframe: web_sys::HtmlIFrameElement = document.create_element("iframe").map_err(js)?.dyn_into().map_err(|_| "not an iframe")?;
+-    iframe.style().set_property("display", "none").map_err(js)?;
+-    document.body().ok_or("no body")?.append_child(&iframe).map_err(js)?;
+-
+-    // `onload` fires once the PDF has actually rendered inside the iframe;
+-    // printing before that would show a blank page. Set the handler BEFORE
+-    // `src` so a fast/cached load can't fire before we're listening.
+-    let iframe_for_load = iframe.clone();
+-    let url_for_cleanup = url.clone();
+-    let on_load = wasm_bindgen::closure::Closure::once_into_js(move || {
+-        let Some(content_window) = iframe_for_load.content_window() else { return };
+-        let _ = content_window.print();
+-        // `afterprint` fires once the print dialog (or print preview) closes, whether the user
+-        // printed or cancelled — the right moment to release the blob URL and drop the iframe.
+-        let iframe_for_cleanup = iframe_for_load.clone();
+-        let on_after_print = wasm_bindgen::closure::Closure::once_into_js(move || {
+-            web_sys::Url::revoke_object_url(&url_for_cleanup).ok();
+-            iframe_for_cleanup.remove();
+-        });
+-        let _ = content_window.add_event_listener_with_callback("afterprint", on_after_print.unchecked_ref());
+-    });
+-    iframe.set_onload(Some(on_load.unchecked_ref()));
+-    iframe.set_src(&url);
+-    Ok(())
+-}
+-
+-fn mime_for(name: &str) -> &'static str {
+-    match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
+-        Some("xlsx") => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+-        Some("xlsm") => "application/vnd.ms-excel.sheet.macroEnabled.12",
+-        Some("xlsb") => "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+-        Some("ods") => "application/vnd.oasis.opendocument.spreadsheet",
+-        Some("csv") => "text/csv",
+-        Some("tsv" | "txt") => "text/plain",
+-        Some("pdf") => "application/pdf",
+-        Some("html" | "htm") => "text/html",
+-        Some("json") => "application/json",
+-        Some("png") => "image/png",
+-        Some("jpg" | "jpeg") => "image/jpeg",
+-        _ => "application/octet-stream",
+-    }
+-}
+-
+-/// Trigger a browser save dialog or download of `bytes` named after `name`.
+-
+-fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
+-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
+-    let window = web_sys::window().ok_or("no window")?;
+-
+-    let show_picker_fn: Option<js_sys::Function> =
+-        js_sys::Reflect::get(&window, &JsValue::from_str("showSaveFilePicker")).ok().and_then(|v| v.dyn_into().ok());
+-
+-    if let Some(picker_fn) = show_picker_fn {
+-        let ext = std::path::Path::new(name).extension().and_then(|e| e.to_str()).unwrap_or("xlsx").to_ascii_lowercase();
+-        let dot_ext = format!(".{ext}");
+-        let mime = mime_for(name);
+-
+-        let accept_obj = js_sys::Object::new();
+-        let exts_arr = js_sys::Array::new();
+-        exts_arr.push(&JsValue::from_str(&dot_ext));
+-        let _ = js_sys::Reflect::set(&accept_obj, &JsValue::from_str(mime), &exts_arr);
+-
+-        let type_desc = match ext.as_str() {
+-            "xlsx" => "Excel Workbook (*.xlsx)",
+-            "xlsm" => "Excel Macro-Enabled Workbook (*.xlsm)",
+-            "xlsb" => "Excel Binary Workbook (*.xlsb)",
+-            "ods" => "OpenDocument Spreadsheet (*.ods)",
+-            "csv" => "CSV (Comma delimited) (*.csv)",
+-            "tsv" => "Tab Delimited Text (*.tsv)",
+-            "txt" => "Plain Text (*.txt)",
+-            "pdf" => "PDF Document (*.pdf)",
+-            "html" | "htm" => "HTML Document (*.html)",
+-            "json" => "JSON Document (*.json)",
+-            "png" => "PNG Image (*.png)",
+-            "jpg" | "jpeg" => "JPEG Image (*.jpeg)",
+-            _ => "Spreadsheet",
+-        };
+-
+-        let type_obj = js_sys::Object::new();
+-        let _ = js_sys::Reflect::set(&type_obj, &JsValue::from_str("description"), &JsValue::from_str(type_desc));
+-        let _ = js_sys::Reflect::set(&type_obj, &JsValue::from_str("accept"), &accept_obj);
+-
+-        let types_arr = js_sys::Array::new();
+-        types_arr.push(&type_obj);
+-
+-        let picker_opts = js_sys::Object::new();
+-        let _ = js_sys::Reflect::set(&picker_opts, &JsValue::from_str("suggestedName"), &JsValue::from_str(name));
+-        let _ = js_sys::Reflect::set(&picker_opts, &JsValue::from_str("types"), &types_arr);
+-
+-        let prom_val = picker_fn.call1(&window, &picker_opts).map_err(js)?;
+-        let prom: js_sys::Promise = prom_val.dyn_into().map_err(|_| "not a promise".to_string())?;
+-
+-        let bytes_vec = bytes.to_vec();
+-        let name_owned = name.to_string();
+-        // Anything but the user cancelling (no user gesture, a denied permission, a failed write)
+-        // falls back to an ordinary download, so a save never fails silently.
+-        let fallback = move |bytes: &[u8]| {
+-            if let Some(w) = web_sys::window()
+-                && let Err(e) = trigger_anchor_download(&w, &name_owned, bytes)
+-            {
+-                log::error!("download fallback failed: {e}");
+-            }
+-        };
+-        wasm_bindgen_futures::spawn_local(async move {
+-            match wasm_bindgen_futures::JsFuture::from(prom).await {
+-                Ok(handle_val) => {
+-                    if let Err(e) = write_file_handle(&handle_val, &bytes_vec).await {
+-                        log::error!("failed writing to file handle: {e}");
+-                        fallback(&bytes_vec);
+-                    } else {
+-                        log::info!("Successfully saved file through save file picker");
+-                    }
+-                }
+-                Err(e) => {
+-                    let err_name = js_sys::Reflect::get(&e, &JsValue::from_str("name")).ok().and_then(|v| v.as_string()).unwrap_or_default();
+-                    if err_name == "AbortError" {
+-                        log::info!("Save file dialog cancelled by user");
+-                    } else {
+-                        log::warn!("showSaveFilePicker refused ({err_name}); downloading instead");
+-                        fallback(&bytes_vec);
+-                    }
+-                }
+-            }
+-        });
+-        return Ok(());
+-    }
+-
+-    // Fallback for browsers without showSaveFilePicker (e.g. Firefox, Safari):
+-    trigger_anchor_download(&window, name, bytes)
+-}
+-
+-async fn write_file_handle(handle: &JsValue, bytes: &[u8]) -> Result<(), String> {
+-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
+-    let create_fn: js_sys::Function = js_sys::Reflect::get(handle, &JsValue::from_str("createWritable"))
+-        .map_err(js)?
+-        .dyn_into()
+-        .map_err(|_| "createWritable is not a function".to_string())?;
+-    let stream_prom: js_sys::Promise = create_fn.call0(handle).map_err(js)?.dyn_into().map_err(|_| "not a promise".to_string())?;
+-    let stream = wasm_bindgen_futures::JsFuture::from(stream_prom).await.map_err(js)?;
+-
+-    let write_fn: js_sys::Function =
+-        js_sys::Reflect::get(&stream, &JsValue::from_str("write")).map_err(js)?.dyn_into().map_err(|_| "write is not a function".to_string())?;
+-    let uint8 = js_sys::Uint8Array::from(bytes);
+-    let write_prom: js_sys::Promise = write_fn.call1(&stream, &uint8).map_err(js)?.dyn_into().map_err(|_| "not a promise".to_string())?;
+-    wasm_bindgen_futures::JsFuture::from(write_prom).await.map_err(js)?;
+-
+-    let close_fn: js_sys::Function =
+-        js_sys::Reflect::get(&stream, &JsValue::from_str("close")).map_err(js)?.dyn_into().map_err(|_| "close is not a function".to_string())?;
+-    let close_prom: js_sys::Promise = close_fn.call0(&stream).map_err(js)?.dyn_into().map_err(|_| "not a promise".to_string())?;
+-    wasm_bindgen_futures::JsFuture::from(close_prom).await.map_err(js)?;
+-    Ok(())
+-}
+-
+-fn trigger_anchor_download(window: &web_sys::Window, name: &str, bytes: &[u8]) -> Result<(), String> {
+-    let js = |e: wasm_bindgen::JsValue| format!("{e:?}");
+-    let document = window.document().ok_or("no document")?;
+-    let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
+-    let opts = web_sys::BlobPropertyBag::new();
+-    opts.set_type(mime_for(name));
+-    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(js)?;
+-    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(js)?;
+-    let a: web_sys::HtmlAnchorElement = document.create_element("a").map_err(js)?.dyn_into().map_err(|_| "not an anchor".to_string())?;
+-    a.set_href(&url);
+-    a.set_download(name);
+-    a.style().set_property("display", "none").map_err(js)?;
+-    let body = document.body().ok_or("no body")?;
+-    body.append_child(&a).map_err(js)?;
+-    a.click();
+-    a.remove();
+-    let revoke = wasm_bindgen::closure::Closure::once_into_js(move || {
+-        web_sys::Url::revoke_object_url(&url).ok();
+-    });
+-    window.set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 10_000).map_err(js)?;
+-    Ok(())
+-}
+diff --git a/assets/app-icon/fileflowhq.png b/assets/app-icon/fileflowhq.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd8a8a0a676ab5cd0fe19d8a7d3517cb3770886d
+GIT binary patch
+literal 1026
+zcmV+d1pWJoP)<h;3K|Lk000e1NJLTq002M$002M;1^@s6s%dfF00009a7bBm001mY
+z001mY0i`{bsQ>^2v`IukRCt{2o6Sp9Q5eS0PCf6P_sra3VsiXS8zcM(Q_LI`3Jk+V
+z5|-nlFG?t*TG*mREi5Pyp<3jqY3<te7qqHCMOqkcqNQd~Ei*`4oH*A>ygB3Caqhk6
+z%!~(~ojA|)J74dG^Acil=(>)8*awKufw4Kt*mq!T4H)B+wHEg>2Z$4Z81?)89%9$<
+zcs$jBI0cBm6bNfg!YksW$Kwg_Jb6h;5k(vU#{NhTl)>r%#9=~6VY;&(ricp)1h7jp
+zl+wMH!c)c?;(Lncln|G|>#a{c^DGC$Z-PK64JON92#E92O**d+;(Xh>^wBu*c%EqJ
+z|D|7@<)?jGqKH3DTLHv9uYfUEAuu+&xx&kyBF8Qvt{4@gQQpcnBM(9^iP!c#Pc=@A
+zj|lljWNAiJem@-j5wDkrdfTL{xF^Cjzt7~2GWJcZfK?{}h#!r79h0iorBPmb{#YV^
+zzsXKQ`5UXP)9-7S9=_yU!tjQ61fc3}kMvp1aOQI#Kx>Mb&uIXyi=#XgZL^ex*nQ}E
+zLVGxt22Ijy_ia%iQX@S)H~~QBEs$<_PzAuz&rf;Hi-C+4ingcikEj5k@!gQ49?}9(
+zb?0<Ky2(z|ikn^A&Pwge>nQ;=y}z#xfcn>i2~CC{^d<ZUHB$o_?_H%<Kz+UgsJPL^
+z4?MYK(!po_JKh4DRrl(a`T)Rg`MkWm|Ae8++uaEPG|vxj{7ovAUFk4tjjREn*;xlH
+z$9Va`$?RGInq2@K2oG5Uz@hM91%Q5NKX3W;I3r~mzU*qJV-rMD0yrGDZx1Up^Xdaw
+zj`8wq&dt1K02mDLU}ux95_QG4;lIR;>(1%$;L0JW`*_2fdnPr195w|$vM|Cc2TyIN
+zxVy!b@Sw^qkkgf*whO?wy8<Gq4!p}9dAbF@#CYk&<I=)|Q~)CU1-aot8URJYgA@P?
+zg$LIGC>9=E1)yMfa1DT>;UNyd*#{E3PucJw9!NO;L`GrJ_!F7@ek28=%|yNtSsD`n
+zq6!$1B8{;#BoGK_;@PNdGp-A9MP&c?Sb8!K0Zf=WMHFd)b4#lQj8&R?21Iw20><3Z
+zqr@#UjLj%u&S^~(LJAT#4N*#ifVilDNoRz(T%_xvq+MfTh}JTr#Vq&2FM`ikN30A@
+z(*hLnt#s4&X?nYMxn!e2bXR40jUYbs9wy!MR)!!a8jP|E#Jbn<EmvJ8Bd}gE_KNx$
+w7@HMeQcizLTb<>&mswye28d@jDm)A0FUpHkZm>lTrT_o{07*qoM6N<$f-6kbmjD0&
+
+literal 0
+HcmV?d00001
+
+diff --git a/crates/ui-egui/src/backstage.rs b/crates/ui-egui/src/backstage.rs
+index ae21554..5f3241a 100644
+--- a/crates/ui-egui/src/backstage.rs
++++ b/crates/ui-egui/src/backstage.rs
+@@ -750,13 +750,13 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+         return match app.run(id, json!({"path": path})) {
+             Ok(_) => true,
+             Err(e) => {
+-                app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
++                app.message = Some(("Spreadsheet".into(), crate::clean_error(&e)));
+                 false
+             }
+         };
+     }
+     if app.services.download.is_none() {
+-        app.message = Some(("GridCraft".into(), "Exporting needs a file picker, which this window doesn't have.".into()));
++        app.message = Some(("Spreadsheet".into(), "Exporting needs a file picker, which this window doesn't have.".into()));
+         return false;
+     }
+     if fmt == "pdf" {
+@@ -764,7 +764,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+         return match app.run(id, json!({})) {
+             Ok(_) => true,
+             Err(e) => {
+-                app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
++                app.message = Some(("Spreadsheet".into(), crate::clean_error(&e)));
+                 false
+             }
+         };
+@@ -783,7 +783,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+             }
+         }
+         Err(e) => {
+-            app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
++            app.message = Some(("Spreadsheet".into(), crate::clean_error(&e)));
+             false
+         }
+     }
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index 5e859c6..1fb7ce0 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -682,7 +682,7 @@ impl Dialog {
+             "commandSearch" => Dialog::custom("commandSearch", "Search Commands", json!({})),
+             "agents" => Dialog::custom("agents", "Agent Control", json!({})),
+             "about" => {
+-                let mut d = Dialog::custom("about", "About GridCraft", json!({}));
++                let mut d = Dialog::custom("about", "About Spreadsheet", json!({}));
+                 d.tab = match p("tab").as_str() {
+                     Some(t @ ("Contributors" | "Models")) => t.to_string(),
+                     _ => "About".into(),
+@@ -1323,12 +1323,14 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
+         "Contributors" => crate::credits::contributors_ui(ui),
+         "Models" => crate::credits::models_ui(ui),
+         _ => {
+-            ui.heading("GridCraft");
++            // The FileFlowHQ logo and name (every Studio editor's heading).
++            crate::ffhq_brand::start_header(ui, "Spreadsheet", "Part of FileFlowHQ Studio. Runs entirely in your browser.");
+             ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+             ui.add_space(4.0);
+-            ui.label("A clean-room, open-source, Rust-native spreadsheet. Part of ArtCraft.");
+-            ui.hyperlink_to("getartcraft.com/apps/gridcraft", "https://getartcraft.com/apps/gridcraft");
+-            ui.hyperlink_to("Join the ArtCraft Discord", "https://discord.gg/artcraft");
++            ui.hyperlink_to("fileflowhq.com", "https://fileflowhq.com");
++            ui.hyperlink_to("Contact FileFlowHQ", "https://fileflowhq.com/contact");
++            // The upstream licenses ship with the app; credit the project too.
++            ui.hyperlink_to("Built on GridCraft, open source (MIT / Apache-2.0)", "https://github.com/storytold/gridcraft");
+         }
+     }
+ }
+diff --git a/crates/ui-egui/src/grid.rs b/crates/ui-egui/src/grid.rs
+index d0eef85..a1aa52a 100644
+--- a/crates/ui-egui/src/grid.rs
++++ b/crates/ui-egui/src/grid.rs
+@@ -2017,7 +2017,7 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
+                     // Ctrl (Cmd on macOS) swaps copying and extending, as in Excel.
+                     let mode = if mods.command { "alternate" } else { "series" };
+                     if let Err(e) = app.run("edit.autoFill", json!({"source": src.a1(), "target": t.a1(), "mode": mode})) {
+-                        app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
++                        app.message = Some(("Spreadsheet".into(), crate::clean_error(&e)));
+                     }
+                 }
+             }
+@@ -2038,7 +2038,7 @@ fn interact(app: &mut SheetApp, ui: &mut egui::Ui, resp: &egui::Response, geo: &
+             }
+             Drag::MoveCols { source, before: Some(before) } => {
+                 if let Err(e) = app.run("sheet.moveColumns", json!({"cols": source.a1(), "before": before})) {
+-                    app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
++                    app.message = Some(("Spreadsheet".into(), crate::clean_error(&e)));
+                 }
+             }
+             _ => {}
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 0b19b25..c6decf9 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -6,6 +6,7 @@
+ #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+ #![forbid(unsafe_code)]
+ 
++mod ffhq_brand;
+ pub mod backstage;
+ mod border_preview;
+ mod cell_pictures;
+@@ -431,7 +432,7 @@ impl SheetApp {
+         if e.contains("is not available right now") {
+             self.toast = Some((e, now_ms()));
+         } else {
+-            self.message = Some(("GridCraft".into(), clean_error(&e)));
++            self.message = Some(("Spreadsheet".into(), clean_error(&e)));
+         }
+     }
+ 
+@@ -578,7 +579,7 @@ impl SheetApp {
+         for req in self.session.take_ui_requests() {
+             match req {
+                 UiRequest::Dialog(name, params) => self.open_dialog(&name, params),
+-                UiRequest::Message(m) => self.message = Some(("GridCraft".into(), m)),
++                UiRequest::Message(m) => self.message = Some(("Spreadsheet".into(), m)),
+                 UiRequest::EditCell(text) => {
+                     let text = text.map(|text| {
+                         self.session
+@@ -655,7 +656,7 @@ impl SheetApp {
+             Ok(r) => self.after_open(Some(path), &r),
+             // A password-protected workbook: ask for the password; the dialog opens it.
+             Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => self.open_dialog("openPassword", json!({"path": path})),
+-            Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
++            Err(e) => self.message = Some(("Spreadsheet".into(), clean_error(&e))),
+         }
+         self.after_engine();
+     }
+@@ -798,7 +799,7 @@ impl SheetApp {
+         let text = match self.session.active().map(|d| formula_locale::canonical(&text, ed.locale, &d.wb, ed.sheet, ed.cell)) {
+             Some(Ok(text)) => text,
+             Some(Err(error)) => {
+-                self.message = Some(("GridCraft".into(), error.to_string()));
++                self.message = Some(("Spreadsheet".into(), error.to_string()));
+                 self.editor = Some(ed);
+                 self.session.mode = gridcraft_engine::Mode::Edit;
+                 return false;
+@@ -810,7 +811,7 @@ impl SheetApp {
+             && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
+         {
+             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
+-                let title = if dv.error_title.is_empty() { "GridCraft".to_string() } else { dv.error_title.clone() };
++                let title = if dv.error_title.is_empty() { "Spreadsheet".to_string() } else { dv.error_title.clone() };
+                 self.message = Some((title, msg));
+                 self.editor = Some(ed);
+                 self.session.mode = gridcraft_engine::Mode::Edit;
+@@ -832,7 +833,7 @@ impl SheetApp {
+                 true
+             }
+             Err(e) => {
+-                self.message = Some(("GridCraft".into(), clean_error(&e)));
++                self.message = Some(("Spreadsheet".into(), clean_error(&e)));
+                 self.editor = Some(ed);
+                 self.session.mode = gridcraft_engine::Mode::Edit;
+                 false
+@@ -964,7 +965,7 @@ impl SheetApp {
+                     self.backstage = None;
+                     self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
+                 }
+-                Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
++                Err(e) => self.message = Some(("Spreadsheet".into(), clean_error(&e))),
+             }
+             self.after_engine();
+         }
+diff --git a/crates/ui-egui/src/ribbon.rs b/crates/ui-egui/src/ribbon.rs
+index e8291ac..4d56818 100644
+--- a/crates/ui-egui/src/ribbon.rs
++++ b/crates/ui-egui/src/ribbon.rs
+@@ -255,6 +255,9 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+ /// Excel's; the ribbon's tab and collapsed state are left as they were for when it closes.
+ fn file_menu(app: &mut SheetApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
++    // The short FileFlowHQ logo beside File, as in every Studio editor (shared component).
++    crate::ffhq_brand::mark(ui, 18.0);
++    ui.add_space(4.0);
+     let label = egui::RichText::new(app.ui.language.tr("File")).font(theme::ui_font(13.5)).color(t.accent);
+     let file = ui.add(egui::Button::new(label).frame(false).min_size(vec2(46.0, 30.0)));
+     if file.clicked() {
+@@ -2243,7 +2246,7 @@ fn automate(app: &mut SheetApp, ui: &mut Ui) {
+     if __k.clicked() {
+         app.open_dialog("journal", json!({}));
+     }
+-    let __k = big_button(ui, Icon::Script, "About\nGridCraft", "Version, contributors and the AI models that helped", false);
++    let __k = big_button(ui, Icon::Script, "About\nSpreadsheet", "Version, contributors and the AI models that helped", false);
+     control_keytip(app, ui, &__k, "about");
+     if __k.clicked() {
+         app.open_dialog("about", json!({}));
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 485b9a2..2e8f3bd 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -56,15 +56,15 @@ impl Tokens {
+     pub fn light() -> Tokens {
+         Tokens {
+             dark: false,
+-            window: Color32::from_rgb(0xF3, 0xF3, 0xF3),
++            window: Color32::from_rgb(0xF4, 0xF6, 0xF5),
+             ribbon: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+             ribbon_border: Color32::from_rgb(0xE3, 0xE3, 0xE3),
+-            text: Color32::from_rgb(0x24, 0x24, 0x24),
+-            text_dim: Color32::from_rgb(0x61, 0x61, 0x61),
++            text: Color32::from_rgb(0x10, 0x15, 0x1A),
++            text_dim: Color32::from_rgb(0x5B, 0x66, 0x70),
+             text_disabled: Color32::from_rgb(0xB0, 0xB0, 0xB0),
+-            accent: Color32::from_rgb(0x10, 0x7C, 0x41),
+-            accent_dark: Color32::from_rgb(0x0B, 0x5E, 0x31),
+-            accent_soft: Color32::from_rgb(0xDF, 0xF1, 0xE6),
++            accent: Color32::from_rgb(0x0E, 0x8F, 0x5C),
++            accent_dark: Color32::from_rgb(0x0A, 0x6E, 0x47),
++            accent_soft: Color32::from_rgb(0xDC, 0xF1, 0xE7),
+             hover: Color32::from_rgb(0xEB, 0xEB, 0xEB),
+             pressed: Color32::from_rgb(0xDD, 0xDD, 0xDD),
+             separator: Color32::from_rgb(0xE0, 0xE0, 0xE0),
+@@ -75,15 +75,15 @@ impl Tokens {
+             header_text: Color32::from_rgb(0x42, 0x42, 0x42),
+             header_line: Color32::from_rgb(0xD6, 0xD6, 0xD6),
+             header_sel_bg: Color32::from_rgb(0xE1, 0xE1, 0xE1),
+-            header_sel_text: Color32::from_rgb(0x10, 0x7C, 0x41),
+-            header_all_bg: Color32::from_rgb(0xC8, 0xE6, 0xD3),
+-            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x1C),
+-            sel_border: Color32::from_rgb(0x10, 0x7C, 0x41),
++            header_sel_text: Color32::from_rgb(0x0E, 0x8F, 0x5C),
++            header_all_bg: Color32::from_rgb(0xC3, 0xE6, 0xD5),
++            sel_fill: Color32::from_rgba_unmultiplied(0x0E, 0x8F, 0x5C, 0x1C),
++            sel_border: Color32::from_rgb(0x0E, 0x8F, 0x5C),
+             input_bg: Color32::WHITE,
+             input_border: Color32::from_rgb(0xD1, 0xD1, 0xD1),
+-            tab_bar: Color32::from_rgb(0xF3, 0xF3, 0xF3),
++            tab_bar: Color32::from_rgb(0xF4, 0xF6, 0xF5),
+             tab_active: Color32::WHITE,
+-            status_bar: Color32::from_rgb(0xF3, 0xF3, 0xF3),
++            status_bar: Color32::from_rgb(0xF4, 0xF6, 0xF5),
+             cell_text: Color32::BLACK,
+             menu_bg: Color32::WHITE,
+             shadow: Color32::from_black_alpha(40),
+@@ -98,36 +98,36 @@ impl Tokens {
+     pub fn dark() -> Tokens {
+         Tokens {
+             dark: true,
+-            window: Color32::from_rgb(0x29, 0x29, 0x29),
+-            ribbon: Color32::from_rgb(0x33, 0x33, 0x33),
+-            ribbon_border: Color32::from_rgb(0x40, 0x40, 0x40),
+-            text: Color32::from_rgb(0xEE, 0xEE, 0xEE),
+-            text_dim: Color32::from_rgb(0xB0, 0xB0, 0xB0),
++            window: Color32::from_rgb(0x12, 0x17, 0x18),
++            ribbon: Color32::from_rgb(0x1A, 0x20, 0x21),
++            ribbon_border: Color32::from_rgb(0x29, 0x32, 0x2F),
++            text: Color32::from_rgb(0xF1, 0xF5, 0xF3),
++            text_dim: Color32::from_rgb(0xA3, 0xAF, 0xAB),
+             text_disabled: Color32::from_rgb(0x70, 0x70, 0x70),
+-            accent: Color32::from_rgb(0x5C, 0xC5, 0x87),
+-            accent_dark: Color32::from_rgb(0x3F, 0xA8, 0x6C),
+-            accent_soft: Color32::from_rgb(0x23, 0x45, 0x31),
+-            hover: Color32::from_rgb(0x42, 0x42, 0x42),
+-            pressed: Color32::from_rgb(0x4D, 0x4D, 0x4D),
+-            separator: Color32::from_rgb(0x48, 0x48, 0x48),
++            accent: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            accent_dark: Color32::from_rgb(0x1F, 0x9E, 0x6A),
++            accent_soft: Color32::from_rgb(0x1F, 0x3B, 0x31),
++            hover: Color32::from_rgb(0x22, 0x2A, 0x2A),
++            pressed: Color32::from_rgb(0x29, 0x32, 0x2F),
++            separator: Color32::from_rgb(0x29, 0x32, 0x2F),
+             grid_bg: Color32::WHITE,
+-            desk: Color32::from_rgb(0x3A, 0x3A, 0x3A),
++            desk: Color32::from_rgb(0x0E, 0x12, 0x13),
+             gridline: Color32::from_rgb(0xE1, 0xE1, 0xE1),
+-            header_bg: Color32::from_rgb(0x30, 0x30, 0x30),
++            header_bg: Color32::from_rgb(0x1A, 0x20, 0x21),
+             header_text: Color32::from_rgb(0xCC, 0xCC, 0xCC),
+-            header_line: Color32::from_rgb(0x45, 0x45, 0x45),
+-            header_sel_bg: Color32::from_rgb(0x45, 0x45, 0x45),
+-            header_sel_text: Color32::from_rgb(0x5C, 0xC5, 0x87),
+-            header_all_bg: Color32::from_rgb(0x2E, 0x55, 0x3E),
+-            sel_fill: Color32::from_rgba_unmultiplied(0x10, 0x7C, 0x41, 0x24),
+-            sel_border: Color32::from_rgb(0x10, 0x7C, 0x41),
+-            input_bg: Color32::from_rgb(0x1F, 0x1F, 0x1F),
+-            input_border: Color32::from_rgb(0x50, 0x50, 0x50),
+-            tab_bar: Color32::from_rgb(0x29, 0x29, 0x29),
+-            tab_active: Color32::from_rgb(0x3A, 0x3A, 0x3A),
+-            status_bar: Color32::from_rgb(0x29, 0x29, 0x29),
++            header_line: Color32::from_rgb(0x29, 0x32, 0x2F),
++            header_sel_bg: Color32::from_rgb(0x29, 0x32, 0x2F),
++            header_sel_text: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            header_all_bg: Color32::from_rgb(0x1F, 0x3B, 0x31),
++            sel_fill: Color32::from_rgba_unmultiplied(0x3B, 0xE6, 0x98, 0x24),
++            sel_border: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            input_bg: Color32::from_rgb(0x12, 0x17, 0x18),
++            input_border: Color32::from_rgb(0x35, 0x41, 0x3D),
++            tab_bar: Color32::from_rgb(0x12, 0x17, 0x18),
++            tab_active: Color32::from_rgb(0x1A, 0x20, 0x21),
++            status_bar: Color32::from_rgb(0x12, 0x17, 0x18),
+             cell_text: Color32::BLACK,
+-            menu_bg: Color32::from_rgb(0x30, 0x30, 0x30),
++            menu_bg: Color32::from_rgb(0x1A, 0x20, 0x21),
+             shadow: Color32::from_black_alpha(90),
+             danger: Color32::from_rgb(0xF1, 0x70, 0x5F),
+             notice_warn_bg: Color32::from_rgb(0x4A, 0x3F, 0x1E),

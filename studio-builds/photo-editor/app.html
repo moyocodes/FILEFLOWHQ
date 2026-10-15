@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Photo Editor — FileFlowHQ</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E %3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%230b0f0f%22 /%3E %3Cg fill=%22%233BE698%22 transform=%22translate%282.1 7.35%29 scale%280.32%29%22%3E %3Cpath d=%22M32.4763 -0.000152588H85.8613C85.0164 0.785692 84.0489 1.81123 83.2208 2.63928L78.7958 7.02676L75.4283 10.3806C74.828 10.9798 73.9312 11.8387 73.3949 12.4691C70.3196 12.4281 67.159 12.4653 64.0781 12.4652L46.3099 12.4674C46.2409 15.4503 46.3043 18.6812 46.305 21.6839C52.2535 21.6852 58.3849 21.7652 64.318 21.6755C63.9214 22.0143 63.3846 22.5848 62.9954 22.9727L60.5995 25.3601C57.7359 28.209 54.8341 31.165 51.9446 33.9736C50.0827 34.007 48.1764 33.9699 46.3062 33.9863C46.2751 35.8496 46.2947 37.7667 46.2975 39.6322C45.9842 39.8806 45.1652 40.7319 44.8478 41.0471L42.0194 43.8575L32.4842 53.398L32.4739 33.6314C34.7783 33.577 37.2286 33.632 39.5527 33.6186C39.5579 33.1346 39.5594 32.6507 39.5572 32.1668L7.25487 32.158C7.24324 30.4991 7.24198 28.8401 7.25125 27.1812C8.11783 27.1375 9.1781 27.1676 10.063 27.1679L15.1266 27.1695L32.4777 27.1589L32.4737 21.6885C33.9618 21.6632 35.5054 21.6829 36.9979 21.6818C36.987 21.2312 37.0041 20.7134 37.008 20.2576L18.9642 20.2126L18.9641 15.0246C23.4545 14.9755 27.9794 15.0501 32.4766 15.017L32.4745 9.74612C35.4975 9.6853 38.7091 9.74067 41.7472 9.74077L41.7465 8.34878C32.6891 8.25842 23.5695 8.42688 14.5135 8.3228L14.5191 3.09689L32.4771 3.09275L32.4763 -0.000152588Z%22 /%3E %3Cpath d=%22M0.108346 15.0691C3.20149 15.0452 6.83719 14.9869 9.90649 15.0837C9.97526 16.5429 9.93326 18.7331 9.91052 20.213C6.71603 20.2381 3.29867 20.2247 0.104492 20.1777C0.169166 18.6401 0.108668 16.6434 0.108346 15.0691Z%22 /%3E %3C/g%3E %3C/svg%3E">
+  
+<script type="module">
+import init, * as bindings from './photocraft-web-efca20028f80b486.js';
+const wasm = await init({ module_or_path: './photocraft-web-efca20028f80b486_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  <style>
+    /* Transparent until the app paints: the embedding page shows its own loader behind it. */
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #photocraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #photocraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 0 16px; text-align: center; color: #b8b8b8; font: 14px system-ui, sans-serif; pointer-events: none; }
+    #photocraft_loading p { margin: 0 0 8px; max-width: 420px; line-height: 1.5; }
+    #photocraft_loading a { color: #e0e0e0; pointer-events: auto; }
+    /* The app removes this element once it runs. If the WebAssembly never downloads or doesn't match
+       this page, no Rust runs to say so, so the page itself shows what to do after a while. */
+    #photocraft_stalled { color: #8c8c8c; visibility: hidden; animation: photocraft-stalled 0s 20s forwards; }
+    @keyframes photocraft-stalled { to { visibility: visible; } }
+  </style>
+<link rel="modulepreload" href="./photocraft-web-efca20028f80b486.js" crossorigin="anonymous" integrity="sha384-GeezlbG13oxjFcWBHu66Vx15+uSgGPiGuDWU1THDmrQrD0ddMoNodjyRFS5ArhUr"><link rel="preload" href="./photocraft-web-efca20028f80b486_bg.wasm" crossorigin="anonymous" integrity="sha384-eVmedjuonMmUMrKr6F0TRlV/2ceHOQ+ZX0GezgavEZmZ6qxBOmiA6w5DWhCxwU6j" as="fetch" type="application/wasm"></head>
+<body>
+  <canvas id="photocraft_canvas"></canvas>
+  <div id="photocraft_loading">
+    <p>Loading Photo Editor&hellip;</p>
+    <p id="photocraft_stalled">This is taking longer than usual. If the Photo Editor doesn't start, its files may have failed to
+      download or come from a different version of this page. <a href="">Reload</a> to try again; the browser
+      console lists what failed.</p>
+  </div>
+</body>
+</html>

@@ -94,7 +94,7 @@ export default function EmailGateModal() {
 
                     <button
                       type="submit"
-                      className="w-full rounded-xl bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+                      className="w-full rounded-xl bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90"
                     >
                       Continue to download
                     </button>
@@ -102,7 +102,7 @@ export default function EmailGateModal() {
                     <button
                       type="button"
                       onClick={skipGate}
-                      className="w-full rounded-xl border border-border px-4 py-3 text-sm font-semibold text-text-dim transition-colors hover:border-signal hover:text-signal"
+                      className="w-full rounded-xl border border-border px-4 py-3 text-sm font-medium text-text-dim transition-colors hover:border-signal hover:text-signal"
                     >
                       Skip and download
                     </button>
@@ -110,7 +110,7 @@ export default function EmailGateModal() {
                     <button
                       type="button"
                       onClick={() => setShowPolicy(true)}
-                      className="flex w-full items-center justify-center gap-1.5 text-xs font-medium text-text-dim transition-colors hover:text-signal"
+                      className="flex w-full items-center justify-center gap-1.5 text-xs font-normal text-text-dim transition-colors hover:text-signal"
                     >
                       <Info className="h-3.5 w-3.5" strokeWidth={2} />
                       Why we ask for this

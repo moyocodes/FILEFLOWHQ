@@ -14,7 +14,7 @@ export default function ProgressBar({ label = 'Working…', progress }) {
 
   return (
     <div className="flex flex-col gap-2 rounded-card border border-border bg-panel px-4 py-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex items-center gap-2 text-sm font-normal">
         <Loader2 className="h-4 w-4 animate-spin text-signal" strokeWidth={2.25} />
         <span>{label}</span>
         {determinate && (

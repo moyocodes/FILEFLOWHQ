@@ -269,7 +269,7 @@ export default function useSvgToPng() {
             </div>
 
             {doneCount > 1 && (
-              <button onClick={downloadAll} className="text-sm font-medium text-signal hover:underline">
+              <button onClick={downloadAll} className="text-sm font-normal text-signal hover:underline">
                 Download all files
               </button>
             )}
@@ -283,7 +283,7 @@ export default function useSvgToPng() {
   const labelClass = 'mb-2.5 block font-mono text-[0.64rem] uppercase tracking-[0.08em] text-text-dim'
   const chip = (active) =>
     [
-      'rounded px-3 py-1.5 text-sm font-medium transition-colors',
+      'rounded px-3 py-1.5 text-sm font-normal transition-colors',
       active ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim hover:text-text'
     ].join(' ')
 
@@ -304,7 +304,7 @@ export default function useSvgToPng() {
                   }}
                   disabled={disabled}
                   title={disabled ? 'AVIF export needs Chrome or Edge' : undefined}
-                  className={disabled ? 'cursor-not-allowed rounded bg-panel-raised px-3 py-1.5 text-sm font-medium text-text-dim opacity-40' : chip(format === f.id)}
+                  className={disabled ? 'cursor-not-allowed rounded bg-panel-raised px-3 py-1.5 text-sm font-normal text-text-dim opacity-40' : chip(format === f.id)}
                 >
                   {f.label}
                 </button>
@@ -385,7 +385,7 @@ export default function useSvgToPng() {
         <button
           onClick={allDone ? downloadAll : convertAll}
           disabled={isConverting || items.length === 0}
-          className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {allDone
             ? `Download ${doneCount > 1 ? `all ${doneCount} files` : 'file'}`

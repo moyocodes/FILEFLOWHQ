@@ -5,7 +5,7 @@ import { isExtension } from './platform'
 // hosted site explicitly.
 const API_BASE = isExtension ? 'https://fileflowhq.com' : ''
 
-/** Resolve an API path like '/api/pdf-to-word' against the right host. */
+/** Resolve an API path like '/api/shorten' against the right host. */
 export function apiUrl(path) {
   return `${API_BASE}${path}`
 }

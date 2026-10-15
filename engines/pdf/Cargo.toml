@@ -1,0 +1,31 @@
+# FileFlowHQ PDF engine: pdfcraft's own PDF reader and Word/PowerPoint/HTML/RTF exporter,
+# compiled to WebAssembly for the converter tools (no editor UI). Build: ../build.sh pdf
+[package]
+name = "ffhq-pdf-engine"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pdfcraft-engine = { path = "../../../craft-apps/pdfcraft/crates/engine" }
+wasm-bindgen = "=0.2.129"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+
+# The same vendored crates pdfcraft builds with.
+[patch.crates-io]
+hayro-interpret = { path = "../../../craft-apps/pdfcraft/vendor/hayro-interpret" }
+hayro = { path = "../../../craft-apps/pdfcraft/vendor/hayro" }
+hayro-syntax = { path = "../../../craft-apps/pdfcraft/vendor/hayro-syntax" }
+hayro-jbig2 = { path = "../../../craft-apps/pdfcraft/vendor/hayro-jbig2" }
+lopdf = { path = "../../../craft-apps/pdfcraft/vendor/lopdf" }
+
+[workspace]

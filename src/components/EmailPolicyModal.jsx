@@ -31,7 +31,7 @@ export default function EmailPolicyModal({ onClose }) {
         </div>
         <button
           onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+          className="mt-5 w-full rounded-xl bg-signal px-4 py-2.5 text-sm font-medium text-void transition-opacity hover:opacity-90"
         >
           Got it
         </button>

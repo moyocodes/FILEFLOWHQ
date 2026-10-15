@@ -11,7 +11,7 @@ export default function StampBadge({ formats = [], size = 'md' }) {
   return (
     <div
       className={[
-        'inline-flex items-center gap-1.5 rounded-full bg-panel font-mono shadow-card font-medium uppercase text-text-dim',
+        'inline-flex items-center gap-1.5 rounded-full bg-panel font-mono shadow-card font-normal uppercase text-text-dim',
         sizeClasses
       ].join(' ')}
     >

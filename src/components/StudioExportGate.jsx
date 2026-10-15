@@ -43,7 +43,7 @@ function loadPaystack() {
 
 /** Diagonal "FileFlowHQ" tiles, shown over the editor until the visitor has paid credits. */
 const WATERMARK = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="160"><text x="20" y="100" transform="rotate(-24 130 80)" font-family="Inter,Arial,sans-serif" font-size="26" font-weight="700" fill="#0e8f5c" fill-opacity="0.16">FileFlowHQ</text></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="160"><text x="20" y="100" transform="rotate(-24 130 80)" font-family="Inter,Arial,sans-serif" font-size="26" font-weight="500" fill="#3be698" fill-opacity="0.16">FileFlowHQ</text></svg>'
 )}")`
 
 /**
@@ -164,7 +164,7 @@ export default function StudioExportGate({ iframeRef, app }) {
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-signal-dim text-signal">
               <Lock className="h-5 w-5" />
             </span>
-            <h2 id="studio-pay-title" className="text-[1.05rem] font-semibold">
+            <h2 id="studio-pay-title" className="text-[1.05rem] font-medium">
               Save “{pending.name}”
             </h2>
             <p className="mt-2 text-[0.85rem] leading-relaxed text-text-dim">
@@ -174,7 +174,7 @@ export default function StudioExportGate({ iframeRef, app }) {
               </strong>
               , shared with every FileFlowHQ tool. Your document stays open while you pay.
             </p>
-            <label className="mt-4 block text-[0.75rem] font-medium text-text-dim">Email for your receipt</label>
+            <label className="mt-4 block text-[0.75rem] font-normal text-text-dim">Email for your receipt</label>
             <input
               type="email"
               required
@@ -187,7 +187,7 @@ export default function StudioExportGate({ iframeRef, app }) {
             <button
               type="submit"
               disabled={busy}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-signal px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-70 dark:text-void"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-signal px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-70 dark:text-void"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {busy ? 'Waiting for Paystack…' : `Pay ${price} and save`}

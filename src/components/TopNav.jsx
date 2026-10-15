@@ -11,7 +11,7 @@ import { InstallButton } from './InstallPrompt.jsx'
 import ExtensionButton from './ExtensionButton.jsx'
 
 /** Full wordmark; the light-mode file has dark lettering, the original has white. */
-export function Wordmark({ className = 'h-8' }) {
+export function Wordmark({ className = 'h-11' }) {
   return (
     <>
       <img src="/logofull-light.svg" alt="FileFlowHQ" width="248" height="63" className={`${className} w-auto dark:hidden`} />
@@ -25,7 +25,7 @@ function ToolLinks({ onNavigate, columns = true }) {
     <div className={columns ? 'grid gap-8 md:grid-cols-3' : 'space-y-6'}>
       {categories.map((cat) => (
         <div key={cat.id}>
-          <div className="mb-2 px-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-text-dim">{cat.label}</div>
+          <div className="mb-2 px-2.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-text-dim">{cat.label}</div>
           <ul className="space-y-0.5">
             {tools
               .filter((t) => t.category === cat.id)
@@ -47,7 +47,7 @@ function ToolLinks({ onNavigate, columns = true }) {
                         <Icon className="h-4 w-4" strokeWidth={1.9} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-[0.85rem] font-medium text-text">{t.name}</span>
+                        <span className="block truncate text-[0.85rem] font-normal text-text">{t.name}</span>
                         <span className="block truncate text-[0.72rem] text-text-dim">{t.tagline}</span>
                       </span>
                     </NavLink>
@@ -69,7 +69,7 @@ function StudioLinks({ onNavigate }) {
         to="/studio"
         end
         onClick={onNavigate}
-        className="mb-2 block px-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-text-dim hover:text-text"
+        className="mb-2 block px-2.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-text-dim hover:text-text"
       >
         Studio editors
       </NavLink>
@@ -92,7 +92,7 @@ function StudioLinks({ onNavigate }) {
                   <Icon className="h-4 w-4" strokeWidth={1.9} />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[0.85rem] font-medium text-text">{app.name}</span>
+                  <span className="block truncate text-[0.85rem] font-normal text-text">{app.name}</span>
                   <span className="block truncate text-[0.72rem] text-text-dim">{app.tagline}</span>
                 </span>
               </NavLink>
@@ -107,8 +107,8 @@ function StudioLinks({ onNavigate }) {
 /**
  * Sticky top navigation: wordmark, secondary links, and a "Tools" button that
  * opens a right-hand side drawer listing every tool by category (the same
- * drawer on desktop and mobile). Borderless — it lifts off the page with a
- * soft shadow once you scroll.
+ * drawer on desktop and mobile). Transparent at the top of the page; once you
+ * scroll it gets a frosted background and lifts off with a soft shadow.
  */
 export default function TopNav() {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -143,30 +143,24 @@ export default function TopNav() {
   }, [drawerOpen])
 
   const link =
-    'rounded-full px-3.5 py-2 text-[0.85rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text'
-
+    'rounded-full px-3.5 py-2 text-[0.88rem] font-medium text-text transition-colors hover:bg-panel-raised'
   return (
     <header
       className={[
-        'sticky top-0 z-30 transition-shadow duration-200',
-        'bg-[color-mix(in_srgb,var(--void)_85%,transparent)] backdrop-blur-lg',
-        scrolled ? 'shadow-[0_8px_30px_-12px_rgba(16,24,40,0.18)]' : ''
+        'sticky top-0 z-30 transition-[background-color,box-shadow] duration-300',
+        scrolled
+          ? 'bg-[color-mix(in_srgb,var(--void)_85%,transparent)] shadow-[0_8px_30px_-12px_rgba(16,24,40,0.18)] backdrop-blur-lg'
+          : 'bg-transparent'
       ].join(' ')}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" aria-label="FileFlowHQ home" className="flex items-center">
-          <Wordmark className="h-8" />
+          <Wordmark className="h-10 sm:h-11" />
         </Link>
 
         <nav className="flex items-center gap-1" aria-label="Main">
           <NavLink to="/studio" className={`${link} hidden md:inline-flex`}>
             Studio
-          </NavLink>
-          <NavLink to="/contact" className={`${link} hidden md:inline-flex`}>
-            Contact
-          </NavLink>
-          <NavLink to="/privacy" className={`${link} hidden md:inline-flex`}>
-            Privacy
           </NavLink>
           <span className="hidden md:inline-flex">
             <ExtensionButton />
@@ -181,7 +175,7 @@ export default function TopNav() {
             onClick={() => setDrawerOpen(true)}
             aria-expanded={drawerOpen}
             aria-controls="tools-drawer"
-            className="inline-flex items-center gap-2 rounded-full bg-signal px-4 py-2.5 text-[0.85rem] font-semibold text-white shadow-[0_10px_24px_-10px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void sm:px-5"
+            className="inline-flex items-center gap-2 rounded-full bg-signal px-4 py-2.5 text-[0.85rem] font-medium text-white shadow-[0_10px_24px_-10px_var(--signal)] transition-transform hover:-translate-y-0.5 dark:text-void sm:px-5"
           >
             <Menu className="h-4 w-4" strokeWidth={2.25} />
             Tools
@@ -218,7 +212,7 @@ export default function TopNav() {
               className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col bg-void shadow-[0_0_80px_-20px_rgba(0,0,0,0.5)]"
             >
               <div className="flex h-16 flex-shrink-0 items-center justify-between px-5">
-                <span className="text-[1rem] font-semibold">All tools</span>
+                <span className="text-[1rem] font-medium">All tools</span>
                 <button
                   ref={closeRef}
                   onClick={() => setDrawerOpen(false)}
@@ -233,13 +227,13 @@ export default function TopNav() {
                 <StudioLinks onNavigate={() => setDrawerOpen(false)} />
               </div>
               <div className="flex flex-shrink-0 flex-wrap gap-2 px-5 pb-6 pt-3 md:hidden">
-                <Link to="/studio" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-medium">
+                <Link to="/studio" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-normal">
                   Studio
                 </Link>
-                <Link to="/contact" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-medium">
+                <Link to="/contact" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-normal">
                   Contact
                 </Link>
-                <Link to="/privacy" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-medium">
+                <Link to="/privacy" className="rounded-full bg-panel-raised px-4 py-2 text-sm font-normal">
                   Privacy
                 </Link>
                 <ExtensionButton />

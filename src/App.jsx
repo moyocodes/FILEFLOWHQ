@@ -29,7 +29,10 @@ import { trackView } from './utils/analytics.js'
  */
 function Shell() {
   const location = useLocation()
-  // A rebranded Studio editor has its own top bar (with Back); the site's nav and footer step aside.
+  // On any Studio editor the site's nav and footer step aside: the FileFlowHQ Studio bar
+  // (Studio.jsx) is the page's only bar.
+  const onEditor = studioApps.some((app) => location.pathname === studioPath(app))
+  // Rebranded editors render outside <main> (kept mounted, below); the others are routed in it.
   const current = studioApps.find((app) => app.branded && location.pathname === studioPath(app))
   const immersive = Boolean(current)
   // Rebranded editors opened this visit stay mounted (hidden) when the visitor goes elsewhere on
@@ -59,7 +62,7 @@ function Shell() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      {!immersive && <TopNav />}
+      {!onEditor && <TopNav />}
       <main className={immersive ? 'hidden' : 'flex-1'}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -84,7 +87,7 @@ function Shell() {
         const app = studioApps.find((a) => a.id === id)
         return <StudioAppPage key={id} app={app} active={current?.id === id} />
       })}
-      {!immersive && <SiteFooter />}
+      {!onEditor && <SiteFooter />}
 
       <PreviewModal />
       <EmailGateModal />

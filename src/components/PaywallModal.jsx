@@ -60,7 +60,7 @@ export default function PaywallModal() {
         >
           <X className="h-4 w-4" strokeWidth={2} />
         </button>
-        <h2 id="paywall-title" className="font-display text-[1.05rem] font-semibold tracking-wide">
+        <h2 id="paywall-title" className="font-display text-[1.05rem] font-medium tracking-wide">
           You've used your {pricing.freeUses} free conversions
         </h2>
         <p className="mt-2 text-[0.85rem] leading-relaxed text-text-dim">
@@ -83,7 +83,7 @@ export default function PaywallModal() {
         <button
           type="submit"
           disabled={busy}
-          className="mt-4 w-full rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-4 w-full rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {busy ? 'Opening Paystack…' : `Pay ${price} for ${pricing.packUses} more uses`}
         </button>

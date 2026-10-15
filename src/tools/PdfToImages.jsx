@@ -100,7 +100,7 @@ export default function usePdfToImages() {
         <div className="flex items-center gap-3 rounded-card border border-border bg-panel p-4">
           <PdfThumbnail file={file} className="h-16 w-12 flex-shrink-0" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{file.name}</p>
+            <p className="truncate text-sm font-normal">{file.name}</p>
             <p className="text-xs text-text-dim">Selected PDF</p>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function usePdfToImages() {
               </div>
             ))}
           </div>
-          <button onClick={downloadAllZip} className="text-sm font-medium text-signal hover:underline">
+          <button onClick={downloadAllZip} className="text-sm font-normal text-signal hover:underline">
             Download all pages as a .zip
           </button>
         </>
@@ -146,7 +146,7 @@ export default function usePdfToImages() {
               key={s}
               onClick={() => setScale(s)}
               className={[
-                'rounded px-3 py-1.5 text-sm font-medium',
+                'rounded px-3 py-1.5 text-sm font-normal',
                 scale === s ? 'bg-signal text-void' : 'bg-panel-raised text-text-dim'
               ].join(' ')}
             >
@@ -173,7 +173,7 @@ export default function usePdfToImages() {
       <button
         onClick={pages.length > 0 ? downloadAllZip : convert}
         disabled={isConverting || !file}
-        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-auto w-full flex-shrink-0 rounded bg-signal px-4 py-3 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {pages.length > 0 ? `Download ${pages.length} pages as .zip` : 'Split into images'}
       </button>

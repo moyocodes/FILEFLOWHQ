@@ -7,7 +7,7 @@ function FileChip({ name, size, label }) {
   return (
     <div className="min-w-0 flex-1 rounded-card border border-border bg-panel p-3">
       <p className="mb-1.5 font-mono text-[0.62rem] uppercase tracking-wide text-text-dim">{label}</p>
-      <p className="truncate text-sm font-medium">{name}</p>
+      <p className="truncate text-sm font-normal">{name}</p>
       <p className="mt-0.5 font-mono text-xs text-text-dim">
         {ext} {size != null ? `· ${formatBytes(size)}` : ''}
       </p>
@@ -37,7 +37,7 @@ export default function ResultCard({ beforeName, beforeSize, afterName, afterSiz
         transition={{ duration: 0.8, ease: 'easeOut' }}
         className="pointer-events-none absolute inset-0 bg-signal"
       />
-      <div className="relative mb-3 flex items-center gap-1.5 text-sm font-medium text-signal">
+      <div className="relative mb-3 flex items-center gap-1.5 text-sm font-normal text-signal">
         <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
         Done
       </div>

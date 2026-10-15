@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Maximize2,
   RotateCw,
+  ChevronDown,
   FileText,
   Image as ImageIcon,
   Aperture,
@@ -60,7 +61,7 @@ export function StudioHome() {
     <>
       <section className="relative overflow-hidden bg-gradient-to-b from-signal-dim to-transparent">
         <div className="mx-auto max-w-7xl px-4 pb-8 pt-8 sm:px-6 sm:pt-10 lg:px-8">
-          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-semibold leading-[1.15] tracking-tight">Studio</h1>
+          <h1 className="text-[clamp(1.6rem,3vw,2.3rem)] font-medium leading-[1.15] tracking-tight">Studio</h1>
           <p className="mt-2 max-w-[60ch] text-[0.95rem] leading-relaxed text-text-dim">
             {studioApps.length} full editors that run entirely in your browser. Your files stay on your device: nothing is
             uploaded. Best on a desktop or laptop.
@@ -83,13 +84,13 @@ export function StudioHome() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className="text-[0.95rem] font-semibold text-text">{app.name}</span>
-                      <span className="rounded-full bg-panel-raised px-2 py-0.5 text-[0.65rem] font-medium text-text-dim">
+                      <span className="text-[0.95rem] font-medium text-text">{app.name}</span>
+                      <span className="rounded-full bg-panel-raised px-2 py-0.5 text-[0.65rem] font-normal text-text-dim">
                         {app.status}
                       </span>
                     </span>
                     <span className="mt-1 block text-[0.83rem] leading-relaxed text-text-dim">{app.description}</span>
-                    <span className="mt-3 inline-flex items-center gap-1 text-[0.8rem] font-semibold text-signal">
+                    <span className="mt-3 inline-flex items-center gap-1 text-[0.8rem] font-medium text-signal">
                       Open <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </span>
                   </span>
@@ -114,9 +115,9 @@ function StudioLoader({ app, failed, slow }) {
       >
         <ArrowLeft className="h-4 w-4" />
       </Link>
-      <img src="/logo.svg" alt="" width="87" height="54" className={`h-10 w-auto ${failed ? 'opacity-40' : 'signal-dot'}`} />
+      <img src="/logo.svg" alt="" width="87" height="54" className={`h-16 w-auto ${failed ? 'opacity-40' : 'signal-dot'}`} />
       <div>
-        <p className="text-[1rem] font-semibold">{failed ? `${app.name} couldn't start` : `Opening ${app.name}…`}</p>
+        <p className="text-[1rem] font-medium">{failed ? `${app.name} couldn't start` : `Opening ${app.name}…`}</p>
         <p className="mt-1 max-w-[42ch] text-[0.82rem] leading-relaxed text-text-dim">
           {failed
             ? 'Your browser may not support WebGL2, or the download was interrupted.'
@@ -129,7 +130,7 @@ function StudioLoader({ app, failed, slow }) {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="inline-flex items-center gap-1.5 rounded-full bg-panel-raised px-4 py-2 text-[0.82rem] font-medium"
+          className="inline-flex items-center gap-1.5 rounded-full bg-panel-raised px-4 py-2 text-[0.82rem] font-normal"
         >
           <RotateCw className="h-3.5 w-3.5" /> Reload
         </button>
@@ -144,7 +145,6 @@ function StudioLoader({ app, failed, slow }) {
 }
 
 /** /studio/<id> — one editor, embedded full-height. */
-/** /studio/<id> — one editor, embedded full-height. */
 export function StudioAppPage({ app, active = true }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -158,8 +158,8 @@ export function StudioAppPage({ app, active = true }) {
   )
   const src = studioAppSrc(app, ORIGIN, app.branded ? { theme } : {})
 
-  // Rebranded editors report when they are running (`pdfcraft:ready`), and ask for Back and
-  // Full screen from their own top bar (`ffhq:action`). Others count as loaded on the frame's load.
+  // Rebranded editors report when they are running (`pdfcraft:ready`); an older PDF editor build
+  // may still ask for Back and Full screen (`ffhq:action`). Others count as loaded on the frame's load.
   useEffect(() => {
     if (!app.branded) return
     const onMessage = (event) => {
@@ -218,37 +218,98 @@ export function StudioAppPage({ app, active = true }) {
     </div>
   )
 
-  // Rebranded editors fill the window: their own top bar has Back and Full screen.
-  // Kept mounted while the visitor is elsewhere on the site (App.jsx), so open documents survive.
-  if (app.branded) return <div className={active ? 'flex h-[100dvh] flex-col' : 'hidden'}>{editor}</div>
-
+  // Every editor fills the window under the same FileFlowHQ Studio bar (the site's nav steps
+  // aside, App.jsx). Branded editors stay mounted while the visitor is elsewhere on the site, so
+  // their open documents survive.
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col">
-      <div className="mx-auto flex w-full max-w-7xl flex-shrink-0 items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
-        <Link
-          to="/studio"
-          aria-label="All editors"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-text"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[0.95rem] font-semibold">{app.name}</h1>
-          <p className="truncate text-[0.75rem] text-text-dim">
-            {app.status} · runs in your browser · <span className="md:hidden">best on desktop</span>
-            <span className="hidden md:inline">nothing is uploaded</span>
-          </p>
-        </div>
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-panel-raised px-3.5 py-2 text-[0.8rem] font-medium"
-        >
-          <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Full screen</span>
-        </a>
-      </div>
+    <div className={active ? 'flex h-[100dvh] flex-col' : 'hidden'}>
+      <StudioBar app={app} src={src} stage={stage} />
       {editor}
     </div>
+  )
+}
+
+/**
+ * The bar above every Studio editor: Back, the FileFlowHQ Studio logo, the editor's name (a
+ * switcher to the other editors) and Full screen. The same for every editor, so they read as one
+ * product whatever each editor looks like inside.
+ */
+function StudioBar({ app, src, stage }) {
+  const [switcher, setSwitcher] = useState(false)
+  const Icon = studioIcons[app.icon] || FileText
+  useEffect(() => {
+    if (!switcher) return
+    const close = (e) => e.key === 'Escape' && setSwitcher(false)
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [switcher])
+
+  const fullscreen = 'inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full bg-panel-raised px-3 text-[0.78rem] font-normal transition-colors hover:text-signal'
+  return (
+    <header className="relative z-30 flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-panel px-2 sm:px-3">
+      <Link
+        to="/studio"
+        aria-label="All editors"
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-text-dim transition-colors hover:bg-panel-raised hover:text-text"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Link>
+      <Link to="/studio" className="flex flex-shrink-0 items-center gap-2" aria-label="FileFlowHQ Studio">
+        <img src="/favicon.svg" alt="" width="24" height="24" className="h-6 w-6" />
+        <span className="hidden text-[0.88rem] font-medium sm:inline">
+          FileFlowHQ <span className="text-signal">Studio</span>
+        </span>
+      </Link>
+      <span className="hidden text-text-dim sm:inline">/</span>
+      <div className="relative min-w-0">
+        <button
+          type="button"
+          onClick={() => setSwitcher((v) => !v)}
+          aria-expanded={switcher}
+          className="flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.88rem] font-normal transition-colors hover:bg-panel-raised"
+        >
+          <Icon className="h-4 w-4 flex-shrink-0 text-signal" strokeWidth={1.9} />
+          <h1 className="truncate">{app.name}</h1>
+          <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-text-dim transition-transform ${switcher ? 'rotate-180' : ''}`} />
+        </button>
+        {switcher && (
+          <>
+            <button type="button" aria-label="Close" className="fixed inset-0 cursor-default" onClick={() => setSwitcher(false)} />
+            <ul className="absolute left-0 top-full z-10 mt-1.5 max-h-[70vh] w-64 overflow-y-auto rounded-2xl border border-border bg-panel p-1.5 shadow-lift">
+              {studioApps.map((other) => {
+                const OtherIcon = studioIcons[other.icon] || FileText
+                return (
+                  <li key={other.id}>
+                    <Link
+                      to={studioPath(other)}
+                      onClick={() => setSwitcher(false)}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[0.85rem] transition-colors hover:bg-panel-raised ${other.id === app.id ? 'text-signal' : ''}`}
+                    >
+                      <OtherIcon className="h-4 w-4 flex-shrink-0 text-signal" strokeWidth={1.9} />
+                      {other.name}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+      <span className="ml-auto hidden truncate text-[0.75rem] text-text-dim md:inline">Runs on your device · nothing is uploaded</span>
+      {app.branded ? (
+        // In place: on its own the editor can't save (saves go through this page).
+        <button
+          type="button"
+          onClick={() => (document.fullscreenElement ? document.exitFullscreen?.() : stage.current?.requestFullscreen?.())}
+          className={`${fullscreen} max-md:ml-auto`}
+        >
+          <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Full screen</span>
+        </button>
+      ) : (
+        <a href={src} target="_blank" rel="noreferrer" className={`${fullscreen} max-md:ml-auto`}>
+          <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Full screen</span>
+        </a>
+      )}
+    </header>
   )
 }

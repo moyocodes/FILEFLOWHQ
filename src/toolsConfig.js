@@ -43,30 +43,34 @@ export const tools = [
     category: 'images',
     path: '/tools/image-converter',
     name: 'Image Converter',
-    tagline: 'Convert between PNG, JPG, and WebP',
-    description: 'Convert images between PNG, JPG, and WebP right in your browser.',
+    tagline: 'HEIC, RAW, PSD, TIFF, PNG, JPG, WebP',
+    description: 'Convert any image, including iPhone HEIC, camera RAW and Photoshop PSD, with the Studio image engine.',
     icon: ImageIcon,
     component: useImageConverter,
-    formats: ['PNG', 'JPG', 'WEBP'],
-    seoTitle: 'Image Converter — PNG to JPG, JPG to PNG & WebP, Free Online',
+    formats: ['HEIC', 'RAW', 'PSD', 'TIFF', 'PNG', 'JPG', 'WEBP', 'AVIF'],
+    seoTitle: 'Image Converter — HEIC to JPG, RAW, PSD, PNG, WebP Free Online',
     seoDescription:
-      'Free online image converter. Convert PNG to JPG, JPG to PNG, and to/from WebP instantly in your browser. No uploads, no watermarks, 100% private.',
-    keywords: 'png to jpg, jpg to png, webp converter, image converter, convert png to jpg free',
+      'Convert HEIC to JPG, camera RAW (DNG, CR2, NEF, ARW) to JPG, PSD to PNG, TIFF, WebP and AVIF for free, right in your browser. No uploads, no sign-up.',
+    keywords: 'heic to jpg, raw to jpg, psd to png, png to jpg, jpg to png, webp converter, tiff converter, image converter free',
     intro:
-      'Convert images between PNG, JPG, and WebP for free, directly in your browser. Your files never leave your device — conversion runs locally, so there are no uploads, no servers, and no tracking.',
+      'Convert any image for free: iPhone HEIC photos, camera RAW files, Photoshop PSDs, TIFF, HDR and everyday PNG, JPG and WebP, to PNG, JPEG, WebP, AVIF, TIFF, PSD, GIF or BMP. The Studio image engine, the same as our Photo Editor, runs on your device, so nothing is uploaded.',
     howTo: [
-      'Drag and drop your image (PNG, JPG, or WebP) into the box above, or click to browse.',
-      'Choose the output format you want to convert to.',
-      'Adjust quality if needed, then download your converted image instantly.',
+      'Drop one or more images into the box above.',
+      'Pick the output format, and the quality for JPEG, WebP or AVIF.',
+      'Download each image, or all of them at once.',
     ],
     faq: [
       {
-        q: 'How do I convert PNG to JPG for free?',
-        a: 'Upload your PNG above, choose JPG as the output format, and download the result. It is completely free with no watermark, and the file is processed locally in your browser.',
+        q: 'How do I convert HEIC to JPG?',
+        a: 'Drop your iPhone HEIC photos above, choose JPEG, and download. It works in any browser, not just Safari.',
+      },
+      {
+        q: 'Can I convert camera RAW files?',
+        a: 'Yes: DNG, Canon CR2/CR3, Nikon NEF, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2 and Pentax PEF are developed and saved as JPEG, PNG, TIFF and more.',
       },
       {
         q: 'Are my images uploaded to a server?',
-        a: 'No. FileFlowHQ converts images entirely inside your browser. Nothing is ever sent to a server, so your images stay private.',
+        a: 'No. The Studio image engine runs inside your browser (it downloads once, about 3.8 MB), so your images never leave your device. You can also strip camera and location data from the output.',
       },
       {
         q: 'What is the difference between PNG, JPG, and WebP?',
@@ -257,43 +261,46 @@ export const tools = [
   {
     id: 'pdf-to-word',
     category: 'pdf',
-    usesServer: true, // sends data to a server (excluded from the 'never upload' count)
     path: '/tools/pdf-to-word',
     name: 'PDF to Word',
-    tagline: 'Editable .docx, or plain .txt extraction',
+    tagline: 'Word, PowerPoint, HTML, RTF or text',
     description:
-      'Convert a PDF into an editable Word document — text styling, tables, lists, links, and images — or pull out plain text.',
+      'Turn a PDF into an editable Word, PowerPoint, HTML or RTF file with the Studio PDF engine, or pull out plain text.',
     icon: FileText,
     component: usePdfToWord,
-    formats: ['PDF', 'DOCX', 'TXT'],
-    seoTitle: 'PDF to Word — Convert PDF to Editable DOCX or Plain Text Free',
+    formats: ['PDF', 'DOCX', 'PPTX', 'HTML', 'RTF', 'TXT'],
+    seoTitle: 'PDF to Word — Convert PDF to Editable DOCX, PowerPoint or Text Free',
     seoDescription:
-      'Convert a PDF into an editable Word (.docx) document, or extract plain text as a .txt file, for free. No sign-up.',
+      'Convert a PDF into an editable Word (.docx), PowerPoint (.pptx), HTML or RTF file, or extract plain text, for free. Runs in your browser, no uploads, no sign-up.',
     keywords:
-      'pdf to word, pdf to docx, convert pdf to word, pdf to editable document, pdf to text, extract text from pdf, pdf to txt',
+      'pdf to word, pdf to docx, convert pdf to word, pdf to powerpoint, pdf to pptx, pdf to html, pdf to rtf, pdf to text, extract text from pdf, pdf to txt',
     intro:
-      'Convert a PDF into an editable Word document, or extract its plain text as a .txt file, for free. Word conversion (up to 4.5 MB) is done securely via Adobe PDF Services and deleted from Adobe\'s servers after conversion; plain-text extraction runs entirely on your device.',
+      'Convert a PDF into an editable Word document, PowerPoint deck, web page or RTF file, or extract its plain text, for free. Conversion uses the Studio PDF engine, the same processor as our PDF Editor, running entirely in your browser: your PDF is never uploaded and there is no file size limit.',
     howTo: [
       'Drop your PDF into the box above.',
-      'Choose Word (.docx) or Plain text (.txt) in the panel on the right.',
+      'Choose Word, PowerPoint, Web page, Rich text or Plain text in the panel on the right.',
       'Download the converted file.',
     ],
     faq: [
       {
         q: 'How do I convert a PDF to an editable Word document?',
-        a: 'Upload your PDF, choose "Word (.docx)", and download a file containing the extracted text, tables, and layout, ready to edit in Word or Google Docs.',
+        a: 'Upload your PDF, choose "Word (.docx)", and download a file with real paragraphs, headings, bold and italic text, colours, tables and images, ready to edit in Word or Google Docs.',
+      },
+      {
+        q: 'Can I convert a PDF to PowerPoint?',
+        a: 'Yes. Choose "PowerPoint (.pptx)" and each PDF page becomes an editable slide.',
       },
       {
         q: 'How do I just extract the text from a PDF?',
-        a: 'Choose "Plain text (.txt)" instead of Word — it pulls the words out in reading order, with no formatting, and runs entirely in your browser.',
+        a: 'Choose "Plain text (.txt)" — it pulls the words out in reading order, with no formatting.',
       },
       {
         q: 'Is the formatting preserved?',
-        a: 'For Word output, text styling, tables, and layout are reconstructed automatically (complex or scanned layouts may be simplified). Plain text output has no formatting at all — just the words.',
+        a: 'Paragraphs, headings, inline bold and italic, colours, tables and images are rebuilt. Scanned (image-only) PDFs have no text to extract.',
       },
       {
         q: 'Is my file uploaded anywhere?',
-        a: "Only for Word output — unlike most tools on FileFlowHQ, that mode uploads your PDF to Adobe's PDF Services API to perform the conversion, then the file is deleted from Adobe's servers (limited to 4.5 MB). Plain-text output never leaves your device.",
+        a: 'No. The Studio PDF engine runs inside your browser (it downloads once, about 2.6 MB), so your PDF never leaves your device.',
       },
     ],
   },
@@ -302,34 +309,38 @@ export const tools = [
     category: 'pdf',
     path: '/tools/word-to-pdf',
     name: 'Word to PDF',
-    tagline: 'Convert .docx to PDF',
-    description: 'Convert a Word (.docx) document into a PDF, preserving text, lists, tables, and images.',
+    tagline: 'Word, ODT, RTF, Markdown to PDF',
+    description: 'Convert Word, ODT, RTF, Markdown, HTML or text documents to PDF with real page layout, using the Studio Word engine.',
     icon: FileOutput,
     component: useDocxToPdf,
-    formats: ['DOCX', 'PDF'],
-    seoTitle: 'Word to PDF — Convert DOCX to PDF Free Online',
+    formats: ['DOCX', 'DOC', 'ODT', 'RTF', 'MD', 'PDF'],
+    seoTitle: 'Word to PDF — Convert DOCX, DOC, ODT or RTF to PDF Free Online',
     seoDescription:
-      'Convert Word documents to PDF for free, right in your browser. Preserve text, lists, tables, and images. No uploads, no sign-up, 100% private.',
-    keywords: 'word to pdf, docx to pdf, convert word to pdf, convert docx to pdf online',
+      'Convert Word documents (.docx, .doc), OpenDocument (.odt), RTF, Markdown and HTML to PDF for free, right in your browser, with true page layout. No uploads, no sign-up.',
+    keywords: 'word to pdf, docx to pdf, doc to pdf, odt to pdf, rtf to pdf, markdown to pdf, convert word to pdf online',
     intro:
-      'Convert a Word (.docx) document into a PDF for free, directly in your browser. Your file never leaves your device — conversion runs locally, so there are no uploads, no servers, and no tracking.',
+      'Convert a Word document (.docx or .doc), OpenDocument text, RTF, Markdown, HTML or plain text into a PDF for free. The Studio Word engine, the same page layout as our Word Processor, runs entirely in your browser, so your file never leaves your device.',
     howTo: [
-      'Drop your .docx file into the box above.',
-      'The document is parsed and laid out on PDF pages automatically.',
-      'Download your converted PDF instantly.',
+      'Drop your document into the box above.',
+      'The Studio Word engine lays it out page by page, as Word would.',
+      'Download your PDF.',
     ],
     faq: [
       {
         q: 'How do I convert a Word document to PDF for free?',
-        a: 'Upload your .docx file above and download the generated PDF. It is free, with no watermark, and the file is processed locally in your browser.',
+        a: 'Upload your file above and download the PDF. It is free, with no watermark, and the file is processed on your device.',
       },
       {
         q: 'Is the formatting preserved?',
-        a: 'Text, headings, lists, tables, and images are reconstructed and laid out on standard A4 pages. Complex layouts like columns or precise positioning are approximated.',
+        a: 'Yes: fonts, headings, lists, tables, images, headers and footers, columns and your page size are laid out by a real word-processor layout engine.',
+      },
+      {
+        q: 'Which file types can I convert?',
+        a: 'Word (.docx and .doc), OpenDocument text (.odt), Rich Text (.rtf), Markdown (.md), HTML and plain text (.txt).',
       },
       {
         q: 'Is my document uploaded to a server?',
-        a: 'No. FileFlowHQ converts the document entirely inside your browser. Nothing is ever sent to a server, so your file stays private.',
+        a: 'No. The Studio Word engine runs inside your browser (it downloads once, about 5 MB), so your file stays private.',
       },
     ],
   },

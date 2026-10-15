@@ -57,7 +57,7 @@ export default function useUrlShortener() {
         </p>
 
         <div>
-          <label className="mb-1.5 block font-mono text-xs font-medium uppercase tracking-wide text-text-dim">
+          <label className="mb-1.5 block font-mono text-xs font-normal uppercase tracking-wide text-text-dim">
             Long URL
           </label>
           <textarea
@@ -79,19 +79,19 @@ export default function useUrlShortener() {
 
         {shortUrl && (
           <div className="rounded-card border border-signal bg-signal-dim p-4">
-            <p className="mb-1.5 font-mono text-xs font-medium uppercase tracking-wide text-text-dim">Short link</p>
+            <p className="mb-1.5 font-mono text-xs font-normal uppercase tracking-wide text-text-dim">Short link</p>
             <div className="flex flex-wrap items-center gap-3">
               <a
                 href={shortUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all font-mono text-sm font-semibold text-signal underline"
+                className="break-all font-mono text-sm font-medium text-signal underline"
               >
                 {shortUrl}
               </a>
               <button
                 onClick={copy}
-                className="flex items-center justify-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium"
+                className="flex items-center justify-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-normal"
               >
                 <Copy className="h-3.5 w-3.5" strokeWidth={2} />
                 {copied ? 'Copied!' : 'Copy link'}
@@ -110,7 +110,7 @@ export default function useUrlShortener() {
         <button
           onClick={shorten}
           disabled={loading}
-          className="flex items-center justify-center gap-1.5 rounded bg-signal px-4 py-2 text-sm font-semibold text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 rounded bg-signal px-4 py-2 text-sm font-medium text-void transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
           {loading ? 'Shortening…' : 'Shorten URL'}
@@ -119,7 +119,7 @@ export default function useUrlShortener() {
         <button
           onClick={copy}
           disabled={!shortUrl}
-          className="flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-normal disabled:opacity-40"
         >
           <Copy className="h-3.5 w-3.5" strokeWidth={2} />
           {copied ? 'Copied!' : 'Copy link'}
@@ -130,7 +130,7 @@ export default function useUrlShortener() {
           rel="noopener noreferrer"
           aria-disabled={!shortUrl}
           className={[
-            'flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-medium',
+            'flex items-center justify-center gap-1.5 rounded border border-border px-4 py-2 text-sm font-normal',
             shortUrl ? '' : 'pointer-events-none opacity-40',
           ].join(' ')}
         >

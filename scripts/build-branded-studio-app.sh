@@ -5,7 +5,8 @@
 #   e.g. scripts/build-branded-studio-app.sh pdf-editor pdfcraft v0.7.1
 #
 # Expects the upstream source at ~/Developer/craft-apps/<repo> (override with CRAFT_SRC).
-# Checks out <tag>, applies studio/patches/<repo>.patch, builds the web app with trunk,
+# Checks out <tag>, applies studio/patches/<repo>.patch, adds the shared brand component
+# (studio/brand/ffhq_brand/ into the UI crate, UI_CRATE=crates/ui-egui by default), builds the web app with trunk,
 # and copies the result (index.html renamed to app.html, plus the upstream LICENSE/NOTICE
 # files the licenses require us to keep) into studio-builds/<id>/.
 #
@@ -28,6 +29,8 @@ git -C "$SRC" reset -q --hard
 git -C "$SRC" clean -fdq
 git -C "$SRC" checkout -q -B fileflowhq "$TAG"
 git -C "$SRC" apply "$PATCH"
+# The shared FileFlowHQ brand component (studio/brand/ffhq_brand/), kept out of the patches.
+cp -R "$ROOT/studio/brand/ffhq_brand" "$SRC/${UI_CRATE:-crates/ui-egui}/src/"
 
 (cd "$SRC/apps/$REPO-web" && CRAFT_FONTS_DIR=${CRAFT_FONTS_DIR:-$(dirname "$SRC")/craft-fonts} trunk build --release)
 

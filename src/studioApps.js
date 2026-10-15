@@ -20,7 +20,7 @@ export const studioApps = [
     repo: 'pdfcraft',
     // Rebranded from source: upstream v0.7.1 + studio/patches/pdfcraft.patch, built into
     // studio-builds/pdf-editor/ by scripts/build-branded-studio-app.sh. Bump the suffix on rebuilds.
-    version: '0.7.1-ffhq.7',
+    version: '0.7.1-ffhq.9',
     branded: true,
   },
   {
@@ -31,7 +31,9 @@ export const studioApps = [
     icon: 'Image',
     status: 'Early alpha',
     repo: 'photocraft',
-    version: '0.8.2',
+    // Rebranded: upstream v0.8.2 + studio/patches/photocraft.patch (see pdf-editor).
+    version: '0.8.2-ffhq.2',
+    branded: true,
   },
   {
     id: 'raw-editor',
@@ -83,7 +85,8 @@ export const studioApps = [
     icon: 'AudioLines',
     status: 'In development',
     repo: 'soundcraft',
-    version: '0.6.1',
+    version: '0.6.1-ffhq.2',
+    branded: true,
   },
   {
     id: 'layout-editor',
@@ -113,7 +116,8 @@ export const studioApps = [
     icon: 'FileType',
     status: 'In development',
     repo: 'wordcraft',
-    version: '0.6.1',
+    version: '0.6.1-ffhq.1',
+    branded: true,
   },
   {
     id: 'slides',

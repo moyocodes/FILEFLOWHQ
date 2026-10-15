@@ -68,7 +68,7 @@ function Card({ title, icon: Icon, description, action, children, className = ''
       {(title || action) && (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-[1rem] font-semibold">
+            <h2 className="flex items-center gap-2 text-[1rem] font-medium">
               {Icon && <Icon className="h-4 w-4 text-signal" strokeWidth={2} aria-hidden="true" />}
               {title}
             </h2>
@@ -85,7 +85,7 @@ function Card({ title, icon: Icon, description, action, children, className = ''
 function Kpi({ icon: Icon, label, value, info }) {
   return (
     <div className="rounded-card bg-panel p-4 shadow-card" title={info}>
-      <p className="flex items-center gap-1.5 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-text-dim">
+      <p className="flex items-center gap-1.5 text-[0.72rem] font-normal uppercase tracking-[0.08em] text-text-dim">
         <Icon className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={2} aria-hidden="true" />
         {label}
       </p>
@@ -93,7 +93,7 @@ function Kpi({ icon: Icon, label, value, info }) {
         key={value}
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mt-1 text-[1.8rem] font-bold tabular-nums tracking-tight"
+        className="mt-1 text-[1.8rem] font-semibold tabular-nums tracking-tight"
       >
         {value}
       </motion.p>
@@ -195,7 +195,7 @@ function LineChart({ series }) {
           className="pointer-events-none absolute top-2 min-w-[150px] rounded-xl bg-panel px-3 py-2 text-xs shadow-lift"
           style={{ left: Math.min(Math.max(x(hover) - 75, 0), w - 160) }}
         >
-          <p className="mb-1 font-semibold">{fmtDay(hs.date)}</p>
+          <p className="mb-1 font-medium">{fmtDay(hs.date)}</p>
           {SERIES.map((s) => (
             <p key={s.key} className="flex items-center gap-1.5 text-text-dim">
               <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
@@ -221,7 +221,7 @@ function BarList({ rows, empty = 'No data yet.', color = 'var(--series-views)' }
               {r.icon}
               {r.label}
             </span>
-            <span className="font-semibold tabular-nums">{r.display ?? r.n.toLocaleString()}</span>
+            <span className="font-medium tabular-nums">{r.display ?? r.n.toLocaleString()}</span>
           </div>
           <div className="mt-1 h-2 rounded-full bg-panel-raised">
             <motion.div
@@ -328,7 +328,7 @@ function WeekSummary({ week }) {
         {up ? <TrendingUp className="h-4 w-4" aria-hidden="true" /> : <TrendingDown className="h-4 w-4" aria-hidden="true" />}
       </span>
       <p className="text-[1rem] leading-snug">
-        <span className="mr-2 align-middle text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-dim">This week</span>
+        <span className="mr-2 align-middle text-[0.68rem] font-medium uppercase tracking-[0.12em] text-text-dim">This week</span>
         {parts.join(' ')}
       </p>
     </motion.div>
@@ -367,7 +367,7 @@ function TokenGate({ onToken, error }) {
   return (
     <div className="mx-auto max-w-md px-4 py-24">
       <div className="rounded-card bg-panel p-7 shadow-lift">
-        <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
         <p className="mt-1 text-[0.9rem] text-text-dim">Paste the ANALYTICS_TOKEN you set in Vercel. It's kept in this browser only.</p>
         <form
           className="mt-5 flex gap-2"
@@ -384,7 +384,7 @@ function TokenGate({ onToken, error }) {
             placeholder="Access token"
             className="min-w-0 flex-1 rounded-full bg-panel-raised px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-signal"
           />
-          <button className="rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-white dark:text-void">Open</button>
+          <button className="rounded-full bg-signal px-5 py-2.5 text-sm font-medium text-white dark:text-void">Open</button>
         </form>
         {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
@@ -474,8 +474,8 @@ export default function StatsDashboard() {
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-signal">Private</p>
-          <h1 className="text-[clamp(1.8rem,3.5vw,2.4rem)] font-semibold tracking-tight">Analytics</h1>
+          <p className="text-[0.75rem] font-medium uppercase tracking-[0.16em] text-signal">Private</p>
+          <h1 className="text-[clamp(1.8rem,3.5vw,2.4rem)] font-medium tracking-tight">Analytics</h1>
           <p className="text-[0.85rem] text-text-dim">Cookie-free: no IPs stored, bots and refreshes within 30 minutes not counted.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -496,7 +496,7 @@ export default function StatsDashboard() {
               onClick={() =>
                 csvDownload(`fileflowhq-daily-${days}d.csv`, data.series, ['date', 'views', 'uploads', 'downloads'])
               }
-              className="inline-flex items-center gap-1.5 rounded-full bg-panel px-3.5 py-2 text-[0.8rem] font-medium shadow-card"
+              className="inline-flex items-center gap-1.5 rounded-full bg-panel px-3.5 py-2 text-[0.8rem] font-normal shadow-card"
             >
               <Download className="h-3.5 w-3.5" aria-hidden="true" /> Daily CSV
             </button>
@@ -510,7 +510,7 @@ export default function StatsDashboard() {
                   ['tool', 'views', 'files_added', 'downloads', 'errors', 'download_rate']
                 )
               }
-              className="inline-flex items-center gap-1.5 rounded-full bg-panel px-3.5 py-2 text-[0.8rem] font-medium shadow-card"
+              className="inline-flex items-center gap-1.5 rounded-full bg-panel px-3.5 py-2 text-[0.8rem] font-normal shadow-card"
             >
               <Download className="h-3.5 w-3.5" aria-hidden="true" /> Tools CSV
             </button>
@@ -522,7 +522,7 @@ export default function StatsDashboard() {
                 role="radio"
                 aria-checked={days === d}
                 onClick={() => setDays(d)}
-                className={`relative rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium ${days === d ? 'text-white dark:text-void' : 'text-text-dim hover:text-text'}`}
+                className={`relative rounded-full px-3.5 py-1.5 text-[0.8rem] font-normal ${days === d ? 'text-white dark:text-void' : 'text-text-dim hover:text-text'}`}
               >
                 {days === d && (
                   <motion.span layoutId="range" className="absolute inset-0 rounded-full bg-signal" transition={{ type: 'spring', stiffness: 400, damping: 32 }} />
@@ -561,7 +561,7 @@ export default function StatsDashboard() {
               <button
                 onClick={() => setTable(!table)}
                 aria-pressed={table}
-                className="inline-flex items-center gap-1.5 rounded-full bg-panel-raised px-3 py-1.5 text-xs font-medium"
+                className="inline-flex items-center gap-1.5 rounded-full bg-panel-raised px-3 py-1.5 text-xs font-normal"
               >
                 <Table2 className="h-3.5 w-3.5" aria-hidden="true" /> {table ? 'Chart' : 'Table'}
               </button>
@@ -572,9 +572,9 @@ export default function StatsDashboard() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-panel text-left text-text-dim">
                     <tr>
-                      <th className="py-1.5 font-medium">Date</th>
+                      <th className="py-1.5 font-normal">Date</th>
                       {SERIES.map((s) => (
-                        <th key={s.key} className="text-right font-medium">
+                        <th key={s.key} className="text-right font-normal">
                           {s.label}
                         </th>
                       ))}
@@ -604,12 +604,12 @@ export default function StatsDashboard() {
               <table className="w-full min-w-[36rem] text-sm">
                 <thead className="text-left text-text-dim">
                   <tr>
-                    <th className="py-2 font-medium">Tool</th>
-                    <th className="text-right font-medium">Views</th>
-                    <th className="text-right font-medium">Files added</th>
-                    <th className="text-right font-medium">Downloads</th>
-                    <th className="text-right font-medium">Errors</th>
-                    <th className="text-right font-medium">Download rate</th>
+                    <th className="py-2 font-normal">Tool</th>
+                    <th className="text-right font-normal">Views</th>
+                    <th className="text-right font-normal">Files added</th>
+                    <th className="text-right font-normal">Downloads</th>
+                    <th className="text-right font-normal">Errors</th>
+                    <th className="text-right font-normal">Download rate</th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -624,7 +624,7 @@ export default function StatsDashboard() {
                         className="odd:bg-panel-raised/50"
                       >
                         <td className="py-2">
-                          <span className="flex items-center gap-2 font-medium">
+                          <span className="flex items-center gap-2 font-normal">
                             <span className="grid h-7 w-7 place-items-center rounded-lg bg-signal-dim text-signal">
                               <Icon className="h-3.5 w-3.5" />
                             </span>

@@ -20,7 +20,7 @@ index 46b3a25..d28342c 100644
    </head>
    <body>
 diff --git a/apps/pdfcraft-web/src/main.rs b/apps/pdfcraft-web/src/main.rs
-index a46a467..49c0338 100644
+index a46a467..f84ca3a 100644
 --- a/apps/pdfcraft-web/src/main.rs
 +++ b/apps/pdfcraft-web/src/main.rs
 @@ -1,4 +1,4 @@
@@ -49,15 +49,21 @@ index a46a467..49c0338 100644
                                      // Shown in the app too, not only in the console (#173).
                                      if let Ok(mut q) = failed.lock() {
                                          q.push((name, e));
-@@ -54,21 +58,28 @@ fn main() {
+@@ -53,22 +57,33 @@ fn main() {
+                     }
                      // eframe never raises a close request on a browser reload or tab close, so `guard_quit` never
                      // prompts; ask the browser to confirm instead while a document has unsaved work (#812).
-                     warn_before_unload(app.unsaved_flag.clone());
+-                    warn_before_unload(app.unsaved_flag.clone());
 -                    // `?host=parent`: a same-origin page embedding PdfCraft in an iframe (such
 -                    // as the Nextcloud app) passes files in and takes saves back (`host` below).
 -                    if query_param("host").as_deref() == Some("parent")
 -                        && let Some(bridge) = host::Bridge::new()
 -                    {
++                    // FileFlowHQ: embedded, the page keeps open documents across a reload
++                    // (`ffhq:snapshot`), so only the bare editor needs the warning.
++                    if host::Bridge::new().is_none() {
++                        warn_before_unload(app.unsaved_flag.clone());
++                    }
 +                    // FileFlowHQ: files only leave the editor through the fileflowhq.com page that
 +                    // embeds it (same origin), which takes payment first. Opened on its own, the
 +                    // editor works but can't save or export.
@@ -85,7 +91,7 @@ index a46a467..49c0338 100644
                          bridge.post_ready();
                      }
                      Ok(Box::new(app))
-@@ -169,6 +180,34 @@ mod host {
+@@ -169,6 +184,34 @@ mod host {
          }
  
          /// The app couldn't start (no WebGL, for example): let the parent say so.
@@ -120,7 +126,7 @@ index a46a467..49c0338 100644
          pub fn post_failed(&self, error: &str) {
              if let Some(m) = message(&[("type", "pdfcraft:failed".into()), ("error", error.into())]) {
                  let _ = self.post(&m, None);
-@@ -207,6 +246,7 @@ mod host {
+@@ -207,6 +250,7 @@ mod host {
              }
          }
  
@@ -128,7 +134,7 @@ index a46a467..49c0338 100644
          pub fn save_fn(&self) -> pdfcraft_ui_egui::HostSaveFn {
              let bridge = self.clone();
              Box::new(move |name: &str, bytes: &[u8], save_as: bool| {
-@@ -218,6 +258,18 @@ mod host {
+@@ -218,6 +262,18 @@ mod host {
              })
          }
  
@@ -5629,6 +5635,309 @@ index 15f617c..02f16b2 100644
  /// XFA's, not Acrobat JavaScript): give them one that runs the script by the field's SOM path.
  pub(crate) fn mark_script_buttons(doc: &pdfcraft_cos::Document, fields: &mut [pdfcraft_forms::Field]) {
      for f in fields.iter_mut() {
+diff --git a/crates/export/src/lib.rs b/crates/export/src/lib.rs
+index 52836a0..176c758 100644
+--- a/crates/export/src/lib.rs
++++ b/crates/export/src/lib.rs
+@@ -73,9 +73,18 @@ pub struct Table {
+     pub rows: Vec<Vec<Cell>>,
+ }
+ 
++/// A styled piece of a paragraph: the block it comes from (size, bold, italic, colour) and its
++/// text, with the separator joining it to the previous run already applied.
++struct Run<'a> {
++    text: String,
++    b: &'a Block,
++}
++
+ /// What goes into the output, in order.
+ enum Item<'a> {
+-    Para(&'a Block, u8),
++    /// One paragraph of one or more runs (a sentence with a bold phrase is three blocks), and its
++    /// heading level.
++    Para(Vec<Run<'a>>, u8),
+     /// Owned: tables are detected per page inside [`items`], so they cannot borrow.
+     Table(Table),
+     Img(&'a Image),
+@@ -297,6 +306,121 @@ pub(crate) fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
+     (out, consumed)
+ }
+ 
++/// A list marker ("•", "-", "1.", "a)") starts its own paragraph.
++fn starts_list_item(text: &str) -> bool {
++    let t = text.trim_start();
++    let mut chars = t.chars();
++    match chars.next() {
++        Some('•' | '◦' | '▪' | '‣' | '·' | '–' | '—' | '-' | '*') => chars.next().is_some_and(char::is_whitespace),
++        Some(c) if c.is_ascii_alphanumeric() => {
++            let head: String = t.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
++            head.len() <= 3 && t[head.len()..].starts_with(['.', ')']) && t[head.len() + 1..].starts_with(char::is_whitespace)
++        }
++        _ => false,
++    }
++}
++
++/// How a block continues a paragraph.
++#[derive(Clone, Copy, PartialEq)]
++enum Continues {
++    No,
++    /// The rest of the same line, in another style.
++    SameLine,
++    /// The next line, flush with the paragraph's left edge, no further down than line spacing.
++    NextLine,
++}
++
++/// Whether `b` continues the paragraph `group`, and how. `right` is the page's right text edge.
++fn continues(group: &[Run], b: &Block, right: f64) -> Continues {
++    let (Some(first), Some(last)) = (group.first(), group.last()) else { return Continues::No };
++    let (first, last) = (first.b, last.b);
++    let s = last.size.max(1.0);
++    if starts_list_item(&b.text) {
++        return Continues::No;
++    }
++    let size_ratio = b.size.max(1.0) / s;
++    // Same line: `b` starts above the bottom of the paragraph's last line and right of its start.
++    // Inline code, links and footnote marks are often set a little smaller or larger.
++    if (0.6..=1.6).contains(&size_ratio) && b.rect[3] > last.rect[1] + 0.3 * s && b.rect[1] >= last.rect[1] - 0.5 * s && b.rect[0] > last.rect[0] {
++        return Continues::SameLine;
++    }
++    // Next line: `b`'s top sits at the last line's bottom (no paragraph gap), flush left, in the
++    // same size — and the line above wrapped: it runs to the right edge, or stops mid-sentence.
++    // (A short line ending a sentence closes its paragraph: list items without visible markers.)
++    let gap = last.rect[1] - b.rect[3];
++    let prev = group.last().map_or("", |r| r.text.trim_end());
++    // A block's box is as wide as its widest line, so only a one-line block shows where its
++    // (last) line ends.
++    let one_line = last.rect[3] - last.rect[1] <= 1.6 * s;
++    let wrapped = (one_line && last.rect[2] >= right - 3.0 * s) || !prev.ends_with(['.', '!', '?', ':']);
++    if (0.85..=1.18).contains(&size_ratio) && gap >= -0.3 * s && gap <= 0.8 * s && (b.rect[0] - first.rect[0]).abs() <= 1.5 * s && wrapped {
++        return Continues::NextLine;
++    }
++    Continues::No
++}
++
++/// The text of `b` as the next run of a paragraph ending in `prev`: joined by a space, except
++/// before closing punctuation, and a hyphen that broke a word across lines is dropped.
++fn joined(prev: &mut String, b: &Block) -> String {
++    let text = b.text.trim_end_matches(['\n', '\r']);
++    if prev.ends_with(char::is_whitespace) || text.starts_with(char::is_whitespace) || text.starts_with([',', '.', ';', ':', '!', '?', ')', ']', '}', '%']) {
++        return text.to_string();
++    }
++    if prev.ends_with('-') && text.starts_with(char::is_lowercase) && prev.chars().rev().nth(1).is_some_and(char::is_alphabetic) {
++        prev.pop();
++        return text.to_string();
++    }
++    format!(" {text}")
++}
++
++/// A page's free-standing blocks (`blocks`, in any order) as paragraphs in reading order: each
++/// is (top, left, runs, heading level). PDFs break a paragraph into one block per style run
++/// (a bold phrase splits a sentence in three); body-text pieces that continue each other are
++/// joined back into one paragraph with several runs. Headings stay alone.
++fn paragraphs<'a>(mut blocks: Vec<&'a Block>, body: f64) -> Vec<(f64, f64, Vec<Run<'a>>, u8)> {
++    // Top to bottom, then left to right within a line (tops within half a line are one line:
++    // a bold run's box often starts a little higher than the regular text beside it).
++    blocks.sort_by(|a, b| b.rect[3].total_cmp(&a.rect[3]));
++    let mut lined: Vec<(usize, f64, &Block)> = Vec::with_capacity(blocks.len());
++    let (mut line, mut line_top) = (0usize, f64::INFINITY);
++    for b in blocks {
++        if line_top - b.rect[3] > 0.5 * b.size.max(1.0) {
++            line += 1;
++            line_top = b.rect[3];
++        }
++        lined.push((line, line_top, b));
++    }
++    lined.sort_by(|a, b| a.0.cmp(&b.0).then(a.2.rect[0].total_cmp(&b.2.rect[0])));
++
++    // A heading by size never joins other text. A short bold block reads as a heading only when
++    // it stands alone: a bold phrase inside a sentence, or a bold lead-in ("Note.") followed by
++    // text on the same line, is part of that paragraph.
++    let by_size = |b: &Block| b.text.len() < 200 && b.size >= body * 1.25;
++    // The right edge of body text, to tell a wrapped line from one that ends its paragraph.
++    let right = lined.iter().filter(|(_, _, b)| !by_size(b)).map(|(_, _, b)| b.rect[2]).fold(f64::MIN, f64::max);
++    let mut out: Vec<(f64, f64, Vec<Run>, u8)> = Vec::new();
++    for (_, top, b) in lined {
++        if let Some((_, _, group, lvl)) = out.last_mut()
++            && !by_size(b)
++            && !group.iter().any(|r| by_size(r.b))
++        {
++            let how = continues(group, b, right);
++            // A standalone bold block (level 2) takes more text only on its own line.
++            if how == Continues::SameLine || (how == Continues::NextLine && *lvl == 0) {
++                let text = match group.last_mut() {
++                    Some(prev) => joined(&mut prev.text, b),
++                    None => b.text.clone(),
++                };
++                group.push(Run { text, b });
++                *lvl = 0;
++                continue;
++            }
++        }
++        out.push((top, b.rect[0], vec![Run { text: b.text.trim_end_matches(['\n', '\r']).to_string(), b }], level(b, body)));
++    }
++    out
++}
++
+ fn items(pages: &[Page]) -> Vec<Item<'_>> {
+     let body = body_size(pages);
+     let mut out = Vec::new();
+@@ -305,14 +429,9 @@ fn items(pages: &[Page]) -> Vec<Item<'_>> {
+             out.push(Item::PageBreak);
+         }
+         let (tables, consumed) = tables(&p.blocks);
+-        // Blocks and images by their top edge, top to bottom.
+-        let mut parts: Vec<(f64, f64, Item)> = p
+-            .blocks
+-            .iter()
+-            .enumerate()
+-            .filter(|(bi, _)| !consumed.get(*bi).copied().unwrap_or(false))
+-            .map(|(_, b)| (b.rect[3], b.rect[0], Item::Para(b, level(b, body))))
+-            .collect();
++        // Paragraphs, tables and images by their top edge, top to bottom.
++        let free: Vec<&Block> = p.blocks.iter().enumerate().filter(|(bi, _)| !consumed.get(*bi).copied().unwrap_or(false)).map(|(_, b)| b).collect();
++        let mut parts: Vec<(f64, f64, Item)> = paragraphs(free, body).into_iter().map(|(top, left, runs, lvl)| (top, left, Item::Para(runs, lvl))).collect();
+         parts.extend(tables.into_iter().map(|t| (t.rect[3], t.rect[0], Item::Table(t))));
+         parts.extend(p.images.iter().map(|im| (im.rect[3], im.rect[0], Item::Img(im))));
+         parts.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
+@@ -366,15 +485,26 @@ table{{border-collapse:collapse;margin:1em 0}}td,th{{border:1px solid #999;paddi
+     );
+     for it in items(pages) {
+         match it {
+-            Item::Para(b, lvl) => {
+-                let mut t = esc(&b.text);
+-                if b.italic {
+-                    t = format!("<em>{t}</em>");
+-                }
+-                if b.bold && lvl == 0 {
+-                    t = format!("<strong>{t}</strong>");
+-                }
+-                let style = hex(b.color).map_or(String::new(), |h| format!(" style=\"color:#{h}\""));
++            Item::Para(runs, lvl) => {
++                let Some(first) = runs.first() else { continue };
++                // The paragraph takes its first run's colour; runs in another colour carry their own.
++                let t: String = runs
++                    .iter()
++                    .map(|r| {
++                        let mut t = esc(&r.text);
++                        if r.b.italic {
++                            t = format!("<em>{t}</em>");
++                        }
++                        if r.b.bold && lvl == 0 {
++                            t = format!("<strong>{t}</strong>");
++                        }
++                        match hex(r.b.color) {
++                            Some(h) if rgb8(r.b.color) != rgb8(first.b.color) => format!("<span style=\"color:#{h}\">{t}</span>"),
++                            _ => t,
++                        }
++                    })
++                    .collect();
++                let style = hex(first.b.color).map_or(String::new(), |h| format!(" style=\"color:#{h}\""));
+                 match lvl {
+                     0 => s.push_str(&format!("<p{style}>{t}</p>\n")),
+                     l => s.push_str(&format!("<h{l}{style}>{t}</h{l}>\n")),
+@@ -586,7 +716,7 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
+     let mut media: Vec<(String, &Image)> = Vec::new();
+     // Word needs a paragraph between adjacent tables and after the last one in the body.
+     let mut after_table = false;
+-    let run = |b: &Block| run_xml(&b.text, b.size, b.bold, b.italic, b.color);
++    let runs = |runs: &[Run]| runs.iter().map(|r| run_xml(&r.text, r.b.size, r.b.bold, r.b.italic, r.b.color)).collect::<String>();
+     let mut shape_id = 0usize;
+     for (page_index, page) in pages.iter().enumerate() {
+         let (pw, _) = word_page_size(page);
+@@ -597,13 +727,13 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
+         } else {
+             for it in items(std::slice::from_ref(page)) {
+                 match &it {
+-                    Item::Para(b, lvl) => {
++                    Item::Para(rs, lvl) => {
+                         let style = match lvl {
+                             1 => "<w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>",
+                             2 => "<w:pPr><w:pStyle w:val=\"Heading2\"/></w:pPr>",
+                             _ => "",
+                         };
+-                        body.push_str(&format!("<w:p>{style}{}</w:p>", run(b)));
++                        body.push_str(&format!("<w:p>{style}{}</w:p>", runs(rs)));
+                     }
+                     Item::Table(t) => {
+                         if after_table {
+@@ -734,7 +864,7 @@ pub fn rtf(pages: &[Page]) -> String {
+     };
+     for it in &items {
+         match it {
+-            Item::Para(b, _) => note(b.color),
++            Item::Para(runs, _) => runs.iter().for_each(|r| note(r.b.color)),
+             Item::Table(t) => t.rows.iter().flatten().for_each(|c| note(c.color)),
+             Item::Img(_) | Item::PageBreak => {}
+         }
+@@ -754,16 +884,21 @@ pub fn rtf(pages: &[Page]) -> String {
+     }
+     for it in items {
+         match it {
+-            Item::Para(b, _) => {
+-                let mut fmt = format!("\\fs{}", (b.size * 2.0).round() as i64);
+-                if b.bold {
+-                    fmt.push_str("\\b");
+-                }
+-                if b.italic {
+-                    fmt.push_str("\\i");
++            Item::Para(runs, _) => {
++                s.push_str("{\\pard");
++                for r in &runs {
++                    let mut fmt = format!("\\fs{}", (r.b.size * 2.0).round() as i64);
++                    // Each run is its own group, so its bold/italic end with it.
++                    if r.b.bold {
++                        fmt.push_str("\\b");
++                    }
++                    if r.b.italic {
++                        fmt.push_str("\\i");
++                    }
++                    fmt.push_str(&cf(r.b.color));
++                    s.push_str(&format!("{{{fmt} {}}}", rtf_text(&r.text)));
+                 }
+-                fmt.push_str(&cf(b.color));
+-                s.push_str(&format!("{{\\pard{fmt} {}\\par}}\n", rtf_text(&b.text)));
++                s.push_str("\\par}\n");
+             }
+             Item::Table(t) => {
+                 let mut edges = t.cols.clone();
+@@ -1017,6 +1152,37 @@ mod tests {
+         assert!(r.contains("\\fs20\\i Caf\\u233? \\{x\\}"), "{r}");
+     }
+ 
++    /// A sentence the PDF stores as three blocks (regular, bold, regular, wrapping to a second
++    /// line) is one Word paragraph with three runs; the next paragraph, after a gap, stays apart.
++    #[test]
++    fn style_runs_of_one_paragraph_are_joined() {
++        let b = |t: &str, x0: f64, y0: f64, x1: f64, y1: f64, bold: bool| Block {
++            text: t.into(),
++            rect: [x0, y0, x1, y1],
++            size: 11.0,
++            bold,
++            italic: false,
++            color: [0.0; 3],
++            rotation: 0.0,
++        };
++        let mut p = page();
++        p.blocks.clear();
++        p.blocks.push(b("Free users see ads and", 72.0, 700.0, 190.0, 712.0, false));
++        p.blocks.push(b("earn credits", 193.0, 700.0, 260.0, 713.0, true));
++        p.blocks.push(b("(watch a video,", 263.0, 700.0, 520.0, 712.0, false));
++        p.blocks.push(b("get 1 credit).", 72.0, 686.0, 150.0, 698.0, false));
++        p.blocks.push(b("A new paragraph.", 72.0, 650.0, 180.0, 662.0, false));
++        let paras: Vec<Vec<String>> = items(&[p])
++            .into_iter()
++            .filter_map(|it| match it {
++                Item::Para(runs, _) => Some(runs.into_iter().map(|r| r.text).collect()),
++                _ => None,
++            })
++            .collect();
++        assert_eq!(paras, vec![vec!["Free users see ads and", " earn credits", " (watch a video,", " get 1 credit)."], vec!["A new paragraph."]]);
++        assert!(!starts_list_item("1990 was a year") && starts_list_item("1. First") && starts_list_item("• Item"));
++    }
++
+     /// A 3-column table with a spanning header row and a hole in the last row.
+     fn table_page() -> Page {
+         let cell = |t: &str, x: f64, y: f64, w: f64| Block {
 diff --git a/crates/filters/src/lib.rs b/crates/filters/src/lib.rs
 index ffaf08c..31cdd16 100644
 --- a/crates/filters/src/lib.rs
@@ -6334,7 +6643,7 @@ index 1f9105e..11a362d 100644
          ))
      } else if info.xfa == Some(pdfcraft_render::Xfa::Static) {
 diff --git a/crates/ui-egui/src/chrome.rs b/crates/ui-egui/src/chrome.rs
-index 1f2d237..7fb31cb 100644
+index 1f2d237..75faa5b 100644
 --- a/crates/ui-egui/src/chrome.rs
 +++ b/crates/ui-egui/src/chrome.rs
 @@ -21,42 +21,50 @@ const MAC_LIGHTS_LEFT: f32 = 10.0;
@@ -6515,7 +6824,7 @@ index 1f2d237..7fb31cb 100644
          }
          icons::paint(
              ui,
-@@ -377,44 +366,86 @@ fn tab(
+@@ -377,44 +366,85 @@ fn tab(
      })
  }
  
@@ -6537,15 +6846,19 @@ index 1f2d237..7fb31cb 100644
 -                ui.spacing_mut().item_spacing.x = 2.0;
 +                ui.spacing_mut().item_spacing.x = 4.0;
 +                let home = app.active.is_none() && !app.combine_showing();
-+                // Embedded in fileflowhq.com: this bar is the page's only one, so it leads back.
-+                if let Some(host) = app.host_action.as_mut()
-+                    && icons::button(ui, "chevron-left", 32.0, false, tl!("Back to Studio")).clicked()
-+                {
-+                    host("back");
-+                }
++                // Embedded in fileflowhq.com, the page's FileFlowHQ Studio bar above carries the
++                // logo, Back and Full screen (the same for every Studio editor): here, just Home.
++                let embedded = app.host_action.is_some();
 +                // Narrow windows (an embedded editor on a small laptop) keep the mark only.
 +                let wide = ui.available_width() > 1100.0;
-+                let resp = if wide { crate::brand::logo(ui, 20.0, Some(tl!("PDF"))) } else { crate::brand::logo_mark(ui, 20.0) };
++                let resp = if embedded {
++                    // Just the short logo beside File, as in every Studio editor (shared component).
++                    crate::ffhq_brand::mark(ui, 20.0)
++                } else if wide {
++                    crate::brand::logo(ui, 20.0, Some(tl!("PDF")))
++                } else {
++                    crate::brand::logo_mark(ui, 20.0)
++                };
 +                if resp.on_hover_text(tl!("Home")).clicked() && !home {
 +                    app.active = None;
 +                    app.combine_tab.focused = false;
@@ -6575,11 +6888,6 @@ index 1f2d237..7fb31cb 100644
 -                    ui.add_enabled_ui(has_doc, |ui| {
 +                    ui.spacing_mut().item_spacing.x = 2.0;
 +                    // Theme and help live in Menu ▸ View / Help; the bar keeps only what's used often.
-+                    if let Some(host) = app.host_action.as_mut()
-+                        && icons::button(ui, "maximize-2", 32.0, false, tl!("Full screen")).clicked()
-+                    {
-+                        host("fullscreen");
-+                    }
 +                    if app.active.is_some() {
                          let tip = crate::commands::command_tip(ui.ctx(), tl!("Print ({key})"), "print.dialog");
                          if icons::button(ui, "printer", 32.0, false, &tip).clicked() {
@@ -6624,6 +6932,23 @@ index 1f2d237..7fb31cb 100644
                          app.palette_open = true;
                      }
                  });
+@@ -422,11 +452,13 @@ pub fn mode_bar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+         });
+ }
+ 
++/// File, Edit, Pages, View and Help, spread out along the top bar (FileFlowHQ: not folded
++/// under one "Menu" button), each opening its own menu.
+ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+     let t = Tokens::get(ui.ctx());
+-    let resp = widgets::ghost_button(ui, "panel-left", tl!("Menu"));
+-    egui::Popup::menu(&resp).show(|ui| {
+-        ui.set_min_width(230.0);
++    ui.horizontal(|ui| {
++        ui.spacing_mut().item_spacing.x = 2.0;
++        ui.spacing_mut().button_padding = egui::vec2(10.0, 6.0);
+         ui.menu_button(tl!("File"), |ui| crate::commands::registry_menu(app, ui, "File"));
+         ui.menu_button(tl!("Edit"), |ui| crate::commands::registry_menu(app, ui, "Edit"));
+         ui.menu_button(tl!("Pages"), |ui| crate::commands::registry_menu(app, ui, "Pages"));
 diff --git a/crates/ui-egui/src/comments.rs b/crates/ui-egui/src/comments.rs
 index 623f89b..6ad94d7 100644
 --- a/crates/ui-egui/src/comments.rs
@@ -6970,10 +7295,10 @@ index d1b5f0e..0d83f4b 100644
          .color(t.text_muted),
      );
 diff --git a/crates/ui-egui/src/home.rs b/crates/ui-egui/src/home.rs
-index 3e70f34..78fd7cd 100644
+index 3e70f34..87966bd 100644
 --- a/crates/ui-egui/src/home.rs
 +++ b/crates/ui-egui/src/home.rs
-@@ -18,108 +18,95 @@ fn card_lift(ui: &egui::Ui, t: &Tokens, rect: Rect, press: theme::Press) {
+@@ -18,108 +18,89 @@ fn card_lift(ui: &egui::Ui, t: &Tokens, rect: Rect, press: theme::Press) {
      }
  }
  
@@ -6989,7 +7314,15 @@ index 3e70f34..78fd7cd 100644
 -                egui::RichText::new(tl!("An open-source PDF workbench — local, private, and scriptable."))
 -                    .color(t.text_muted)
 -                    .font(theme::regular(14.0)),
--            );
++        let side = ((ui.available_width() - COLUMN) / 2.0).max(32.0) as i8;
++        egui::Frame::NONE.inner_margin(egui::Margin { left: side, right: side, top: 40, bottom: 32 }).show(ui, |ui| {
++            // Hero: the FileFlowHQ logo, the editor's name and one line on what it does (the same
++            // heading as every Studio editor's start screen).
++            crate::ffhq_brand::start_header(
++                ui,
++                tl!("PDF Editor"),
++                tl!("Edit, sign and organize PDFs right in your browser. Your files never leave your device."),
+             );
 -            ui.add_space(14.0);
 -            egui::Frame::NONE
 -                .fill(t.card)
@@ -7009,22 +7342,8 @@ index 3e70f34..78fd7cd 100644
 -                    if let Some(cmd) = widgets::community_links(ui) {
 -                        app.execute(cmd);
 -                    }
-+        let side = ((ui.available_width() - COLUMN) / 2.0).max(32.0) as i8;
-+        egui::Frame::NONE.inner_margin(egui::Margin { left: side, right: side, top: 40, bottom: 32 }).show(ui, |ui| {
-+            // Hero: the mark, the product name and one line on what it does.
-+            ui.horizontal(|ui| {
-+                crate::brand::paint_mark(ui, ui.cursor().min + vec2(0.0, 4.0), 34.0);
-+                ui.add_space(34.0 * 87.0 / 54.0 + 14.0);
-+                ui.vertical(|ui| {
-+                    ui.label(egui::RichText::new(tl!("PDF Editor")).font(theme::semibold(26.0)));
-+                    ui.label(
-+                        egui::RichText::new(tl!("Edit, sign and organize PDFs right in your browser. Your files never leave your device."))
-+                            .color(t.text_muted)
-+                            .font(theme::regular(14.0)),
-+                    );
-                 });
+-                });
 -            ui.add_space(22.0);
-+            });
 +            ui.add_space(28.0);
  
 -            egui::Frame::NONE
@@ -7166,7 +7485,7 @@ index 3e70f34..78fd7cd 100644
  
              #[cfg(not(target_arch = "wasm32"))]
              {
-@@ -130,7 +117,7 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+@@ -130,7 +111,7 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
              ui.add_space(26.0);
              let mut clear = false;
              ui.horizontal(|ui| {
@@ -7175,7 +7494,7 @@ index 3e70f34..78fd7cd 100644
                  if !app.recent.is_empty() {
                      ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                          let resp = widgets::ghost_button(ui, "trash-2", tl!("Clear"));
-@@ -141,12 +128,12 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+@@ -141,12 +122,12 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
              });
              ui.add_space(8.0);
              if app.recent.is_empty() {
@@ -7190,7 +7509,7 @@ index 3e70f34..78fd7cd 100644
                  resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &r.name));
                  let press = theme::Press::track(ui, &resp);
                  // The row, not its response: the pointer stays "in" the row over its remove button.
-@@ -204,12 +191,15 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+@@ -204,12 +185,15 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
              if clear {
                  app.execute("file.clear_recent");
              }
@@ -11096,7 +11415,7 @@ index bf64ea7..c926d0b 100644
  pub struct LastSession {
      pub files: Vec<SessionFile>,
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 2d4f5b0..98c3fbe 100644
+index 2d4f5b0..43bc762 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -1,4 +1,4 @@
@@ -11105,15 +11424,16 @@ index 2d4f5b0..98c3fbe 100644
  //!
  //! Layout grammar follows plan/acrobat/02-ui-ux.md §1: tab strip, mode bar, left tool panel,
  //! floating quick-action bar, document area, right panel + right rail with page navigation.
-@@ -25,6 +25,7 @@ macro_rules! tl_ctx {
+@@ -25,6 +25,8 @@ macro_rules! tl_ctx {
  mod a11y_ui;
  mod actions_ui;
  mod appearance;
 +mod brand;
++mod ffhq_brand;
  pub mod canvas;
  mod chrome;
  mod combine_grid;
-@@ -74,6 +75,8 @@ pub mod bulk_fields;
+@@ -74,6 +76,8 @@ pub mod bulk_fields;
  mod dialogs;
  mod edit_text_ui;
  mod editing;
@@ -11122,7 +11442,7 @@ index 2d4f5b0..98c3fbe 100644
  #[cfg(not(target_arch = "wasm32"))]
  pub mod file_watch;
  mod files;
-@@ -380,13 +383,18 @@ pub enum OsEvent {
+@@ -380,13 +384,18 @@ pub enum OsEvent {
  /// Returns the [`OsEvent`]s that arrived since it was last called (set by the desktop app).
  pub type OsEventsFn = Box<dyn FnMut() -> Vec<OsEvent>>;
  
@@ -11142,7 +11462,7 @@ index 2d4f5b0..98c3fbe 100644
  
  pub struct PasswordPrompt {
      pub name: String,
-@@ -512,9 +520,9 @@ pub struct PdfCraftApp {
+@@ -512,9 +521,9 @@ pub struct PdfCraftApp {
      pub palette_query: String,
      pub all_tools_expanded: bool,
      pub recent: Vec<RecentFile>,
@@ -11154,7 +11474,7 @@ index 2d4f5b0..98c3fbe 100644
      /// [`PdfCraftApp::reopen_last_files`].
      pub last_session: last_session::LastSession,
      /// Quitting closes unsaved tabs one by one: what was open when the quit began.
-@@ -548,12 +556,20 @@ pub struct PdfCraftApp {
+@@ -548,12 +557,20 @@ pub struct PdfCraftApp {
      pub host_save: Option<HostSaveFn>,
      /// Reports unsaved work to the embedding page (web, see [`HostDirtyFn`]).
      pub host_dirty: Option<HostDirtyFn>,
@@ -11175,7 +11495,7 @@ index 2d4f5b0..98c3fbe 100644
      /// Document Properties ▸ Initial View (and reading options) being edited.
      pub view_draft: Option<(DocId, pdfcraft_engine::InitialView)>,
      /// Files picked asynchronously for combine / insert (web).
-@@ -813,8 +829,8 @@ impl PdfCraftApp {
+@@ -813,8 +830,8 @@ impl PdfCraftApp {
              quick_tool: QuickTool::Select,
              space_hand: None,
              comment_prefs: Default::default(),
@@ -11186,7 +11506,7 @@ index 2d4f5b0..98c3fbe 100644
              reading_colors: Default::default(),
              #[cfg(target_os = "linux")]
              desktop_theme: None,
-@@ -858,9 +874,14 @@ impl PdfCraftApp {
+@@ -858,9 +875,14 @@ impl PdfCraftApp {
              os_events: None,
              host_save: None,
              host_dirty: None,
@@ -11201,7 +11521,7 @@ index 2d4f5b0..98c3fbe 100644
              view_draft: None,
              requests: Default::default(),
              #[cfg(not(target_arch = "wasm32"))]
-@@ -1485,7 +1506,7 @@ impl PdfCraftApp {
+@@ -1485,7 +1507,7 @@ impl PdfCraftApp {
          client
      }
  
@@ -11210,7 +11530,7 @@ index 2d4f5b0..98c3fbe 100644
      /// links; an address that came from a document goes through [`Self::request_document_url`].
      pub fn open_url(&mut self, url: &str) {
          if let Some(ctx) = &self.ctx {
-@@ -1508,9 +1529,9 @@ impl PdfCraftApp {
+@@ -1508,9 +1530,9 @@ impl PdfCraftApp {
              Err(e) => {
                  use pdfcraft_engine::links::BlockedLink;
                  let template = if matches!(e, BlockedLink::MailFile | BlockedLink::MailEncodedWord) {
@@ -11222,7 +11542,7 @@ index 2d4f5b0..98c3fbe 100644
                  };
                  self.notify_fmt(template, &[("who", tl!(origin.noun())), ("e", &e.to_string())]);
              }
-@@ -2499,6 +2520,7 @@ impl eframe::App for PdfCraftApp {
+@@ -2499,6 +2521,7 @@ impl eframe::App for PdfCraftApp {
                  report(dirty);
              }
          }
@@ -11230,7 +11550,7 @@ index 2d4f5b0..98c3fbe 100644
          self.poll_updates();
          self.poll_print();
          // Shortcuts deferred last frame: the text field has taken that frame's typing since.
-@@ -2549,7 +2571,7 @@ impl eframe::App for PdfCraftApp {
+@@ -2549,7 +2572,7 @@ impl eframe::App for PdfCraftApp {
              .and_then(|i| self.session.get(self.views[i].id))
              .map(|d| d.display_name())
              .or_else(|| self.combine_showing().then(|| tl!("Combine files").to_owned()))
@@ -11239,7 +11559,7 @@ index 2d4f5b0..98c3fbe 100644
          if title != self.window_title {
              ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
              self.window_title = title;
-@@ -2572,8 +2594,10 @@ impl eframe::App for PdfCraftApp {
+@@ -2572,8 +2595,10 @@ impl eframe::App for PdfCraftApp {
              self.finish_render_frame(&ctx);
              return;
          }
@@ -11252,7 +11572,7 @@ index 2d4f5b0..98c3fbe 100644
          if self.active.is_some() {
              chrome::right_rail(self, ui);
              // Read mode hides the tools, not the navigation panes: the rail stays visible
-@@ -2609,6 +2633,39 @@ impl eframe::App for PdfCraftApp {
+@@ -2609,6 +2634,39 @@ impl eframe::App for PdfCraftApp {
      }
  }
  
@@ -11733,7 +12053,7 @@ index 6af878d..7b3fbf0 100644
  
  /// A browser print being prepared: the print-ready PDF's sheets drawn one [`WebPrintJob::step`]
 diff --git a/crates/ui-egui/src/widgets.rs b/crates/ui-egui/src/widgets.rs
-index 4f5aaa7..508aace 100644
+index 4f5aaa7..ff3afd8 100644
 --- a/crates/ui-egui/src/widgets.rs
 +++ b/crates/ui-egui/src/widgets.rs
 @@ -137,7 +137,7 @@ pub fn pill_button(ui: &mut egui::Ui, label: &str, primary: bool) -> Response {
@@ -11855,6 +12175,23 @@ index 4f5aaa7..508aace 100644
      let shortcut = crate::commands::command_shortcut_label(ui.ctx(), "view.palette");
      let shortcut = ui.painter().layout_no_wrap(shortcut, theme::regular(11.5), t.text_faint);
      let shortcut_pos = rect.right_center() - vec2(12.0 + shortcut.size().x, shortcut.size().y * 0.5);
+@@ -519,14 +604,14 @@ pub fn artcraft_mark(ui: &mut egui::Ui, size: f32) -> Response {
+     )
+ }
+ 
+-/// Buttons for every community link (`pdfcraft_engine::links`), Discord first and prominent.
++/// Buttons for every community link (`pdfcraft_engine::links`), the first one prominent.
+ /// Returns the registry command of the one clicked.
+ pub fn community_links(ui: &mut egui::Ui) -> Option<&'static str> {
+     let mut clicked = None;
+     ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+         for (i, l) in pdfcraft_engine::links::LINKS.iter().enumerate() {
+-            let resp = if i == 0 { icon_pill(ui, l.icon, tl!("Join our Discord"), true) } else { icon_pill(ui, l.icon, tl!(l.label), false) };
++            let resp = if i == 0 { icon_pill(ui, l.icon, tl!("Contact us"), true) } else { icon_pill(ui, l.icon, tl!(l.label), false) };
+             if resp.on_hover_text(l.url).clicked() {
+                 clicked = Some(l.command);
+             }
 @@ -577,7 +662,7 @@ pub fn icon_pill(ui: &mut egui::Ui, icon: &str, label: &str, primary: bool) -> R
      resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label));
      let press = theme::Press::track(ui, &resp);

@@ -1,10 +1,9 @@
 # FileFlowHQ — file conversion, mostly client-side
 
 A React + Tailwind app that converts images, PDFs, and data files. Most tools
-run **entirely in the browser** — nothing is sent to a server — but three
-features do call a small serverless backend: **PDF to Word** (Word output,
-via Adobe PDF Services) uploads the file for conversion, a post-download
-confirmation email is sent via Mailjet, and the **URL Shortener** stores links in
+run **entirely in the browser** — nothing is sent to a server — but two
+features do call a small serverless backend: a post-download confirmation
+email is sent via Mailjet, and the **URL Shortener** stores links in
 Upstash Redis. Live as a web app (Vercel); it also
 builds as a Chrome extension (in Web Store review) and, via Capacitor, as
 iOS/Android apps (native projects are in the repo, but the apps are not yet
@@ -24,8 +23,8 @@ exporting from rebranded editors costs paid credits (Paystack).
 | Images to PDF | Combine images into one PDF | `jspdf` (client-side) |
 | PDF to Images | Split PDF pages into PNGs | `pdfjs-dist` (client-side) |
 | Merge / Split PDF | Combine PDFs or extract page ranges | `pdf-lib` (client-side) |
-| PDF to Word | Convert to `.docx` (Adobe PDF Services) or extract plain text | `api/pdf-to-word.js` (server) / `pdfjs-dist` (client) |
-| Word to PDF | Convert `.docx` to PDF | client-side |
+| PDF to Word | Convert to `.docx`, `.pptx`, `.html`, `.rtf`, or extract plain text | Studio PDF engine (pdfcraft, WebAssembly) / `pdfjs-dist` for `.txt` |
+| Word to PDF | `.docx`, `.doc`, `.odt`, `.rtf`, `.md`, `.html`, `.txt` to PDF | Studio Word engine (wordcraft, WebAssembly) |
 | PDF Read Aloud | Read PDF text aloud | client-side |
 | Document Scanner | Capture/crop a document into a PDF or image | client-side |
 | QR & Barcode Scanner | Scan codes via camera | client-side |
@@ -120,7 +119,6 @@ fileflowhq/
 ├── capacitor.config.json
 ├── ios/, android/        # Capacitor native projects
 ├── api/                  # Vercel serverless functions
-│   ├── pdf-to-word.js      # Adobe PDF Services — PDF → Word
 │   ├── send-confirmation.js # Mailjet — post-download email
 │   ├── contact-message.js   # Mailjet — contact form
 │   ├── usage.js, _usage.js  # credit balance (free + paid) in Redis
@@ -145,7 +143,7 @@ fileflowhq/
     │   ├── Home.jsx
     │   └── ToolPage.jsx
     ├── tools/                # one component per tool (see table above)
-    └── utils/                # fileHelpers, pdfjsSetup, docxToPdf, imagesToPdf,
+    └── utils/                # fileHelpers, pdfjsSetup, engines, imagesToPdf,
                                 pdfTextExtraction, platform (native vs. web checks)
 ```
 
@@ -200,10 +198,6 @@ fully wired up and isn't a supported target).
      URL shortener (`api/shorten.js`, `api/s.js`). Create a free Upstash Redis
      database under your Vercel project's **Storage** tab; Vercel injects these
      automatically. (`UPSTASH_REDIS_REST_URL` / `_TOKEN` also work.)
-   - `PDF_SERVICES_CLIENT_ID`, `PDF_SERVICES_CLIENT_SECRET` — Adobe PDF
-     Services, required by `api/pdf-to-word.js` (Word-output mode). Without
-     these the Word-conversion feature fails; the plain-text extraction mode
-     still works client-side.
    - `PAYSTACK_SECRET_KEY` — Paystack, required for payments. Also set the
      webhook URL in the Paystack dashboard to `https://fileflowhq.com/api/pay-webhook`.
    - `OWNER_KEY` (optional) — exempts you from the paywall; `USAGE_SALT`,
@@ -296,15 +290,19 @@ is already allowed in `api/_cors.js`.
 
 ## Notes on the PDF tools
 
-- **PDF to Images**, **PDF to Word** (text mode), and **PDF Read Aloud** use
+- **PDF to Images**, **PDF to Word**, and **PDF Read Aloud** use
   `pdfjs-dist`, which needs a web worker. Vite bundles this automatically via
   the `?url` import in `src/utils/pdfjsSetup.js` — no extra configuration
   needed after `npm install`.
-- **PDF to Word** has two modes: converting to an actual `.docx` uploads the
-  file to **Adobe PDF Services** (`api/pdf-to-word.js`), which preserves text
-  styling, tables, lists, links, and images, and is capped at 4.5MB per file.
-  Plain-text extraction runs entirely client-side via `pdfjs-dist` with no
-  size cap and no upload.
+- **Studio engines** (`engines/`, `src/utils/engines.js`): the Studio editors'
+  own Rust processors, built headless to WebAssembly and served from
+  `public/engines/<name>/<version>/`. A tool loads its engine in a worker the
+  first time it is used; nothing is uploaded and there is no JavaScript
+  fallback. **PDF to Word** uses pdfcraft's exporter (Word, PowerPoint, HTML,
+  RTF); **Word to PDF** uses wordcraft's page layout. Rebuild with
+  `engines/build.sh pdf|word` (needs the editor sources in
+  `~/Developer/craft-apps`; pdfcraft with `studio/patches/pdfcraft.patch`
+  applied, wordcraft at v0.6.1 in `engine-src/`).
 - Password-protected or scanned (image-only) PDFs are handled with a clear
   error/notice rather than failing silently.
 

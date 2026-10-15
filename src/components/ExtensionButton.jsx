@@ -24,8 +24,8 @@ export default function ExtensionButton({ variant = 'nav' }) {
 
   const className =
     variant === 'hero'
-      ? 'inline-flex items-center gap-2 rounded-full bg-panel px-5 py-3 text-[0.9rem] font-semibold text-text shadow-card transition-transform hover:-translate-y-0.5'
-      : 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[0.85rem] font-medium text-text-dim transition-colors hover:bg-panel-raised hover:text-text'
+      ? 'inline-flex items-center gap-2 rounded-full bg-panel px-5 py-3 text-[0.9rem] font-medium text-text shadow-card transition-transform hover:-translate-y-0.5'
+      : 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[0.88rem] font-medium text-text transition-colors hover:bg-panel-raised'
 
   return (
     <a href={CHROME_EXTENSION_URL} target="_blank" rel="noopener noreferrer" className={className}>
