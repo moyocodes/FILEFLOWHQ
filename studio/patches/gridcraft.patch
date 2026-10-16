@@ -38,22 +38,49 @@ index 5fdd1ea..5bee6ed 100644
  </html>
 diff --git a/apps/gridcraft-web/src/host.rs b/apps/gridcraft-web/src/host.rs
 new file mode 100644
-index 0000000..e99ee77
+index 0000000..9f393fb
 --- /dev/null
 +++ b/apps/gridcraft-web/src/host.rs
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,188 @@
 +//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
-+//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
 +//!
 +//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
-+//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
-+//!               charges for it, then hands the file to the user.
-+//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
 +//!
 +//! Opened on its own (not embedded), the editor works but can't save or export.
 +
++use std::cell::{Cell, RefCell};
++
 +use js_sys::{Array, Object, Reflect, Uint8Array};
 +use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
 +
 +/// The embedding page's window: a different window than ours, on our own origin.
 +fn parent() -> Option<web_sys::Window> {
@@ -100,14 +127,68 @@ index 0000000..e99ee77
 +    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
 +}
 +
-+/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
-+pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
 +    let buffer = Uint8Array::from(bytes).buffer();
-+    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
 +}
 +
-+/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
-+pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
 +    let Some(window) = web_sys::window() else { return };
 +    let own_origin = window.location().origin().unwrap_or_default();
 +    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -120,16 +201,34 @@ index 0000000..e99ee77
 +        }
 +        let data = e.data();
 +        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
-+        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
-+            return;
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
 +        }
-+        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
-+            open(name, Uint8Array::new(&bytes).to_vec());
-+        }
++        wake();
 +    });
 +    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
 +        cb.forget();
 +    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
 +}
 diff --git a/apps/gridcraft-web/src/main.rs b/apps/gridcraft-web/src/main.rs
 index 58c4f43..ccae131 100644
@@ -146,7 +245,7 @@ index 58c4f43..ccae131 100644
  mod web;
  
 diff --git a/apps/gridcraft-web/src/web.rs b/apps/gridcraft-web/src/web.rs
-index e1350a1..df69409 100644
+index e1350a1..e0fa060 100644
 --- a/apps/gridcraft-web/src/web.rs
 +++ b/apps/gridcraft-web/src/web.rs
 @@ -3,7 +3,6 @@
@@ -157,7 +256,7 @@ index e1350a1..df69409 100644
  
  const CANVAS_ID: &str = "gridcraft_canvas";
  const LOADING_ID: &str = "gridcraft_loading";
-@@ -39,7 +38,9 @@ pub fn start() {
+@@ -39,7 +38,10 @@ pub fn start() {
                          let _ = session.execute("file.new", serde_json::json!({"sample": "sales"}));
                      }
                      let mut app = SheetApp::new(session, services(inbox.clone(), cc.egui_ctx.clone()));
@@ -165,19 +264,24 @@ index e1350a1..df69409 100644
 +                    // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme.
 +                    app.ui.system_theme = false;
 +                    app.ui.dark = !q.contains("theme=light");
++                    app.ui.theme_from_host = crate::host::embedded();
                      // Follow the browser's language, except a CJK one: the web build has no system
                      // CJK fonts (none are bundled), so that interface would render as tofu.
                      let browser = gridcraft_ui_egui::i18n::Language::system();
-@@ -50,14 +51,24 @@ pub fn start() {
+@@ -50,14 +52,28 @@ pub fn start() {
                          app.ui.language = browser;
                      }
                      SheetApp::setup_context_for_language(&cc.egui_ctx, false, app.ui.language);
 +                    // Files the FileFlowHQ page sends in open like dropped files.
 +                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
-+                    crate::host::listen(move |name, bytes| {
-+                        open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
-+                        wake.request_repaint();
-+                    });
++                    let open_wake = wake.clone();
++                    crate::host::listen(
++                        move |name, bytes| {
++                            open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
++                            open_wake.request_repaint();
++                        },
++                        move || wake.request_repaint(),
++                    );
                      Ok(Box::new(WebShell { app, inbox }))
                  }),
              )
@@ -194,7 +298,46 @@ index e1350a1..df69409 100644
              }
          }
      });
-@@ -133,14 +144,16 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
+@@ -72,6 +88,30 @@ struct WebShell {
+     inbox: Inbox,
+ }
+ 
++impl WebShell {
++    /// FileFlowHQ Studio: follow the page's theme, save when it asks or when AutoSave is due, and
++    /// tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = crate::host::take_requests();
++        if let Some(dark) = req.dark {
++            let _ = self.app.run("view.theme", serde_json::json!({"mode": if dark { "dark" } else { "light" }}));
++        }
++        let dirty = self.app.session.active().is_some_and(|d| d.is_dirty());
++        if crate::host::should_save(req.save, dirty) {
++            // The browser's Save As: the workbook is kept in the browser under its name.
++            if req.save {
++                self.app.open_dialog("saveAs", serde_json::json!({}));
++            } else {
++                crate::host::autosaving(|| self.app.open_dialog("saveAs", serde_json::json!({})));
++            }
++        }
++        crate::host::report_dirty(self.app.session.active().is_some_and(|d| d.is_dirty()));
++        if dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++        }
++    }
++}
++
+ impl eframe::App for WebShell {
+     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+         let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
+@@ -90,6 +130,7 @@ impl eframe::App for WebShell {
+             });
+         }
+         self.app.logic(ctx);
++        self.host_requests(ctx);
+     }
+ 
+     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+@@ -133,14 +174,16 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
                  ctx.request_repaint();
              });
          })),
@@ -203,19 +346,19 @@ index e1350a1..df69409 100644
          download: Some(Box::new(|name: &str, bytes: &[u8]| {
 -            if let Err(e) = download(name, bytes) {
 -                log::error!("download of {name} failed: {e}");
-+            if let Err(e) = crate::host::export(name, bytes) {
++            if let Err(e) = crate::host::export(name, bytes, gridcraft_ui_egui::ffhq_brand::is_export()) {
 +                log::error!("saving {name} works at fileflowhq.com/studio/spreadsheet: {e}");
              }
          })),
          print: Some(Box::new(|bytes: &[u8]| {
 -            if let Err(e) = print_pdf(bytes) {
 -                log::error!("print failed: {e}");
-+            if let Err(e) = crate::host::export("Print.pdf", bytes) {
++            if let Err(e) = crate::host::export("Print.pdf", bytes, true) {
 +                log::error!("printing works at fileflowhq.com/studio/spreadsheet: {e}");
              }
          })),
          open_url: Some(Box::new(|url: &str| {
-@@ -185,195 +198,3 @@ fn copy_html(html: &str, text: &str) -> Result<(), String> {
+@@ -185,195 +228,3 @@ fn copy_html(html: &str, text: &str) -> Result<(), String> {
      });
      Ok(())
  }
@@ -440,11 +583,27 @@ w7@HMeQcizLTb<>&mswye28d@jDm)A0FUpHkZm>lTrT_o{07*qoM6N<$f-6kbmjD0&
 literal 0
 HcmV?d00001
 
+diff --git a/crates/engine/src/lib.rs b/crates/engine/src/lib.rs
+index 3aceab0..fee68c4 100644
+--- a/crates/engine/src/lib.rs
++++ b/crates/engine/src/lib.rs
+@@ -137,6 +137,11 @@ impl DocState {
+     pub fn is_dirty(&self) -> bool {
+         !Arc::ptr_eq(&self.wb, &self.saved)
+     }
++    /// The workbook as it is now has been saved somewhere the engine doesn't write itself (a
++    /// browser download, or FileFlowHQ Studio keeping it in the browser).
++    pub fn mark_saved(&mut self) {
++        self.saved = self.wb.clone();
++    }
+     pub fn sheet_index(&self) -> usize {
+         self.wb.active_sheet
+     }
 diff --git a/crates/ui-egui/src/backstage.rs b/crates/ui-egui/src/backstage.rs
-index ae21554..5f3241a 100644
+index ae21554..247596a 100644
 --- a/crates/ui-egui/src/backstage.rs
 +++ b/crates/ui-egui/src/backstage.rs
-@@ -750,13 +750,13 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+@@ -750,21 +750,22 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
          return match app.run(id, json!({"path": path})) {
              Ok(_) => true,
              Err(e) => {
@@ -460,8 +619,10 @@ index ae21554..5f3241a 100644
          return false;
      }
      if fmt == "pdf" {
-@@ -764,7 +764,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
-         return match app.run(id, json!({})) {
+         // Without a path the PDF comes back as bytes, which `SheetApp::run` hands to the browser.
+-        return match app.run(id, json!({})) {
++        // FileFlowHQ Studio: an export downloads (a save stays in the browser).
++        return match crate::ffhq_brand::as_export(|| app.run(id, json!({}))) {
              Ok(_) => true,
              Err(e) => {
 -                app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
@@ -469,7 +630,15 @@ index ae21554..5f3241a 100644
                  false
              }
          };
-@@ -783,7 +783,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+@@ -776,14 +777,14 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+             let name = r.get("name").and_then(Json::as_str).map_or_else(|| format!("{stem}.{fmt}"), str::to_string);
+             match (bytes, &app.services.download) {
+                 (Some(b), Some(dl)) => {
+-                    dl(&name, &b);
++                    crate::ffhq_brand::as_export(|| dl(&name, &b));
+                     true
+                 }
+                 _ => false,
              }
          }
          Err(e) => {
@@ -479,7 +648,7 @@ index ae21554..5f3241a 100644
          }
      }
 diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
-index 5e859c6..1fb7ce0 100644
+index 5e859c6..b64de55 100644
 --- a/crates/ui-egui/src/dialogs.rs
 +++ b/crates/ui-egui/src/dialogs.rs
 @@ -682,7 +682,7 @@ impl Dialog {
@@ -491,7 +660,7 @@ index 5e859c6..1fb7ce0 100644
                  d.tab = match p("tab").as_str() {
                      Some(t @ ("Contributors" | "Models")) => t.to_string(),
                      _ => "About".into(),
-@@ -1323,12 +1323,14 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
+@@ -1323,12 +1323,13 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
          "Contributors" => crate::credits::contributors_ui(ui),
          "Models" => crate::credits::models_ui(ui),
          _ => {
@@ -505,8 +674,7 @@ index 5e859c6..1fb7ce0 100644
 -            ui.hyperlink_to("Join the ArtCraft Discord", "https://discord.gg/artcraft");
 +            ui.hyperlink_to("fileflowhq.com", "https://fileflowhq.com");
 +            ui.hyperlink_to("Contact FileFlowHQ", "https://fileflowhq.com/contact");
-+            // The upstream licenses ship with the app; credit the project too.
-+            ui.hyperlink_to("Built on GridCraft, open source (MIT / Apache-2.0)", "https://github.com/storytold/gridcraft");
++
          }
      }
  }
@@ -533,18 +701,36 @@ index d0eef85..a1aa52a 100644
              }
              _ => {}
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 0b19b25..c6decf9 100644
+index 0b19b25..8213e8c 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -6,6 +6,7 @@
  #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
  #![forbid(unsafe_code)]
  
-+mod ffhq_brand;
++pub mod ffhq_brand;
  pub mod backstage;
  mod border_preview;
  mod cell_pictures;
-@@ -431,7 +432,7 @@ impl SheetApp {
+@@ -48,6 +49,9 @@ pub mod desktop_theme;
+ #[derive(Clone, Debug, Serialize, Deserialize)]
+ #[serde(default, rename_all = "camelCase")]
+ pub struct UiState {
++    /// FileFlowHQ Studio: light/dark follows the embedding page, so the in-editor switch is hidden.
++    #[serde(skip)]
++    pub theme_from_host: bool,
+     /// The manual preference, retained when following the system appearance.
+     pub dark: bool,
+     pub system_theme: bool,
+@@ -92,6 +96,7 @@ fn lenient_interface_scale<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u16
+ impl Default for UiState {
+     fn default() -> Self {
+         UiState {
++            theme_from_host: false,
+             dark: false,
+             system_theme: false,
+             ribbon_tab: "Home".into(),
+@@ -431,7 +436,7 @@ impl SheetApp {
          if e.contains("is not available right now") {
              self.toast = Some((e, now_ms()));
          } else {
@@ -553,7 +739,7 @@ index 0b19b25..c6decf9 100644
          }
      }
  
-@@ -578,7 +579,7 @@ impl SheetApp {
+@@ -578,7 +583,7 @@ impl SheetApp {
          for req in self.session.take_ui_requests() {
              match req {
                  UiRequest::Dialog(name, params) => self.open_dialog(&name, params),
@@ -562,7 +748,18 @@ index 0b19b25..c6decf9 100644
                  UiRequest::EditCell(text) => {
                      let text = text.map(|text| {
                          self.session
-@@ -655,7 +656,7 @@ impl SheetApp {
+@@ -626,6 +631,10 @@ impl SheetApp {
+                 {
+                     let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
+                     dl(&name, &b);
++                    // A save in the browser is a save: the workbook has no unsaved changes now.
++                    if let Some(d) = self.session.active_mut() {
++                        d.mark_saved();
++                    }
+                 }
+             }
+             // File › Options (`file.options`) and the File tab itself open the Backstage view.
+@@ -655,7 +664,7 @@ impl SheetApp {
              Ok(r) => self.after_open(Some(path), &r),
              // A password-protected workbook: ask for the password; the dialog opens it.
              Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => self.open_dialog("openPassword", json!({"path": path})),
@@ -571,7 +768,7 @@ index 0b19b25..c6decf9 100644
          }
          self.after_engine();
      }
-@@ -798,7 +799,7 @@ impl SheetApp {
+@@ -798,7 +807,7 @@ impl SheetApp {
          let text = match self.session.active().map(|d| formula_locale::canonical(&text, ed.locale, &d.wb, ed.sheet, ed.cell)) {
              Some(Ok(text)) => text,
              Some(Err(error)) => {
@@ -580,7 +777,7 @@ index 0b19b25..c6decf9 100644
                  self.editor = Some(ed);
                  self.session.mode = gridcraft_engine::Mode::Edit;
                  return false;
-@@ -810,7 +811,7 @@ impl SheetApp {
+@@ -810,7 +819,7 @@ impl SheetApp {
              && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
          {
              if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
@@ -589,7 +786,7 @@ index 0b19b25..c6decf9 100644
                  self.message = Some((title, msg));
                  self.editor = Some(ed);
                  self.session.mode = gridcraft_engine::Mode::Edit;
-@@ -832,7 +833,7 @@ impl SheetApp {
+@@ -832,7 +841,7 @@ impl SheetApp {
                  true
              }
              Err(e) => {
@@ -598,7 +795,7 @@ index 0b19b25..c6decf9 100644
                  self.editor = Some(ed);
                  self.session.mode = gridcraft_engine::Mode::Edit;
                  false
-@@ -964,7 +965,7 @@ impl SheetApp {
+@@ -964,7 +973,7 @@ impl SheetApp {
                      self.backstage = None;
                      self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
                  }
@@ -608,10 +805,46 @@ index 0b19b25..c6decf9 100644
              self.after_engine();
          }
 diff --git a/crates/ui-egui/src/ribbon.rs b/crates/ui-egui/src/ribbon.rs
-index e8291ac..4d56818 100644
+index e8291ac..83584f9 100644
 --- a/crates/ui-egui/src/ribbon.rs
 +++ b/crates/ui-egui/src/ribbon.rs
-@@ -255,6 +255,9 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
+@@ -129,13 +129,19 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
+                 if __k.clicked() {
+                     app.open_dialog("commandSearch", json!({}));
+                 }
+-                let share = small_button(ui, Icon::Share, "Share", "Share: export or save a copy", true);
++                // FileFlowHQ Studio: Export downloads a copy (Save keeps the workbook in the browser).
++                let share = small_button(ui, Icon::Share, "Export", "Download a copy: Excel, CSV, web page", true);
+                 egui::Popup::menu(&share).show(|ui| {
+-                    for (label, fmt) in
+-                        [("Save a Copy as Excel Workbook (.xlsx)…", "xlsx"), ("Export as CSV…", "csv"), ("Export as Web Page (.html)…", "html")]
+-                    {
++                    for (label, fmt) in [("Excel workbook (.xlsx)", "xlsx"), ("PDF (.pdf)", "pdf"), ("CSV (.csv)", "csv"), ("Web page (.html)", "html")] {
+                         if ui.button(label).clicked() {
+-                            app.open_dialog("saveCopy", json!({"format": fmt}));
++                            if fmt == "xlsx" && app.services.download.is_some() {
++                                download_xlsx_copy(app);
++                            } else if fmt == "xlsx" {
++                                app.open_dialog("saveCopy", json!({"format": fmt}));
++                            } else {
++                                crate::backstage::export_as(app, fmt);
++                            }
++                            ui.close();
+                         }
+                     }
+                 });
+@@ -147,6 +153,10 @@ pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
+                 // Quick light/dark switch (#194); right-click offers System as well. The same
+                 // choice lives in File › Display theme and the View tab.
+                 let lang = app.ui.language;
++                // FileFlowHQ Studio: light/dark is switched from the Studio bar instead.
++                if app.ui.theme_from_host {
++                    return;
++                }
+                 let theme = icon_button(ui, Icon::Appearance, t.text_dim, "Dark Mode", vec2(28.0, 26.0));
+                 let dark = ui.ctx().theme() == egui::Theme::Dark;
+                 theme.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, dark, lang.tr("Dark Mode")));
+@@ -255,6 +265,9 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
  /// Excel's; the ribbon's tab and collapsed state are left as they were for when it closes.
  fn file_menu(app: &mut SheetApp, ui: &mut Ui) {
      let t = Tokens::get(ui.ctx());
@@ -621,7 +854,7 @@ index e8291ac..4d56818 100644
      let label = egui::RichText::new(app.ui.language.tr("File")).font(theme::ui_font(13.5)).color(t.accent);
      let file = ui.add(egui::Button::new(label).frame(false).min_size(vec2(46.0, 30.0)));
      if file.clicked() {
-@@ -2243,7 +2246,7 @@ fn automate(app: &mut SheetApp, ui: &mut Ui) {
+@@ -2243,7 +2256,7 @@ fn automate(app: &mut SheetApp, ui: &mut Ui) {
      if __k.clicked() {
          app.open_dialog("journal", json!({}));
      }
@@ -630,6 +863,20 @@ index e8291ac..4d56818 100644
      control_keytip(app, ui, &__k, "about");
      if __k.clicked() {
          app.open_dialog("about", json!({}));
+@@ -2482,3 +2495,13 @@ mod title_bar_tests {
+         assert_eq!(MAC_CONTENT_LEFT - lights_end, margin);
+     }
+ }
++
++/// Export ▸ Excel workbook in the browser: the workbook as .xlsx, downloaded (an export: the
++/// workbook's own save is unaffected).
++fn download_xlsx_copy(app: &mut SheetApp) {
++    let Ok(r) = app.run("file.saveBytes", json!({"format": "xlsx"})) else { return };
++    let name = r.get("name").and_then(serde_json::Value::as_str).unwrap_or("Book.xlsx").to_string();
++    if let (Some(dl), Some(b)) = (&app.services.download, r.get("base64").and_then(serde_json::Value::as_str).and_then(gridcraft_engine::io::base64_decode)) {
++        crate::ffhq_brand::as_export(|| dl(&name, &b));
++    }
++}
 diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
 index 485b9a2..2e8f3bd 100644
 --- a/crates/ui-egui/src/theme.rs

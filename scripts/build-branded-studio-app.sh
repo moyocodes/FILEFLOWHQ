@@ -10,7 +10,8 @@
 # and copies the result (index.html renamed to app.html, plus the upstream LICENSE/NOTICE
 # files the licenses require us to keep) into studio-builds/<id>/.
 #
-# Needs: rustup (wasm32-unknown-unknown target) and trunk (`brew install trunk`).
+# Needs: rustup (wasm32-unknown-unknown target) and trunk (`brew install trunk`); FilmCraft
+# needs the wasm-bindgen CLI instead (see its docs/web.md).
 set -euo pipefail
 
 ID=$1 REPO=$2 TAG=$3
@@ -32,10 +33,16 @@ git -C "$SRC" apply "$PATCH"
 # The shared FileFlowHQ brand component (studio/brand/ffhq_brand/), kept out of the patches.
 cp -R "$ROOT/studio/brand/ffhq_brand" "$SRC/${UI_CRATE:-crates/ui-egui}/src/"
 
-(cd "$SRC/apps/$REPO-web" && CRAFT_FONTS_DIR=${CRAFT_FONTS_DIR:-$(dirname "$SRC")/craft-fonts} trunk build --release)
-
 rm -rf "$OUT" && mkdir -p "$OUT"
-cp -R "$SRC/dist/web/." "$OUT/"
+if [ -d "$SRC/xtask" ] && [ -d "$SRC/apps/$REPO-web/web" ]; then
+  # Editors with their own web build (FilmCraft: `cargo xtask web`, needs the wasm-bindgen CLI
+  # at the crate's exact version) instead of trunk.
+  (cd "$SRC" && cargo xtask web)
+  cp -R "$SRC/target/web/dist/." "$OUT/"
+else
+  (cd "$SRC/apps/$REPO-web" && CRAFT_FONTS_DIR=${CRAFT_FONTS_DIR:-$(dirname "$SRC")/craft-fonts} trunk build --release)
+  cp -R "$SRC/dist/web/." "$OUT/"
+fi
 mv "$OUT/index.html" "$OUT/app.html"
 cp "$SRC"/LICENSE-* "$OUT/"
 [ -f "$SRC/NOTICE" ] && cp "$SRC/NOTICE" "$OUT/"

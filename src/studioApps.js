@@ -9,6 +9,7 @@
  * Plain data only (no imports): the fetch script and prerender read it in Node.
  * Bump `version` to upgrade an editor.
  */
+// Commented out: editors not extracted and rebranded yet (no studio-builds/ for them).
 export const studioApps = [
   {
     id: 'pdf-editor',
@@ -18,6 +19,8 @@ export const studioApps = [
     icon: 'FileText',
     status: 'Early alpha',
     repo: 'pdfcraft',
+    // Saving one of these keeps it in this browser; anything else is a paid export (StudioExportGate).
+    saveFormats: ['pdf'],
     // Rebranded from source: upstream v0.7.1 + studio/patches/pdfcraft.patch, built into
     // studio-builds/pdf-editor/ by scripts/build-branded-studio-app.sh. Bump the suffix on rebuilds.
     version: '0.7.1-ffhq.9',
@@ -31,30 +34,31 @@ export const studioApps = [
     icon: 'Image',
     status: 'Early alpha',
     repo: 'photocraft',
+    saveFormats: ['pcraft'],
     // Rebranded: upstream v0.8.2 + studio/patches/photocraft.patch (see pdf-editor).
     version: '0.8.2-ffhq.2',
     branded: true,
   },
-  {
-    id: 'raw-editor',
-    name: 'Photo Library & RAW',
-    tagline: 'Non-destructive photo developing',
-    description: 'Organize photos and develop RAW files non-destructively, with exports straight to your device.',
-    icon: 'Aperture',
-    status: 'In development',
-    repo: 'lightcraft',
-    version: '0.7.1',
-  },
-  {
-    id: 'vector-editor',
-    name: 'Vector Editor',
-    tagline: 'Illustrations, logos, SVG',
-    description: 'Draw and edit vector artwork — paths, shapes, text and SVG export.',
-    icon: 'PenTool',
-    status: 'In development',
-    repo: 'vectorcraft',
-    version: '0.10.0',
-  },
+  // {
+  //   id: 'raw-editor',
+  //   name: 'Photo Library & RAW',
+  //   tagline: 'Non-destructive photo developing',
+  //   description: 'Organize photos and develop RAW files non-destructively, with exports straight to your device.',
+  //   icon: 'Aperture',
+  //   status: 'In development',
+  //   repo: 'lightcraft',
+  //   version: '0.7.1',
+  // },
+  // {
+  //   id: 'vector-editor',
+  //   name: 'Vector Editor',
+  //   tagline: 'Illustrations, logos, SVG',
+  //   description: 'Draw and edit vector artwork — paths, shapes, text and SVG export.',
+  //   icon: 'PenTool',
+  //   status: 'In development',
+  //   repo: 'vectorcraft',
+  //   version: '0.10.0',
+  // },
   {
     id: 'video-editor',
     name: 'Video Editor',
@@ -63,20 +67,22 @@ export const studioApps = [
     icon: 'Clapperboard',
     status: 'In development',
     repo: 'filmcraft',
-    version: '0.7.2',
+    saveFormats: ['fcproj'],
+    version: '0.7.2-ffhq.1',
+    branded: true,
   },
-  {
-    id: 'motion-editor',
-    name: 'Motion & Effects',
-    tagline: 'Motion graphics and compositing',
-    description: 'Keyframed motion graphics, compositing and visual effects.',
-    icon: 'Sparkles',
-    status: 'In development',
-    repo: 'effectcraft',
-    version: '0.9.2',
-    // Its own service worker precaches "./index.html", which we rename to app.html.
-    query: 'nosw',
-  },
+  // {
+  //   id: 'motion-editor',
+  //   name: 'Motion & Effects',
+  //   tagline: 'Motion graphics and compositing',
+  //   description: 'Keyframed motion graphics, compositing and visual effects.',
+  //   icon: 'Sparkles',
+  //   status: 'In development',
+  //   repo: 'effectcraft',
+  //   version: '0.9.2',
+  //   // Its own service worker precaches "./index.html", which we rename to app.html.
+  //   query: 'nosw',
+  // },
   {
     id: 'audio-editor',
     name: 'Audio Studio',
@@ -85,19 +91,20 @@ export const studioApps = [
     icon: 'AudioLines',
     status: 'In development',
     repo: 'soundcraft',
+    saveFormats: ['scraft', 'scraftz'],
     version: '0.6.1-ffhq.2',
     branded: true,
   },
-  {
-    id: 'layout-editor',
-    name: 'Page Layout',
-    tagline: 'Brochures, magazines, print',
-    description: 'Page layout and publishing for print and PDF: frames, typography, master pages.',
-    icon: 'LayoutTemplate',
-    status: 'In development',
-    repo: 'designcraft',
-    version: '0.7.1',
-  },
+  // {
+  //   id: 'layout-editor',
+  //   name: 'Page Layout',
+  //   tagline: 'Brochures, magazines, print',
+  //   description: 'Page layout and publishing for print and PDF: frames, typography, master pages.',
+  //   icon: 'LayoutTemplate',
+  //   status: 'In development',
+  //   repo: 'designcraft',
+  //   version: '0.7.1',
+  // },
   {
     id: 'ui-designer',
     name: 'UI Design',
@@ -106,7 +113,9 @@ export const studioApps = [
     icon: 'Frame',
     status: 'Early alpha',
     repo: 'figcraft',
-    version: '0.5.1',
+    saveFormats: ['figcraft'],
+    version: '0.5.1-ffhq.1',
+    branded: true,
   },
   {
     id: 'word-processor',
@@ -116,6 +125,7 @@ export const studioApps = [
     icon: 'FileType',
     status: 'In development',
     repo: 'wordcraft',
+    saveFormats: ['docx'],
     version: '0.6.1-ffhq.1',
     branded: true,
   },
@@ -127,7 +137,9 @@ export const studioApps = [
     icon: 'Presentation',
     status: 'In development',
     repo: 'deckcraft',
-    version: '0.6.1',
+    saveFormats: ['pptx'],
+    version: '0.6.1-ffhq.1',
+    branded: true,
   },
   {
     id: 'spreadsheet',
@@ -137,18 +149,20 @@ export const studioApps = [
     icon: 'Sheet',
     status: 'In development',
     repo: 'gridcraft',
-    version: '0.6.1',
+    saveFormats: ['xlsx'],
+    version: '0.6.1-ffhq.1',
+    branded: true,
   },
-  {
-    id: 'cad',
-    name: 'CAD Drafting',
-    tagline: '2D drafting and design',
-    description: 'Computer-aided design and drafting with layers, dimensions and precise geometry.',
-    icon: 'DraftingCompass',
-    status: 'In development',
-    repo: 'cadcraft',
-    version: '0.6.2',
-  },
+  // {
+  //   id: 'cad',
+  //   name: 'CAD Drafting',
+  //   tagline: '2D drafting and design',
+  //   description: 'Computer-aided design and drafting with layers, dimensions and precise geometry.',
+  //   icon: 'DraftingCompass',
+  //   status: 'In development',
+  //   repo: 'cadcraft',
+  //   version: '0.6.2',
+  // },
 ]
 
 export const studioPath = (app) => `/studio/${app.id}`

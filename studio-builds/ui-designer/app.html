@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>UI Design — FileFlowHQ Studio</title>
+  <link rel="icon" href="./fileflowhq-d22f90cb7f0819ea.png" integrity="sha384-LvqCN4dQ6vOXATN8cndedzQbziSrWy4sFDrUAnGgImIiTkS6ffRg2xHX9Z3pQnig"/>
+  
+<script type="module">
+import init, * as bindings from './figcraft-web-36ed5f21f7d41b.js';
+const wasm = await init({ module_or_path: './figcraft-web-36ed5f21f7d41b_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #figcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #figcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #6b6b6b; font: 14px system-ui, sans-serif; pointer-events: none; }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: transparent; }
+      #figcraft_loading { color: #b8b8b8; }
+    }
+  </style>
+<link rel="modulepreload" href="./figcraft-web-36ed5f21f7d41b.js" crossorigin="anonymous" integrity="sha384-62warZWzU7DR5IyrLj4R1dpWStqlNNM8OqnXbYDeG8vLv5Dy6jgjhT8Ea0xp1PTu"><link rel="preload" href="./figcraft-web-36ed5f21f7d41b_bg.wasm" crossorigin="anonymous" integrity="sha384-Pvl9O459Q9GZ9iTS/iEagxRYldJgO1dbE/iGXpeapRdb5cJ2zYkqJq+4MPbL8NFS" as="fetch" type="application/wasm"></head>
+<body>
+  <canvas id="figcraft_canvas"></canvas>
+  <div id="figcraft_loading">Loading UI Design&hellip;</div>
+</body>
+</html>

@@ -28,10 +28,18 @@ literal 0
 HcmV?d00001
 
 diff --git a/apps/photocraft-web/Cargo.toml b/apps/photocraft-web/Cargo.toml
-index a4ded64..f1f9177 100644
+index a4ded64..b90d865 100644
 --- a/apps/photocraft-web/Cargo.toml
 +++ b/apps/photocraft-web/Cargo.toml
-@@ -34,7 +34,7 @@ rfd = { workspace = true }
+@@ -20,6 +20,7 @@ path = "src/main.rs"
+ 
+ [dependencies]
+ photocraft-engine = { workspace = true }
++serde_json = { workspace = true }
+ photocraft-io = { workspace = true }
+ photocraft-codecs = { workspace = true }
+ photocraft-doc = { workspace = true }
+@@ -34,7 +35,7 @@ rfd = { workspace = true }
  wasm-bindgen = "0.2"
  wasm-bindgen-futures = "0.4"
  js-sys = "0.3"
@@ -72,22 +80,49 @@ index 5e73400..e2db1c7 100644
    </div>
 diff --git a/apps/photocraft-web/src/host.rs b/apps/photocraft-web/src/host.rs
 new file mode 100644
-index 0000000..c280689
+index 0000000..9f393fb
 --- /dev/null
 +++ b/apps/photocraft-web/src/host.rs
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,188 @@
 +//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
-+//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
 +//!
 +//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
-+//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
-+//!               charges for it, then hands the file to the user.
-+//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
 +//!
 +//! Opened on its own (not embedded), the editor works but can't save or export.
 +
++use std::cell::{Cell, RefCell};
++
 +use js_sys::{Array, Object, Reflect, Uint8Array};
 +use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
 +
 +/// The embedding page's window: a different window than ours, on our own origin.
 +fn parent() -> Option<web_sys::Window> {
@@ -102,6 +137,7 @@ index 0000000..c280689
 +}
 +
 +/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
 +pub fn embedded() -> bool {
 +    parent().is_some()
 +}
@@ -133,14 +169,68 @@ index 0000000..c280689
 +    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
 +}
 +
-+/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
-+pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
 +    let buffer = Uint8Array::from(bytes).buffer();
-+    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
 +}
 +
-+/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
-+pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
 +    let Some(window) = web_sys::window() else { return };
 +    let own_origin = window.location().origin().unwrap_or_default();
 +    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -153,16 +243,34 @@ index 0000000..c280689
 +        }
 +        let data = e.data();
 +        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
-+        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
-+            return;
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
 +        }
-+        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
-+            open(name, Uint8Array::new(&bytes).to_vec());
-+        }
++        wake();
 +    });
 +    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
 +        cb.forget();
 +    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
 +}
 diff --git a/apps/photocraft-web/src/main.rs b/apps/photocraft-web/src/main.rs
 index 5ba75f5..9a5d799 100644
@@ -179,7 +287,7 @@ index 5ba75f5..9a5d799 100644
  mod web;
  
 diff --git a/apps/photocraft-web/src/web.rs b/apps/photocraft-web/src/web.rs
-index 6c99396..ad35a6f 100644
+index 6c99396..1d2fe6c 100644
 --- a/apps/photocraft-web/src/web.rs
 +++ b/apps/photocraft-web/src/web.rs
 @@ -54,6 +54,8 @@ pub fn start() {
@@ -200,22 +308,37 @@ index 6c99396..ad35a6f 100644
                      let inbox: Inbox = Arc::default();
                      let served: Served = Arc::default();
                      load_font_manifest(served.clone(), cc.egui_ctx.clone());
-@@ -88,7 +90,13 @@ pub fn start() {
+@@ -88,7 +90,19 @@ pub fn start() {
                          photocraft_ui_egui::notices::post(&mut app, i18n::t("Some brush presets could not be loaded"), preset_warnings, true, None);
                      }
                      listen_pen(&pen_target, app.stylus.feed.clone());
 -                    app.set_theme(&cc.egui_ctx, ThemeKind::Pro);
 +                    app.set_theme(&cc.egui_ctx, theme);
++                    // Embedded, light/dark comes from the page (the Studio bar), not the editor.
++                    app.ui.theme_from_host = crate::host::embedded();
 +                    // Files the FileFlowHQ page sends in open like dropped files.
 +                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
-+                    crate::host::listen(move |name, bytes| {
-+                        open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
-+                        wake.request_repaint();
-+                    });
++                    let open_wake = wake.clone();
++                    crate::host::listen(
++                        move |name, bytes| {
++                            open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
++                            open_wake.request_repaint();
++                        },
++                        move || wake.request_repaint(),
++                    );
                      if let Some(rs) = cc.wgpu_render_state.clone()
                          && !force_cpu
                      {
-@@ -101,10 +109,14 @@ pub fn start() {
+@@ -96,15 +110,22 @@ pub fn start() {
+                         app.set_wgpu(rs);
+                     }
+                     let unsaved = Arc::new(AtomicBool::new(false));
+-                    guard_unload(unsaved.clone());
++                    // Embedded, the page asks before the visitor leaves (it knows about AutoSave).
++                    if !crate::host::embedded() {
++                        guard_unload(unsaved.clone());
++                    }
+                     Ok(Box::new(WebShell { app, inbox, unsaved, served, database, presets }))
                  }),
              )
              .await;
@@ -231,7 +354,43 @@ index 6c99396..ad35a6f 100644
              }
          }
      });
-@@ -385,7 +397,16 @@ fn services(inbox: Inbox) -> Services {
+@@ -231,6 +252,27 @@ struct WebShell {
+ }
+ 
+ impl WebShell {
++    /// FileFlowHQ Studio: follow the page's theme, save when it asks or when AutoSave is due, and
++    /// tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = crate::host::take_requests();
++        if let Some(dark) = req.dark {
++            self.app.set_theme(ctx, if dark { ThemeKind::Pro } else { ThemeKind::ProLight });
++        }
++        let dirty = self.app.session.active().is_some_and(|d| d.is_dirty());
++        if crate::host::should_save(req.save, dirty) {
++            let mut save = |app: &mut PhotocraftApp| photocraft_ui_egui::menus::invoke(app, ctx, "file.save", serde_json::json!({}));
++            let r = if req.save { save(&mut self.app) } else { crate::host::autosaving(|| save(&mut self.app)) };
++            if let Err(e) = r {
++                log::warn!("save failed: {e}");
++            }
++        }
++        crate::host::report_dirty(self.app.has_unsaved_work());
++        if dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++        }
++    }
++
+     fn save_presets(&mut self, ctx: &egui::Context) {
+         if let Some(db) = self.database.clone()
+             && let Some(batch) = self.presets.begin()
+@@ -302,6 +344,7 @@ impl eframe::App for WebShell {
+         self.serve_fonts(ctx);
+         self.app.logic(ctx, frame);
+         self.save_presets(ctx);
++        self.host_requests(ctx);
+     }
+ 
+     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+@@ -385,7 +428,16 @@ fn services(inbox: Inbox) -> Services {
                  reply.send(Some(FileDialogAnswer::SaveTo(name)));
              }
          })),
@@ -241,7 +400,7 @@ index 6c99396..ad35a6f 100644
 +        write: Some(Box::new(|path: &str, bytes: &[u8]| {
 +            let name = std::path::Path::new(path).file_name().map_or_else(|| "image".to_string(), |n| n.to_string_lossy().to_string());
 +            if crate::host::embedded() {
-+                crate::host::export(&name, bytes)
++                crate::host::export(&name, bytes, photocraft_ui_egui::ffhq_brand::is_export())
 +            } else {
 +                Err("Saving and exporting work at fileflowhq.com/studio/photo-editor".to_string())
 +            }
@@ -249,7 +408,7 @@ index 6c99396..ad35a6f 100644
          encode_png: Some(Box::new(|w, h, rgba| {
              let img = Image::from_u8(w, h, ChannelLayout::Rgba, rgba.to_vec()).map_err(|e| e.to_string())?;
              photocraft_codecs::encode(&img, photocraft_codecs::Format::Png, &EncodeOptions::default()).map_err(|e| e.to_string())
-@@ -404,46 +425,6 @@ fn local_storage() -> Option<web_sys::Storage> {
+@@ -404,46 +456,6 @@ fn local_storage() -> Option<web_sys::Storage> {
      web_sys::window()?.local_storage().ok().flatten()
  }
  
@@ -864,21 +1023,16 @@ index 4ac3f3e..d242722 100644
          .query_all(egui_kittest::kittest::by().predicate(|n| n.bounding_box().is_some()))
          .map(|n| n.rect())
 diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
-index 1573d5e..b488708 100644
+index 1573d5e..9b78ea7 100644
 --- a/crates/ui-egui/src/dialogs.rs
 +++ b/crates/ui-egui/src/dialogs.rs
-@@ -418,12 +418,15 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
+@@ -418,12 +418,10 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
          "contributors" => crate::credits::contributors_ui(app, ui),
          "models" => crate::credits::models_ui(ui),
          _ => {
 -            ui.label(tl!("PhotoCraft — an open-source, native image editor written in Rust."));
 +            ui.label(tl!("Photo Editor — part of FileFlowHQ Studio. Runs entirely in your browser."));
              ui.label(crate::i18n::fmt(tl!("Version {version}"), &[("version", &photocraft_engine::build_info::long_version())]));
-+            ui.add_space(6.0);
-+            // The upstream licenses (MIT OR Apache-2.0) ship with the app; credit the project too.
-+            if ui.link(tl!("Built on PhotoCraft, open source (MIT / Apache-2.0)")).on_hover_text(crate::links::UPSTREAM).clicked() {
-+                crate::links::open(app, ui.ctx(), crate::links::UPSTREAM);
-+            }
              ui.add_space(12.0);
              ui.vertical_centered(|ui| {
 -                crate::links::discord_button(app, ui, 220.0);
@@ -886,7 +1040,7 @@ index 1573d5e..b488708 100644
                  crate::links::link_row(app, ui);
              });
              ui.add_space(10.0);
-@@ -450,7 +453,7 @@ pub fn title(d: &Dialog) -> String {
+@@ -450,7 +448,7 @@ pub fn title(d: &Dialog) -> String {
      match d.kind {
          DialogKind::NewDocument => "New Document".into(),
          DialogKind::About if d.fields.get("systemInfo").and_then(Value::as_bool) == Some(true) => "System Info".into(),
@@ -895,15 +1049,46 @@ index 1573d5e..b488708 100644
          DialogKind::LayerStyle => "Layer Style".into(),
          DialogKind::Command => d.fields.get("__label").and_then(Value::as_str).unwrap_or("Command").trim_end_matches('…').to_string(),
          DialogKind::Error => "Error".into(),
+diff --git a/crates/ui-egui/src/export_dialog.rs b/crates/ui-egui/src/export_dialog.rs
+index cd520d5..3bd1a6d 100644
+--- a/crates/ui-egui/src/export_dialog.rs
++++ b/crates/ui-egui/src/export_dialog.rs
+@@ -97,7 +97,7 @@ pub fn quick_export_selected_layers_png(app: &mut PhotocraftApp) -> Result<Value
+             let export = app.services.export.as_ref().ok_or("no exporter configured")?;
+             let (bytes, warnings) = export(doc, &path, &ExportSettings { xmp_all: false, ..Default::default() })?;
+             let write = app.services.write.as_mut().ok_or("no writer configured")?;
+-            write(&path, &bytes)?;
++            crate::ffhq_brand::as_export(|| write(&path, &bytes))?;
+             crate::notices::io_warnings(app, &format!("Exported {}", crate::file_open::display_name(&path)), &warnings);
+             exported.push(json!({"path": path, "bytes": bytes.len(), "warnings": warnings}));
+         }
+@@ -369,7 +369,7 @@ pub fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value,
+         let export = app.services.export.as_ref().ok_or("no exporter configured")?;
+         let (bytes, warnings) = export(&out, &path, &settings)?;
+         let write = app.services.write.as_mut().ok_or("no writer configured")?;
+-        write(&path, &bytes)?;
++        crate::ffhq_brand::as_export(|| write(&path, &bytes))?;
+         let template = "Exported {path} ({size})";
+         app.ui.status = crate::i18n::fmt(tl!(template), &[("path", &path), ("size", &crate::sizing::human_bytes(bytes.len() as f64))]);
+         app.ui.status_error = false;
+@@ -400,7 +400,7 @@ fn confirm_layers(app: &mut PhotocraftApp, f: &Map<String, Value>, ids: &[photoc
+             let export = app.services.export.as_ref().ok_or("no exporter configured")?;
+             let (bytes, warnings) = export(&out, &path, &settings)?;
+             let write = app.services.write.as_mut().ok_or("no writer configured")?;
+-            write(&path, &bytes)?;
++            crate::ffhq_brand::as_export(|| write(&path, &bytes))?;
+             let template = "Exported {path}";
+             let what = crate::i18n::fmt(tl!(template), &[("path", &crate::file_open::display_name(&path))]);
+             crate::notices::io_warnings(app, &what, &warnings);
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 2042e1e..b96e240 100644
+index 2042e1e..c4da08a 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -27,6 +27,7 @@ pub mod artboard_ui;
  mod blend_keys;
  pub(crate) mod blend_preview;
  mod brand;
-+mod ffhq_brand;
++pub mod ffhq_brand;
  pub(crate) mod brush_cursor;
  pub mod brush_panel;
  pub mod brush_picker;
@@ -1042,7 +1227,7 @@ index 18f1d6a..3875a88 100644
              let help = h.get_by_label("Help").rect().center();
              click(&mut h, help);
 diff --git a/crates/ui-egui/src/panels.rs b/crates/ui-egui/src/panels.rs
-index 0f6a1b8..b4dd141 100644
+index 0f6a1b8..42f278b 100644
 --- a/crates/ui-egui/src/panels.rs
 +++ b/crates/ui-egui/src/panels.rs
 @@ -541,7 +541,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
@@ -1064,7 +1249,36 @@ index 0f6a1b8..b4dd141 100644
                      crate::brand::paint_mark(ui, mark);
                      ui.add_space(6.0);
                  }
-@@ -623,25 +624,6 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+@@ -564,7 +565,18 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                 let menus_end = if app.services.native_menu.is_some() {
+                     if rtl { ui.cursor().right() } else { ui.cursor().left() }
+                 } else {
+-                    crate::menus::menu_bar(app, ui)
++                    crate::menus::menu_bar(app, ui);
++                    // FileFlowHQ Studio: New and Open as pills beside the menus (the site's look).
++                    ui.add_space(10.0);
++                    let ctx = ui.ctx().clone();
++                    if crate::ffhq_brand::pill_button_sized(ui, tl!("New"), true, theme::medium(12.5), 26.0).on_hover_text(tl!("New document")).clicked() {
++                        let _ = crate::menus::invoke(app, &ctx, "file.new", json!({}));
++                    }
++                    ui.add_space(4.0);
++                    if crate::ffhq_brand::pill_button_sized(ui, tl!("Open"), false, theme::medium(12.5), 26.0).on_hover_text(tl!("Open a file from your device")).clicked() {
++                        let _ = crate::menus::invoke(app, &ctx, "file.open", json!({}));
++                    }
++                    if rtl { ui.cursor().right() } else { ui.cursor().left() }
+                 };
+                 // The menu bar takes the whole row, so the far-end group gets its own rect: from
+                 // the menus to the bar's end, or to the caption buttons.
+@@ -616,32 +628,14 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+                         photocraft_engine::prefs::AppearanceMode::Light => ("sun", tl!("Light")),
+                     };
+                     let appearance_tip = format!("{}: {}", tl!("Appearance Mode"), appearance_label);
+-                    if icons_shown >= 2 {
++                    // FileFlowHQ Studio: light/dark is switched from the Studio bar (the site's theme).
++                    if icons_shown >= 2 && !app.ui.theme_from_host {
+                         let button = icons::button(ui, theme_icon, 28.0, false, &appearance_tip);
+                         if button.clicked() {
+                             crate::prefs_ui::cycle_appearance(app, ui.ctx());
                          }
                          button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
                      }
@@ -1090,7 +1304,7 @@ index 0f6a1b8..b4dd141 100644
                      if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                  };
                  free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
-@@ -683,7 +665,7 @@ pub fn system_title_bar(app: &PhotocraftApp) -> bool {
+@@ -683,7 +677,7 @@ pub fn system_title_bar(app: &PhotocraftApp) -> bool {
  /// marks unsaved changes, like the `•` in the app-drawn title), or just the app name with no
  /// document open.
  pub fn window_title(app: &PhotocraftApp) -> String {
@@ -1099,7 +1313,7 @@ index 0f6a1b8..b4dd141 100644
  }
  
  /// Keep the OS window title (and the taskbar / Alt-Tab entry) on the active file. Sends
-@@ -699,7 +681,6 @@ pub fn sync_window_title(app: &mut PhotocraftApp, ctx: &egui::Context) {
+@@ -699,7 +693,6 @@ pub fn sync_window_title(app: &mut PhotocraftApp, ctx: &egui::Context) {
  /// Minimum space kept between the window title and the menus or controls beside it.
  const TITLE_GAP: f32 = 16.0;
  /// Free room the title bar needs after its other controls to show the Discord button.
@@ -1107,7 +1321,7 @@ index 0f6a1b8..b4dd141 100644
  /// The workspace switcher's narrowest width, and one 28 pt title-bar icon with its spacing.
  const WORKSPACE_MIN: f32 = 90.0;
  const ICON_SLOT: f32 = 34.0;
-@@ -760,19 +741,19 @@ mod title_tests {
+@@ -760,19 +753,19 @@ mod title_tests {
  
      #[test]
      fn window_title_with_no_document_is_the_app_name() {
@@ -1130,7 +1344,7 @@ index 0f6a1b8..b4dd141 100644
      }
  
      #[test]
-@@ -810,11 +791,11 @@ mod title_tests {
+@@ -810,11 +803,11 @@ mod title_tests {
          let ctx = egui::Context::default();
          crate::PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
          super::sync_window_title(&mut app, &ctx);
@@ -1144,7 +1358,7 @@ index 0f6a1b8..b4dd141 100644
          // Same document state again: the cached title stops a repeat command.
          super::sync_window_title(&mut app, &ctx);
          let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-@@ -823,7 +804,7 @@ mod title_tests {
+@@ -823,7 +816,7 @@ mod title_tests {
          assert!(!cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(_))), "repeat Title: {cmds:?}");
          open_named(&mut app, "foo.psd");
          super::sync_window_title(&mut app, &ctx);
@@ -1153,6 +1367,28 @@ index 0f6a1b8..b4dd141 100644
      }
  }
  
+diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
+index ee348d9..fddf43d 100644
+--- a/crates/ui-egui/src/state.rs
++++ b/crates/ui-egui/src/state.rs
+@@ -1027,6 +1027,9 @@ pub struct ColorPanelState {
+ 
+ #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+ pub struct UiState {
++    /// FileFlowHQ Studio: light/dark follows the embedding page, so the in-editor switch is hidden.
++    #[serde(skip)]
++    pub theme_from_host: bool,
+     pub tool: Tool,
+     /// The last tool used in each shortcut group (the tools sharing a key, [`Tool::key`]), at most
+     /// one per group: the group's key brings it back, as in Photoshop (#2608).
+@@ -1241,6 +1244,7 @@ pub struct UiState {
+ impl Default for UiState {
+     fn default() -> Self {
+         Self {
++            theme_from_host: false,
+             tool: Tool::Brush,
+             group_tools: Vec::new(),
+             recent_files: Vec::new(),
 diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
 index bee0104..deee548 100644
 --- a/crates/ui-egui/src/theme.rs

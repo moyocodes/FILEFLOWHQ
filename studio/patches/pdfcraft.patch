@@ -19,17 +19,218 @@ index 46b3a25..d28342c 100644
      </style>
    </head>
    <body>
+diff --git a/apps/pdfcraft-web/src/ffhq_host.rs b/apps/pdfcraft-web/src/ffhq_host.rs
+new file mode 100644
+index 0000000..179b3b7
+--- /dev/null
++++ b/apps/pdfcraft-web/src/ffhq_host.rs
+@@ -0,0 +1,188 @@
++//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
++//!
++//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
++//!
++//! Opened on its own (not embedded), the editor works but can't save or export.
++
++use std::cell::{Cell, RefCell};
++
++use js_sys::{Array, Object, Reflect, Uint8Array};
++use web_sys::wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
++
++/// The embedding page's window: a different window than ours, on our own origin.
++fn parent() -> Option<web_sys::Window> {
++    let window = web_sys::window()?;
++    let parent = window.parent().ok().flatten()?;
++    if Object::is(&parent, &window) {
++        return None;
++    }
++    // Reading another origin's location throws: that page isn't ours.
++    let theirs = parent.location().origin().ok()?;
++    (theirs == window.location().origin().ok()?).then_some(parent)
++}
++
++/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
++pub fn embedded() -> bool {
++    parent().is_some()
++}
++
++fn message(fields: &[(&str, JsValue)]) -> Option<Object> {
++    let o = Object::new();
++    for (k, v) in fields {
++        Reflect::set(&o, &JsValue::from_str(k), v).ok()?;
++    }
++    Some(o)
++}
++
++fn post(fields: &[(&str, JsValue)], transfer: Option<&JsValue>) -> Result<(), String> {
++    let parent = parent().ok_or("not embedded in fileflowhq.com")?;
++    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).ok_or("no origin")?;
++    let m = message(fields).ok_or("couldn't build the message")?;
++    match transfer {
++        Some(t) => parent.post_message_with_transfer(&m, &origin, &Array::of1(t)),
++        None => parent.post_message(&m, &origin),
++    }
++    .map_err(|e| format!("{e:?}"))
++}
++
++pub fn post_ready() {
++    let _ = post(&[("type", "pdfcraft:ready".into())], None);
++}
++
++pub fn post_failed(error: &str) {
++    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
++}
++
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
++    let buffer = Uint8Array::from(bytes).buffer();
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
++}
++
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
++    let Some(window) = web_sys::window() else { return };
++    let own_origin = window.location().origin().unwrap_or_default();
++    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
++        let from_parent = match (parent(), e.source()) {
++            (Some(p), Some(src)) => Object::is(&p, &src),
++            _ => false,
++        };
++        if !from_parent || e.origin() != own_origin {
++            return;
++        }
++        let data = e.data();
++        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
++        }
++        wake();
++    });
++    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
++        cb.forget();
++    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
++}
 diff --git a/apps/pdfcraft-web/src/main.rs b/apps/pdfcraft-web/src/main.rs
-index a46a467..f84ca3a 100644
+index a46a467..41b7ba4 100644
 --- a/apps/pdfcraft-web/src/main.rs
 +++ b/apps/pdfcraft-web/src/main.rs
-@@ -1,4 +1,4 @@
+@@ -1,8 +1,11 @@
 -//! PdfCraft in the browser. Build: `cd apps/pdfcraft-web && trunk build --release`
 +//! FileFlowHQ in the browser. Build: `cd apps/pdfcraft-web && trunk build --release`
  //! (trunk generates the JS loader; no handwritten JS — plan/execution-plan.md §1).
  
  #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
-@@ -27,6 +27,10 @@ fn main() {
+ 
++#[cfg(target_arch = "wasm32")]
++mod ffhq_host;
++
+ #[cfg(target_arch = "wasm32")]
+ fn main() {
+     use eframe::wasm_bindgen::JsCast;
+@@ -27,6 +30,10 @@ fn main() {
                      if let Some(json) = cc.storage.and_then(|s| s.get_string("pdfcraft").or_else(|| s.get_string("printcraft"))) {
                          app.restore(&json);
                      }
@@ -40,7 +241,7 @@ index a46a467..f84ca3a 100644
                      // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).
                      if let Some(url) = query_param("file") {
                          let inbox = app.startup_inbox.clone();
-@@ -41,7 +45,7 @@ fn main() {
+@@ -41,7 +48,7 @@ fn main() {
                                      }
                                  }
                                  Err(e) => {
@@ -49,7 +250,7 @@ index a46a467..f84ca3a 100644
                                      // Shown in the app too, not only in the console (#173).
                                      if let Ok(mut q) = failed.lock() {
                                          q.push((name, e));
-@@ -53,22 +57,33 @@ fn main() {
+@@ -53,22 +60,61 @@ fn main() {
                      }
                      // eframe never raises a close request on a browser reload or tab close, so `guard_quit` never
                      // prompts; ask the browser to confirm instead while a document has unsaved work (#812).
@@ -88,10 +289,38 @@ index a46a467..f84ca3a 100644
                          app.host_dirty = Some(bridge.dirty_fn());
 +                        app.host_action = Some(bridge.action_fn());
 +                        app.host_snapshot = Some(bridge.snapshot_fn());
++                        // FileFlowHQ Studio: the page's theme, Save and AutoSave (`ffhq_host`).
++                        let wake = cc.egui_ctx.clone();
++                        ffhq_host::listen(|_, _| {}, move || wake.request_repaint());
++                        // The edit generation AutoSave last kept (so an unchanged document isn't sent again).
++                        let mut kept: Option<u64> = None;
++                        app.host_poll = Some(Box::new(move |app: &mut PdfCraftApp, ctx: &egui::Context| {
++                            let req = ffhq_host::take_requests();
++                            if let Some(dark) = req.dark {
++                                let _ = app.set_option("theme", if dark { "dark" } else { "light" });
++                            }
++                            let dirty = app.first_dirty().is_some();
++                            if req.save {
++                                // Save asked for by the page (e.g. leaving with "Save"): a real save.
++                                let _ = ffhq_host::should_save(true, dirty);
++                                app.save_active(pdfcraft_ui_egui::SaveTarget::InPlace);
++                            } else if let Some((name, bytes, generation)) = app.autosave_copy().filter(|c| Some(c.2) != kept)
++                                // Never in the middle of a text edit, and only after a pause.
++                                && ffhq_host::should_save(false, dirty && !app.editing_text())
++                            {
++                                // AutoSave keeps a copy in the browser without saving the document:
++                                // a save would turn the text being worked on into page content.
++                                kept = Some(generation);
++                                let _ = ffhq_host::autosaving(|| ffhq_host::export(&name, &bytes, false));
++                            }
++                            if dirty {
++                                ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++                            }
++                        }));
                          bridge.post_ready();
                      }
                      Ok(Box::new(app))
-@@ -169,6 +184,34 @@ mod host {
+@@ -169,6 +215,34 @@ mod host {
          }
  
          /// The app couldn't start (no WebGL, for example): let the parent say so.
@@ -126,7 +355,7 @@ index a46a467..f84ca3a 100644
          pub fn post_failed(&self, error: &str) {
              if let Some(m) = message(&[("type", "pdfcraft:failed".into()), ("error", error.into())]) {
                  let _ = self.post(&m, None);
-@@ -207,6 +250,7 @@ mod host {
+@@ -207,6 +281,7 @@ mod host {
              }
          }
  
@@ -134,7 +363,7 @@ index a46a467..f84ca3a 100644
          pub fn save_fn(&self) -> pdfcraft_ui_egui::HostSaveFn {
              let bridge = self.clone();
              Box::new(move |name: &str, bytes: &[u8], save_as: bool| {
-@@ -218,6 +262,18 @@ mod host {
+@@ -218,6 +293,15 @@ mod host {
              })
          }
  
@@ -142,12 +371,9 @@ index a46a467..f84ca3a 100644
 +        /// page charges for it and then hands the file to the user.
 +        pub fn export_fn(&self) -> pdfcraft_ui_egui::DownloadHook {
 +            let bridge = self.clone();
-+            Box::new(move |name: &str, bytes: &[u8]| {
-+                let buffer = js_sys::Uint8Array::from(bytes).buffer();
-+                let m = message(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())])
-+                    .ok_or_else(|| "couldn't build the message".to_string())?;
-+                bridge.post(&m, Some(&buffer))
-+            })
++            let _ = bridge;
++            // Saves stay in the browser; everything else (exports, printouts) downloads.
++            Box::new(move |name: &str, bytes: &[u8]| crate::ffhq_host::export(name, bytes, !pdfcraft_ui_egui::ffhq_brand::is_save()))
 +        }
 +
          pub fn dirty_fn(&self) -> pdfcraft_ui_egui::HostDirtyFn {
@@ -6643,7 +6869,7 @@ index 1f9105e..11a362d 100644
          ))
      } else if info.xfa == Some(pdfcraft_render::Xfa::Static) {
 diff --git a/crates/ui-egui/src/chrome.rs b/crates/ui-egui/src/chrome.rs
-index 1f2d237..75faa5b 100644
+index 1f2d237..5658a82 100644
 --- a/crates/ui-egui/src/chrome.rs
 +++ b/crates/ui-egui/src/chrome.rs
 @@ -21,42 +21,50 @@ const MAC_LIGHTS_LEFT: f32 = 10.0;
@@ -6902,10 +7128,10 @@ index 1f2d237..75faa5b 100644
                              app.dialog = Some(Dialog::Properties(PropsTab::Description));
                          }
 -                    });
-+                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Save ({key})"), "file.save");
-+                        if icons::button(ui, "save", 32.0, false, &tip).clicked() {
-+                            app.run_command("file.save");
-+                        }
++                        // FileFlowHQ Studio: Save (⌘S, File menu) keeps the PDF in the browser; this
++                        // downloads it, as a PDF or converted to another format.
++                        let export = widgets::secondary_button(ui, "file-output", tl!("Export"));
++                        egui::Popup::menu(&export).show(|ui| export_menu(app, ui));
 +                    }
 +                    ui.add_space(10.0);
 +                    let tip = crate::commands::command_tip(ui.ctx(), tl!("Open a PDF ({key})"), "file.open");
@@ -6949,6 +7175,49 @@ index 1f2d237..75faa5b 100644
          ui.menu_button(tl!("File"), |ui| crate::commands::registry_menu(app, ui, "File"));
          ui.menu_button(tl!("Edit"), |ui| crate::commands::registry_menu(app, ui, "Edit"));
          ui.menu_button(tl!("Pages"), |ui| crate::commands::registry_menu(app, ui, "Pages"));
+@@ -733,3 +765,42 @@ mod tab_widths {
+         assert!(MAC_CONTENT_LEFT <= f32::from(i8::MAX));
+     }
+ }
++
++/// Export ▸ the formats a PDF can be downloaded as (each one is an export: paid, downloaded).
++fn export_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
++    ui.label(egui::RichText::new(tl!("Export as")).strong());
++    ui.separator();
++    if ui.button(tl!("PDF document (.pdf)")).clicked() {
++        download_pdf_copy(app);
++        ui.close();
++    }
++    for (label, cmd) in [
++        ("Word document (.docx)", "export.docx"),
++        ("PowerPoint (.pptx)", "export.pptx"),
++        ("Rich Text (.rtf)", "export.rtf"),
++        ("Web page (.html)", "export.html"),
++        ("Plain text (.txt)", "export.text"),
++        ("Images (PNG, JPEG, TIFF)", "export.image"),
++        ("All images in the PDF", "export.all_images"),
++    ] {
++        if ui.button(tl!(label)).clicked() {
++            app.run_command(cmd);
++            ui.close();
++        }
++    }
++}
++
++/// The open PDF as it is now, downloaded (an export: the document's own save is unaffected).
++fn download_pdf_copy(app: &mut PdfCraftApp) {
++    let Some(id) = app.active.and_then(|i| app.views.get(i)).map(|v| v.id) else { return };
++    let Some(name) = app.session.get(id).map(|d| d.name.clone()) else { return };
++    let name = if name.to_ascii_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") };
++    match app.session.save_bytes(id) {
++        Ok(bytes) => {
++            if let Err(e) = crate::editing::download(&name, &bytes) {
++                app.notify_fmt("Couldn't download {name}: {e}", &[("name", &name), ("e", &e)]);
++            }
++        }
++        Err(e) => app.notify_fmt("Couldn't export {name}: {e}", &[("name", &name), ("e", &e.to_string())]),
++    }
++}
 diff --git a/crates/ui-egui/src/comments.rs b/crates/ui-egui/src/comments.rs
 index 623f89b..6ad94d7 100644
 --- a/crates/ui-egui/src/comments.rs
@@ -7164,10 +7433,33 @@ index fe4c039..6ebd364 100644
      style.accent = t.accent;
      style.font = crate::theme::medium(12.0);
 diff --git a/crates/ui-egui/src/editing.rs b/crates/ui-egui/src/editing.rs
-index 6410898..7060c38 100644
+index 6410898..267a6ba 100644
 --- a/crates/ui-egui/src/editing.rs
 +++ b/crates/ui-egui/src/editing.rs
-@@ -619,7 +619,7 @@ impl PdfCraftApp {
+@@ -465,6 +465,22 @@ impl PdfCraftApp {
+     /// [`Self::commit_form_typing`] for document `id`, which may not be the active tab (a save
+     /// panel answering later, Close All). If its tab has typing or a queued edit, the tab is
+     /// brought forward first, so the commit and any field scripts act on that document.
++    /// FileFlowHQ Studio's AutoSave: the active document as it is now (name, PDF bytes, and the
++    /// edit generation it reflects), without saving it. A real save rebuilds the document from the
++    /// written file, which turns added text into page content; AutoSave must not do that while the
++    /// visitor is still working on it.
++    pub fn autosave_copy(&self) -> Option<(String, std::sync::Arc<Vec<u8>>, u64)> {
++        let id = self.views.get(self.active?)?.id;
++        let doc = self.session.get(id)?;
++        let name = if doc.name.to_ascii_lowercase().ends_with(".pdf") { doc.name.clone() } else { format!("{}.pdf", doc.name) };
++        Some((name, self.session.save_bytes(id).ok()?, doc.edit_generation()))
++    }
++
++    /// Whether text is being edited right now (FileFlowHQ Studio's AutoSave waits for it).
++    pub fn editing_text(&self) -> bool {
++        self.views.iter().any(|v| v.content.draft.is_some())
++    }
++
+     pub(crate) fn commit_typing_in(&mut self, id: pdfcraft_engine::DocId) -> bool {
+         let Some(i) = self.views.iter().position(|v| v.id == id) else { return true };
+         // Added text the standard fonts can't draw can't be saved: show it rather than drop it.
+@@ -619,10 +635,11 @@ impl PdfCraftApp {
              };
              // An embedding page that asked for saves (`?host=parent`) gets the bytes; otherwise
              // the browser downloads them.
@@ -7175,8 +7467,13 @@ index 6410898..7060c38 100644
 +            let to_host = true; // FileFlowHQ: the page reports where the file went
              let delivered = match &self.host_save {
                  Some(save) => save(&name, &bytes, matches!(target, SaveTarget::As)),
-                 None => download(&name, &bytes),
-@@ -947,9 +947,34 @@ fn short_name(path: &str) -> String {
+-                None => download(&name, &bytes),
++                // FileFlowHQ Studio: this is a save (kept in the browser); other downloads are exports.
++                None => crate::ffhq_brand::as_save(|| download(&name, &bytes)),
+             };
+             match delivered {
+                 Ok(()) => {
+@@ -947,9 +964,34 @@ fn short_name(path: &str) -> String {
      std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string())
  }
  
@@ -11415,7 +11712,7 @@ index bf64ea7..c926d0b 100644
  pub struct LastSession {
      pub files: Vec<SessionFile>,
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 2d4f5b0..43bc762 100644
+index 2d4f5b0..cbbfa7b 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -1,4 +1,4 @@
@@ -11429,7 +11726,7 @@ index 2d4f5b0..43bc762 100644
  mod actions_ui;
  mod appearance;
 +mod brand;
-+mod ffhq_brand;
++pub mod ffhq_brand;
  pub mod canvas;
  mod chrome;
  mod combine_grid;
@@ -11474,13 +11771,17 @@ index 2d4f5b0..43bc762 100644
      /// [`PdfCraftApp::reopen_last_files`].
      pub last_session: last_session::LastSession,
      /// Quitting closes unsaved tabs one by one: what was open when the quit began.
-@@ -548,12 +557,20 @@ pub struct PdfCraftApp {
+@@ -548,12 +557,24 @@ pub struct PdfCraftApp {
      pub host_save: Option<HostSaveFn>,
      /// Reports unsaved work to the embedding page (web, see [`HostDirtyFn`]).
      pub host_dirty: Option<HostDirtyFn>,
 +    /// Set when a fileflowhq.com page embeds the editor: the top bar then offers Back and Full screen.
 +    pub host_action: Option<HostActionFn>,
 +    pub host_snapshot: Option<HostSnapshotFn>,
++    /// FileFlowHQ Studio: called every frame so the web shell can act on the embedding page's
++    /// requests (theme, Save, AutoSave).
++    #[allow(clippy::type_complexity)]
++    pub host_poll: Option<Box<dyn FnMut(&mut PdfCraftApp, &egui::Context)>>,
 +    /// What the last snapshot held (name, bytes identity), and when the next one is due.
 +    snapshot_sig: Vec<(String, usize)>,
 +    snapshot_due: Option<f64>,
@@ -11495,7 +11796,7 @@ index 2d4f5b0..43bc762 100644
      /// Document Properties ▸ Initial View (and reading options) being edited.
      pub view_draft: Option<(DocId, pdfcraft_engine::InitialView)>,
      /// Files picked asynchronously for combine / insert (web).
-@@ -813,8 +830,8 @@ impl PdfCraftApp {
+@@ -813,8 +834,8 @@ impl PdfCraftApp {
              quick_tool: QuickTool::Select,
              space_hand: None,
              comment_prefs: Default::default(),
@@ -11506,12 +11807,13 @@ index 2d4f5b0..43bc762 100644
              reading_colors: Default::default(),
              #[cfg(target_os = "linux")]
              desktop_theme: None,
-@@ -858,9 +875,14 @@ impl PdfCraftApp {
+@@ -858,9 +879,15 @@ impl PdfCraftApp {
              os_events: None,
              host_save: None,
              host_dirty: None,
 +            host_action: None,
 +            host_snapshot: None,
++            host_poll: None,
 +            snapshot_sig: Vec::new(),
 +            snapshot_due: None,
              close_request: None,
@@ -11521,7 +11823,7 @@ index 2d4f5b0..43bc762 100644
              view_draft: None,
              requests: Default::default(),
              #[cfg(not(target_arch = "wasm32"))]
-@@ -1485,7 +1507,7 @@ impl PdfCraftApp {
+@@ -1485,7 +1512,7 @@ impl PdfCraftApp {
          client
      }
  
@@ -11530,7 +11832,7 @@ index 2d4f5b0..43bc762 100644
      /// links; an address that came from a document goes through [`Self::request_document_url`].
      pub fn open_url(&mut self, url: &str) {
          if let Some(ctx) = &self.ctx {
-@@ -1508,9 +1530,9 @@ impl PdfCraftApp {
+@@ -1508,9 +1535,9 @@ impl PdfCraftApp {
              Err(e) => {
                  use pdfcraft_engine::links::BlockedLink;
                  let template = if matches!(e, BlockedLink::MailFile | BlockedLink::MailEncodedWord) {
@@ -11542,15 +11844,19 @@ index 2d4f5b0..43bc762 100644
                  };
                  self.notify_fmt(template, &[("who", tl!(origin.noun())), ("e", &e.to_string())]);
              }
-@@ -2499,6 +2521,7 @@ impl eframe::App for PdfCraftApp {
+@@ -2499,6 +2526,11 @@ impl eframe::App for PdfCraftApp {
                  report(dirty);
              }
          }
 +        self.host_snapshot_frame(ctx);
++        if let Some(mut poll) = self.host_poll.take() {
++            poll(self, ctx);
++            self.host_poll = Some(poll);
++        }
          self.poll_updates();
          self.poll_print();
          // Shortcuts deferred last frame: the text field has taken that frame's typing since.
-@@ -2549,7 +2572,7 @@ impl eframe::App for PdfCraftApp {
+@@ -2549,7 +2581,7 @@ impl eframe::App for PdfCraftApp {
              .and_then(|i| self.session.get(self.views[i].id))
              .map(|d| d.display_name())
              .or_else(|| self.combine_showing().then(|| tl!("Combine files").to_owned()))
@@ -11559,7 +11865,7 @@ index 2d4f5b0..43bc762 100644
          if title != self.window_title {
              ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
              self.window_title = title;
-@@ -2572,8 +2595,10 @@ impl eframe::App for PdfCraftApp {
+@@ -2572,8 +2604,10 @@ impl eframe::App for PdfCraftApp {
              self.finish_render_frame(&ctx);
              return;
          }
@@ -11572,7 +11878,7 @@ index 2d4f5b0..43bc762 100644
          if self.active.is_some() {
              chrome::right_rail(self, ui);
              // Read mode hides the tools, not the navigation panes: the rail stays visible
-@@ -2609,6 +2634,39 @@ impl eframe::App for PdfCraftApp {
+@@ -2609,6 +2643,39 @@ impl eframe::App for PdfCraftApp {
      }
  }
  

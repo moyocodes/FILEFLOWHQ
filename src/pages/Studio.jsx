@@ -18,13 +18,17 @@ import {
   FileType,
   Presentation,
   Sheet,
-  DraftingCompass
+  DraftingCompass,
+  FolderOpen,
+  Download,
+  Trash2
 } from 'lucide-react'
 import { studioApps, studioPath, studioAppSrc } from '../studioApps.js'
 import { applySeo } from '../utils/useSeo.js'
 import { isNative } from '../utils/platform.js'
 import StudioExportGate from '../components/StudioExportGate.jsx'
-import { keepDocuments, keptDocuments } from '../utils/studioStore.js'
+import { keepDocuments, keptDocuments, savedFiles, removeSavedFile } from '../utils/studioStore.js'
+import ThemeToggle from '../components/ThemeToggle.jsx'
 
 export const studioIcons = {
   FileText,
@@ -152,11 +156,30 @@ export function StudioAppPage({ app, active = true }) {
   const navigate = useNavigate()
   const frame = useRef(null)
   const stage = useRef(null)
-  // Rebranded editors open in the site's theme. Read once: changing the src would reload the editor.
+  // Rebranded editors open in the site's theme (the src is read once: changing it would reload the
+  // editor) and then follow it live through `ffhq:theme`.
   const [theme] = useState(() =>
     typeof document !== 'undefined' && !document.documentElement.classList.contains('dark') ? 'light' : 'dark'
   )
   const src = studioAppSrc(app, ORIGIN, app.branded ? { theme } : {})
+  // AutoSave is off until the visitor turns it on (remembered per editor, in this browser).
+  const [autosave, setAutosaveState] = useState(() => readAutosave(app.id))
+  const [dirty, setDirty] = useState(false)
+  const setAutosave = (on, tellEditor = true) => {
+    setAutosaveState(on)
+    try {
+      localStorage.setItem(`ffhq-autosave:${app.id}`, on ? '1' : '0')
+    } catch {
+      // storage blocked: the choice lasts for this visit
+    }
+    if (tellEditor) frame.current?.contentWindow?.postMessage({ type: 'ffhq:autosave', on }, window.location.origin)
+    // Without AutoSave nothing is kept between visits.
+    if (!on) keepDocuments(app.id, [])
+  }
+  const autosaveRef = useRef(autosave)
+  autosaveRef.current = autosave
+  const setAutosaveRef = useRef(setAutosave)
+  setAutosaveRef.current = setAutosave
 
   // Rebranded editors report when they are running (`pdfcraft:ready`); an older PDF editor build
   // may still ask for Back and Full screen (`ffhq:action`). Others count as loaded on the frame's load.
@@ -164,16 +187,23 @@ export function StudioAppPage({ app, active = true }) {
     if (!app.branded) return
     const onMessage = (event) => {
       if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow) return
-      const { type, action, docs } = event.data || {}
+      const { type, action, docs, dirty: unsaved, on } = event.data || {}
       if (type === 'pdfcraft:ready') {
         setLoaded(true)
-        // Reopen what was open before the reload (kept in this browser only).
-        keptDocuments(app.id).then((kept) => {
-          for (const { name, bytes } of kept) {
-            frame.current?.contentWindow?.postMessage({ type: 'pdfcraft:open', name, bytes }, window.location.origin)
+        postTheme(frame.current)
+        frame.current?.contentWindow?.postMessage({ type: 'ffhq:autosave', on: autosaveRef.current }, window.location.origin)
+        // Reopen what was open before the reload (AutoSave on), or else the last file saved.
+        Promise.all([autosaveRef.current ? keptDocuments(app.id) : [], savedFiles(app.id)]).then(([kept, saved]) => {
+          for (const { name, bytes } of kept.length ? kept : saved.slice(0, 1)) {
+            // A copy: the stored buffer stays usable for the Saved menu.
+            frame.current?.contentWindow?.postMessage({ type: 'pdfcraft:open', name, bytes: bytes.slice(0) }, window.location.origin)
           }
         })
-      } else if (type === 'ffhq:snapshot' && Array.isArray(docs)) keepDocuments(app.id, docs)
+      } else if (type === 'ffhq:snapshot' && Array.isArray(docs)) {
+        // Open documents are kept across visits only with AutoSave on.
+        if (autosaveRef.current) keepDocuments(app.id, docs)
+      } else if (type === 'ffhq:dirty' || type === 'pdfcraft:dirty') setDirty(Boolean(unsaved))
+      else if (type === 'ffhq:autosave') setAutosaveRef.current(Boolean(on), false)
       else if (type === 'pdfcraft:failed') setFailed(true)
       else if (type === 'ffhq:action' && action === 'back') navigate('/studio')
       else if (type === 'ffhq:action' && action === 'fullscreen') {
@@ -184,6 +214,53 @@ export function StudioAppPage({ app, active = true }) {
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [app.branded, app.id, navigate])
+
+  // The site's light/dark mode (the system's, or the Studio bar toggle) drives the editor's.
+  useEffect(() => {
+    if (!app.branded || !loaded) return
+    const html = document.documentElement
+    const sync = new MutationObserver(() => postTheme(frame.current))
+    sync.observe(html, { attributes: true, attributeFilter: ['class'] })
+    return () => sync.disconnect()
+  }, [app.branded, loaded])
+
+  // Leaving the editor inside the site (Back, the switcher, any link) with unsaved changes and
+  // AutoSave off: ask whether to save. Saving also turns AutoSave on.
+  const [leaving, setLeaving] = useState(null) // the path the visitor was going to
+  useEffect(() => {
+    if (!app.branded || !active || !dirty || autosave) return
+    const onClick = (e) => {
+      const a = e.target.closest?.('a[href]')
+      if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return
+      const url = new URL(a.href, window.location.href)
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return
+      e.preventDefault()
+      e.stopPropagation()
+      setLeaving(url.pathname + url.search + url.hash)
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [app.branded, active, dirty, autosave])
+  const leave = (save) => {
+    const to = leaving
+    setLeaving(null)
+    if (save) {
+      setAutosave(true)
+      frame.current?.contentWindow?.postMessage({ type: 'ffhq:save' }, window.location.origin)
+    }
+    navigate(to)
+  }
+
+  // Leaving (closing the tab, reloading) with unsaved changes and AutoSave off asks first.
+  useEffect(() => {
+    if (!app.branded || !dirty || autosave) return
+    const warn = (e) => {
+      e.preventDefault()
+      e.returnValue = 'unsaved changes'
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [app.branded, dirty, autosave])
 
   useEffect(() => {
     if (loaded) return
@@ -223,8 +300,129 @@ export function StudioAppPage({ app, active = true }) {
   // their open documents survive.
   return (
     <div className={active ? 'flex h-[100dvh] flex-col' : 'hidden'}>
-      <StudioBar app={app} src={src} stage={stage} />
+      <StudioBar app={app} src={src} stage={stage} frame={frame} autosave={autosave} setAutosave={setAutosave} dirty={dirty} />
       {editor}
+      {leaving && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-void/70 p-4 backdrop-blur-sm sm:items-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-sm rounded-card bg-panel p-5 shadow-lift">
+            <h2 id="leave-title" className="text-[1.05rem] font-medium">
+              Save your changes?
+            </h2>
+            <p className="mt-2 text-[0.85rem] leading-relaxed text-text-dim">
+              {app.name} has changes that aren't saved. Save them in this browser and turn on AutoSave, so your work is kept from now on?
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" onClick={() => leave(true)} className="rounded-full bg-signal px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 dark:text-void">
+                Save and turn on AutoSave
+              </button>
+              <button type="button" onClick={() => leave(false)} className="rounded-full bg-panel-raised px-4 py-2.5 text-sm font-normal transition-colors hover:text-signal">
+                Don't save
+              </button>
+              <button type="button" onClick={() => setLeaving(null)} className="px-4 py-2 text-[0.8rem] text-text-dim transition-colors hover:text-text">
+                Stay here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function readAutosave(appId) {
+  try {
+    return localStorage.getItem(`ffhq-autosave:${appId}`) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** AutoSave on/off for the editor; off, a note says unsaved changes go when you leave. */
+function AutosaveSwitch({ on, onChange, dirty }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      title={on ? 'AutoSave keeps every change in this browser' : 'AutoSave is off: unsaved changes are lost when you leave'}
+      className="inline-flex h-8 flex-shrink-0 items-center gap-2 rounded-full bg-panel-raised px-3 text-[0.78rem] font-normal transition-colors hover:text-signal"
+    >
+      <span className="hidden sm:inline">AutoSave</span>
+      <span className={`relative h-4 w-7 rounded-full transition-colors ${on ? 'bg-signal' : 'bg-border-strong'}`}>
+        <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all dark:bg-void ${on ? 'left-3.5' : 'left-0.5'}`} />
+      </span>
+      {!on && dirty && <span className="hidden text-[0.72rem] text-text-dim lg:inline">Unsaved</span>}
+    </button>
+  )
+}
+
+/** Tell an editor frame the site's current light/dark mode. */
+function postTheme(iframe) {
+  const dark = document.documentElement.classList.contains('dark')
+  iframe?.contentWindow?.postMessage({ type: 'ffhq:theme', theme: dark ? 'dark' : 'light' }, window.location.origin)
+}
+
+/** Files saved from this editor (kept in this browser): open one again, download it, or remove it. */
+function SavedMenu({ app, frame }) {
+  const [open, setOpen] = useState(false)
+  const [files, setFiles] = useState([])
+  useEffect(() => {
+    const load = () => savedFiles(app.id).then(setFiles)
+    const changed = (e) => e.detail === app.id && load()
+    load()
+    window.addEventListener('ffhq:saved-changed', changed)
+    return () => window.removeEventListener('ffhq:saved-changed', changed)
+  }, [app.id])
+
+  const reopen = ({ name, bytes }) => {
+    frame.current?.contentWindow?.postMessage({ type: 'pdfcraft:open', name, bytes: bytes.slice(0) }, window.location.origin)
+    setOpen(false)
+  }
+  const download = ({ name, bytes }) => {
+    window.dispatchEvent(new CustomEvent('ffhq:download', { detail: { appId: app.id, name, bytes: bytes.slice(0) } }))
+    setOpen(false)
+  }
+  const item = 'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-text-dim transition-colors hover:bg-panel-raised hover:text-signal'
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-panel-raised px-3 text-[0.78rem] font-normal transition-colors hover:text-signal"
+      >
+        <FolderOpen className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Saved{files.length ? ` (${files.length}/5)` : ''}</span>
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-label="Close" className="fixed inset-0 cursor-default" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-10 mt-1.5 w-72 rounded-2xl border border-border bg-panel p-1.5 shadow-lift">
+            {files.length ? (
+              <ul className="max-h-[60vh] overflow-y-auto">
+                {files.map((f) => (
+                  <li key={f.name} className="flex items-center gap-1 rounded-xl px-1 hover:bg-panel-raised/60">
+                    <button type="button" onClick={() => reopen(f)} className="min-w-0 flex-1 px-1.5 py-2 text-left" title="Open">
+                      <span className="block truncate text-[0.84rem]">{f.name}</span>
+                      <span className="block text-[0.7rem] text-text-dim">{new Date(f.at).toLocaleString()}</span>
+                    </button>
+                    <button type="button" onClick={() => download(f)} aria-label={`Download ${f.name}`} title="Download" className={item}>
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => removeSavedFile(app.id, f.name)} aria-label={`Remove ${f.name}`} title="Remove from this browser" className={item}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-2.5 py-3 text-[0.8rem] leading-relaxed text-text-dim">
+                Nothing saved yet. Save in {app.name} and your file is kept here, in this browser (up to 5 files). Export to download.
+              </p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -234,7 +432,7 @@ export function StudioAppPage({ app, active = true }) {
  * switcher to the other editors) and Full screen. The same for every editor, so they read as one
  * product whatever each editor looks like inside.
  */
-function StudioBar({ app, src, stage }) {
+function StudioBar({ app, src, stage, frame, autosave, setAutosave, dirty }) {
   const [switcher, setSwitcher] = useState(false)
   const Icon = studioIcons[app.icon] || FileText
   useEffect(() => {
@@ -295,18 +493,23 @@ function StudioBar({ app, src, stage }) {
           </>
         )}
       </div>
-      <span className="ml-auto hidden truncate text-[0.75rem] text-text-dim md:inline">Runs on your device · nothing is uploaded</span>
+      <span className="ml-auto hidden truncate text-[0.75rem] text-text-dim xl:inline">Runs on your device · nothing is uploaded</span>
+      <span className="max-xl:ml-auto" />
+      {app.branded && <AutosaveSwitch on={autosave} onChange={setAutosave} dirty={dirty} />}
+      {app.branded && <SavedMenu app={app} frame={frame} />}
+      {/* Light/dark for the site and the editor inside (it follows the system until chosen). */}
+      <ThemeToggle compact />
       {app.branded ? (
         // In place: on its own the editor can't save (saves go through this page).
         <button
           type="button"
           onClick={() => (document.fullscreenElement ? document.exitFullscreen?.() : stage.current?.requestFullscreen?.())}
-          className={`${fullscreen} max-md:ml-auto`}
+          className={fullscreen}
         >
           <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Full screen</span>
         </button>
       ) : (
-        <a href={src} target="_blank" rel="noreferrer" className={`${fullscreen} max-md:ml-auto`}>
+        <a href={src} target="_blank" rel="noreferrer" className={fullscreen}>
           <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Full screen</span>
         </a>
       )}

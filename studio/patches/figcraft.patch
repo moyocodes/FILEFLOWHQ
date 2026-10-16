@@ -1,0 +1,1166 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index ef0302e..3ce900e 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1714,7 +1714,10 @@ dependencies = [
+  "figcraft-collab-net",
+  "figcraft-engine",
+  "figcraft-ui-egui",
++ "js-sys",
+  "log",
++ "rfd",
++ "serde_json",
+  "wasm-bindgen",
+  "wasm-bindgen-futures",
+  "web-sys",
+diff --git a/apps/figcraft-web/Cargo.toml b/apps/figcraft-web/Cargo.toml
+index 93f9eb4..9b14a9b 100644
+--- a/apps/figcraft-web/Cargo.toml
++++ b/apps/figcraft-web/Cargo.toml
+@@ -25,4 +25,7 @@ log = { workspace = true }
+ eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
+ wasm-bindgen = "0.2"
+ wasm-bindgen-futures = "0.4"
+-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlCanvasElement", "Location", "MediaQueryList", "Navigator", "Gamepad", "GamepadButton", "GamepadMappingType"] }
++js-sys = "0.3"
++rfd = { workspace = true }
++serde_json = { workspace = true }
++web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlCanvasElement", "Location", "MediaQueryList", "Navigator", "Gamepad", "GamepadButton", "GamepadMappingType", "MessageEvent"] }
+diff --git a/apps/figcraft-web/index.html b/apps/figcraft-web/index.html
+index 1a9969d..a4b4f9d 100644
+--- a/apps/figcraft-web/index.html
++++ b/apps/figcraft-web/index.html
+@@ -3,21 +3,22 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+-  <title>FigCraft</title>
++  <title>UI Design — FileFlowHQ Studio</title>
++  <link data-trunk rel="icon" href="../../assets/app-icon/fileflowhq.png" />
+   <link data-trunk rel="rust" data-bin="figcraft-web" data-cargo-profile="web-release" data-wasm-opt="z" data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-nontrapping-float-to-int --enable-sign-ext --enable-reference-types --enable-multivalue" data-weak-refs />
+   <style>
+-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f5f5f5; }
++    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+     #figcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+     #figcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+       color: #6b6b6b; font: 14px system-ui, sans-serif; pointer-events: none; }
+     @media (prefers-color-scheme: dark) {
+-      html, body { background: #2c2c2c; }
++      html, body { background: transparent; }
+       #figcraft_loading { color: #b8b8b8; }
+     }
+   </style>
+ </head>
+ <body>
+   <canvas id="figcraft_canvas"></canvas>
+-  <div id="figcraft_loading">Loading FigCraft&hellip;</div>
++  <div id="figcraft_loading">Loading UI Design&hellip;</div>
+ </body>
+ </html>
+diff --git a/apps/figcraft-web/src/host.rs b/apps/figcraft-web/src/host.rs
+new file mode 100644
+index 0000000..9f393fb
+--- /dev/null
++++ b/apps/figcraft-web/src/host.rs
+@@ -0,0 +1,188 @@
++//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
++//!
++//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
++//!
++//! Opened on its own (not embedded), the editor works but can't save or export.
++
++use std::cell::{Cell, RefCell};
++
++use js_sys::{Array, Object, Reflect, Uint8Array};
++use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
++
++/// The embedding page's window: a different window than ours, on our own origin.
++fn parent() -> Option<web_sys::Window> {
++    let window = web_sys::window()?;
++    let parent = window.parent().ok().flatten()?;
++    if Object::is(&parent, &window) {
++        return None;
++    }
++    // Reading another origin's location throws: that page isn't ours.
++    let theirs = parent.location().origin().ok()?;
++    (theirs == window.location().origin().ok()?).then_some(parent)
++}
++
++/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
++pub fn embedded() -> bool {
++    parent().is_some()
++}
++
++fn message(fields: &[(&str, JsValue)]) -> Option<Object> {
++    let o = Object::new();
++    for (k, v) in fields {
++        Reflect::set(&o, &JsValue::from_str(k), v).ok()?;
++    }
++    Some(o)
++}
++
++fn post(fields: &[(&str, JsValue)], transfer: Option<&JsValue>) -> Result<(), String> {
++    let parent = parent().ok_or("not embedded in fileflowhq.com")?;
++    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).ok_or("no origin")?;
++    let m = message(fields).ok_or("couldn't build the message")?;
++    match transfer {
++        Some(t) => parent.post_message_with_transfer(&m, &origin, &Array::of1(t)),
++        None => parent.post_message(&m, &origin),
++    }
++    .map_err(|e| format!("{e:?}"))
++}
++
++pub fn post_ready() {
++    let _ = post(&[("type", "pdfcraft:ready".into())], None);
++}
++
++pub fn post_failed(error: &str) {
++    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
++}
++
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
++    let buffer = Uint8Array::from(bytes).buffer();
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
++}
++
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
++    let Some(window) = web_sys::window() else { return };
++    let own_origin = window.location().origin().unwrap_or_default();
++    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
++        let from_parent = match (parent(), e.source()) {
++            (Some(p), Some(src)) => Object::is(&p, &src),
++            _ => false,
++        };
++        if !from_parent || e.origin() != own_origin {
++            return;
++        }
++        let data = e.data();
++        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
++        }
++        wake();
++    });
++    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
++        cb.forget();
++    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
++}
+diff --git a/apps/figcraft-web/src/main.rs b/apps/figcraft-web/src/main.rs
+index 587fd60..3a81268 100644
+--- a/apps/figcraft-web/src/main.rs
++++ b/apps/figcraft-web/src/main.rs
+@@ -15,6 +15,9 @@
+ //!
+ //! URL query flag: `?webgl` forces the WebGL2 backend instead of WebGPU.
+ 
++#[cfg(target_arch = "wasm32")]
++mod host;
++
+ #[cfg(target_arch = "wasm32")]
+ mod web;
+ 
+diff --git a/apps/figcraft-web/src/web.rs b/apps/figcraft-web/src/web.rs
+index 6368903..a9dca70 100644
+--- a/apps/figcraft-web/src/web.rs
++++ b/apps/figcraft-web/src/web.rs
+@@ -1,9 +1,29 @@
+-//! The browser shell: web `Services` and the eframe web runner.
++//! The browser shell: web `Services` and the eframe web runner. FileFlowHQ Studio: files open
++//! through the browser's picker (or from the embedding page) into the engine's in-memory file
++//! store (`figcraft_engine::web_files`), and every file the engine writes goes to the page —
++//! `.figcraft` saves are kept in the browser, everything else is an export (downloaded).
++
++use std::cell::RefCell;
++use std::path::PathBuf;
++use std::rc::Rc;
+ 
+ use figcraft_engine::Session;
++use figcraft_engine::web_files;
+ use figcraft_ui_egui::{FigApp, Services};
++use serde_json::json;
+ use wasm_bindgen::JsCast as _;
+ 
++/// What a file picked in the browser is for.
++#[derive(Clone, Copy)]
++enum Purpose {
++    Open,
++    Import,
++    Place,
++}
++
++/// Files picked or sent by the page, read asynchronously and handled on the next frame.
++type Inbox = Rc<RefCell<Vec<(Purpose, String, Vec<u8>)>>>;
++
+ const CANVAS_ID: &str = "figcraft_canvas";
+ const LOADING_ID: &str = "figcraft_loading";
+ 
+@@ -40,15 +60,41 @@ pub fn start() {
+                     // on the socket wakes the page for a frame.
+                     let ctx = cc.egui_ctx.clone();
+                     session.live.install(Box::new(figcraft_collab_net::NetLink::new(std::sync::Arc::new(move || ctx.request_repaint()))));
+-                    let fig = FigApp::new(session, Box::new(WebServices { reduce_motion }));
+-                    Ok(Box::new(WebShell { fig }))
++                    let inbox: Inbox = Rc::default();
++                    let mut fig = FigApp::new(session, Box::new(WebServices { reduce_motion, inbox: inbox.clone(), ctx: cc.egui_ctx.clone() }));
++                    // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme;
++                    // embedded, light/dark is switched from the Studio bar, not the editor.
++                    fig.run(if query().contains("theme=light") { "view.themeLight" } else { "view.themeDark" }, json!({}));
++                    fig.ui.theme_from_host = crate::host::embedded();
++                    web_files::set_deliver(Box::new(|name: &str, bytes: &[u8]| {
++                        if !crate::host::embedded() {
++                            return Err("saving and exporting work at fileflowhq.com/studio/ui-designer".into());
++                        }
++                        let export = !name.to_ascii_lowercase().ends_with(".figcraft");
++                        crate::host::export(name, bytes, export)
++                    }));
++                    // Files the FileFlowHQ page sends in open like picked ones.
++                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
++                    let open_wake = wake.clone();
++                    crate::host::listen(
++                        move |name, bytes| {
++                            open_inbox.borrow_mut().push((Purpose::Open, name, bytes));
++                            open_wake.request_repaint();
++                        },
++                        move || wake.request_repaint(),
++                    );
++                    Ok(Box::new(WebShell { fig, inbox }))
+                 }),
+             )
+             .await;
++        match &result {
++            Ok(()) => crate::host::post_ready(),
++            Err(e) => crate::host::post_failed(&format!("{e:?}")),
++        }
+         if let Some(el) = document.get_element_by_id(LOADING_ID) {
+             match result {
+                 Ok(()) => el.remove(),
+-                Err(e) => el.set_inner_html(&format!("<p>FigCraft failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
++                Err(e) => el.set_inner_html(&format!("<p>UI Design failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
+             }
+         }
+     });
+@@ -60,23 +106,100 @@ fn query() -> String {
+ 
+ struct WebShell {
+     fig: FigApp,
++    inbox: Inbox,
++}
++
++impl WebShell {
++    /// Open, import or place the files that arrived.
++    fn drain_inbox(&mut self) {
++        let files = std::mem::take(&mut *self.inbox.borrow_mut());
++        for (purpose, name, bytes) in files {
++            web_files::add(&name, bytes);
++            match purpose {
++                Purpose::Open => {
++                    if self.fig.run("file.open", json!({"path": name})).is_some() {
++                        self.fig.ui.home = false;
++                    }
++                }
++                Purpose::Import => {
++                    self.fig.run("file.import", json!({"path": name}));
++                }
++                Purpose::Place => {
++                    self.fig.run("file.placeImage", json!({"path": name}));
++                }
++            }
++        }
++    }
++
++    /// FileFlowHQ Studio: follow the page's theme, save when it asks or when AutoSave is due, and
++    /// tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = crate::host::take_requests();
++        if let Some(dark) = req.dark {
++            self.fig.run(if dark { "view.themeDark" } else { "view.themeLight" }, json!({}));
++        }
++        let dirty = self.fig.session.docs.iter().any(|d| d.is_dirty());
++        let active_dirty = self.fig.session.docs.get(self.fig.session.active).is_some_and(|d| d.is_dirty());
++        if crate::host::should_save(req.save, active_dirty) && !self.fig.ui.home {
++            let save = |fig: &mut FigApp| {
++                let Some(d) = fig.session.docs.get(fig.session.active) else { return };
++                if d.path.is_some() {
++                    fig.run("file.save", json!({}));
++                } else {
++                    let name = format!("{}.figcraft", d.doc.name);
++                    fig.run("file.saveAs", json!({"path": name}));
++                }
++            };
++            if req.save { save(&mut self.fig) } else { crate::host::autosaving(|| save(&mut self.fig)) }
++        }
++        crate::host::report_dirty(dirty);
++        if dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++        }
++    }
+ }
+ 
+ impl eframe::App for WebShell {
+     // `FigApp::ui` runs its own per-frame logic first (fonts, theme), like the desktop app.
+     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
++        self.drain_inbox();
+         self.fig.ui(ui);
++        let ctx = ui.ctx().clone();
++        self.host_requests(&ctx);
+     }
+ }
+ 
+-/// Browser services. File dialogs return nothing for now (the trait's defaults); the clipboard
+-/// goes through egui's own web clipboard handling.
++/// Browser services. Opening shows the browser's picker (the file arrives on a later frame, through
++/// the inbox); saving needs no picker (the page keeps or downloads the file); the clipboard goes
++/// through egui's own web clipboard handling.
+ struct WebServices {
+     /// `prefers-reduced-motion: reduce` (it follows the setting while the page is open).
+     reduce_motion: Option<web_sys::MediaQueryList>,
++    inbox: Inbox,
++    ctx: egui::Context,
+ }
+ 
+ impl Services for WebServices {
++    fn pick_open(&mut self, title: &str, exts: &[&str]) -> Option<PathBuf> {
++        // Open lists the native format first; Place image lists only pictures.
++        let purpose = match exts.first() {
++            Some(&"figcraft") => Purpose::Open,
++            Some(&"png") => Purpose::Place,
++            _ => Purpose::Import,
++        };
++        let dialog = rfd::AsyncFileDialog::new().set_title(title).add_filter(title, exts);
++        let (inbox, ctx) = (self.inbox.clone(), self.ctx.clone());
++        wasm_bindgen_futures::spawn_local(async move {
++            let Some(file) = dialog.pick_file().await else { return };
++            let bytes = file.read().await;
++            inbox.borrow_mut().push((purpose, file.file_name(), bytes));
++            ctx.request_repaint();
++        });
++        None
++    }
++    fn pick_save(&mut self, _title: &str, name: &str, _exts: &[&str]) -> Option<PathBuf> {
++        Some(PathBuf::from(name))
++    }
+     fn open_url(&mut self, url: &str) {
+         let Some(window) = web_sys::window() else { return };
+         if let Err(e) = window.open_with_url_and_target(url, "_blank") {
+diff --git a/assets/app-icon/fileflowhq.png b/assets/app-icon/fileflowhq.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd8a8a0a676ab5cd0fe19d8a7d3517cb3770886d
+GIT binary patch
+literal 1026
+zcmV+d1pWJoP)<h;3K|Lk000e1NJLTq002M$002M;1^@s6s%dfF00009a7bBm001mY
+z001mY0i`{bsQ>^2v`IukRCt{2o6Sp9Q5eS0PCf6P_sra3VsiXS8zcM(Q_LI`3Jk+V
+z5|-nlFG?t*TG*mREi5Pyp<3jqY3<te7qqHCMOqkcqNQd~Ei*`4oH*A>ygB3Caqhk6
+z%!~(~ojA|)J74dG^Acil=(>)8*awKufw4Kt*mq!T4H)B+wHEg>2Z$4Z81?)89%9$<
+zcs$jBI0cBm6bNfg!YksW$Kwg_Jb6h;5k(vU#{NhTl)>r%#9=~6VY;&(ricp)1h7jp
+zl+wMH!c)c?;(Lncln|G|>#a{c^DGC$Z-PK64JON92#E92O**d+;(Xh>^wBu*c%EqJ
+z|D|7@<)?jGqKH3DTLHv9uYfUEAuu+&xx&kyBF8Qvt{4@gQQpcnBM(9^iP!c#Pc=@A
+zj|lljWNAiJem@-j5wDkrdfTL{xF^Cjzt7~2GWJcZfK?{}h#!r79h0iorBPmb{#YV^
+zzsXKQ`5UXP)9-7S9=_yU!tjQ61fc3}kMvp1aOQI#Kx>Mb&uIXyi=#XgZL^ex*nQ}E
+zLVGxt22Ijy_ia%iQX@S)H~~QBEs$<_PzAuz&rf;Hi-C+4ingcikEj5k@!gQ49?}9(
+zb?0<Ky2(z|ikn^A&Pwge>nQ;=y}z#xfcn>i2~CC{^d<ZUHB$o_?_H%<Kz+UgsJPL^
+z4?MYK(!po_JKh4DRrl(a`T)Rg`MkWm|Ae8++uaEPG|vxj{7ovAUFk4tjjREn*;xlH
+z$9Va`$?RGInq2@K2oG5Uz@hM91%Q5NKX3W;I3r~mzU*qJV-rMD0yrGDZx1Up^Xdaw
+zj`8wq&dt1K02mDLU}ux95_QG4;lIR;>(1%$;L0JW`*_2fdnPr195w|$vM|Cc2TyIN
+zxVy!b@Sw^qkkgf*whO?wy8<Gq4!p}9dAbF@#CYk&<I=)|Q~)CU1-aot8URJYgA@P?
+zg$LIGC>9=E1)yMfa1DT>;UNyd*#{E3PucJw9!NO;L`GrJ_!F7@ek28=%|yNtSsD`n
+zq6!$1B8{;#BoGK_;@PNdGp-A9MP&c?Sb8!K0Zf=WMHFd)b4#lQj8&R?21Iw20><3Z
+zqr@#UjLj%u&S^~(LJAT#4N*#ifVilDNoRz(T%_xvq+MfTh}JTr#Vq&2FM`ikN30A@
+z(*hLnt#s4&X?nYMxn!e2bXR40jUYbs9wy!MR)!!a8jP|E#Jbn<EmvJ8Bd}gE_KNx$
+w7@HMeQcizLTb<>&mswye28d@jDm)A0FUpHkZm>lTrT_o{07*qoM6N<$f-6kbmjD0&
+
+literal 0
+HcmV?d00001
+
+diff --git a/crates/engine/src/cmd/create.rs b/crates/engine/src/cmd/create.rs
+index 53f7a35..e12104d 100644
+--- a/crates/engine/src/cmd/create.rs
++++ b/crates/engine/src/cmd/create.rs
+@@ -311,7 +311,7 @@ fn read_path(path: &str) -> Result<Vec<u8>> {
+ 
+ #[cfg(target_arch = "wasm32")]
+ fn read_path(path: &str) -> Result<Vec<u8>> {
+-    Err(EngineError::Other(format!("{path}: files can't be read in the browser")))
++    crate::web_files::read(path).ok_or_else(|| EngineError::Other(format!("{path}: open it again (files aren't kept between visits)")))
+ }
+ 
+ /// Place an image as a rectangle with an image fill (Figma's image layer).
+diff --git a/crates/engine/src/cmd/file.rs b/crates/engine/src/cmd/file.rs
+index fd7dab3..0f8b188 100644
+--- a/crates/engine/src/cmd/file.rs
++++ b/crates/engine/src/cmd/file.rs
+@@ -413,16 +413,27 @@ fn read(path: &str) -> Result<Vec<u8>> {
+ 
+ #[cfg(target_arch = "wasm32")]
+ fn read(path: &str) -> Result<Vec<u8>> {
+-    Err(EngineError::Other(format!("{path}: no file system in the browser")))
++    crate::web_files::read(path).ok_or_else(|| EngineError::Other(format!("{path}: open it again (files aren't kept between visits)")))
+ }
+ 
+ /// The bytes of file `path`, refused when it's larger than `max`.
+ pub(crate) fn read_capped(path: &str, max: u64) -> Result<Vec<u8>> {
+-    let meta = std::fs::metadata(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+-    if !meta.is_file() || meta.len() > max {
+-        return Err(EngineError::Other(format!("{path}: not a file of at most {max} bytes")));
++    #[cfg(target_arch = "wasm32")]
++    {
++        let bytes = read(path)?;
++        if bytes.len() as u64 > max {
++            return Err(EngineError::Other(format!("{path}: not a file of at most {max} bytes")));
++        }
++        return Ok(bytes);
++    }
++    #[cfg(not(target_arch = "wasm32"))]
++    {
++        let meta = std::fs::metadata(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
++        if !meta.is_file() || meta.len() > max {
++            return Err(EngineError::Other(format!("{path}: not a file of at most {max} bytes")));
++        }
++        read(path)
+     }
+-    read(path)
+ }
+ 
+ #[cfg(not(target_arch = "wasm32"))]
+@@ -437,8 +448,8 @@ pub(crate) fn write(path: &str, bytes: &[u8]) -> Result<()> {
+ }
+ 
+ #[cfg(target_arch = "wasm32")]
+-pub(crate) fn write(path: &str, _bytes: &[u8]) -> Result<()> {
+-    Err(EngineError::Other(format!("{path}: no file system in the browser")))
++pub(crate) fn write(path: &str, bytes: &[u8]) -> Result<()> {
++    crate::web_files::write(path, bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+ }
+ 
+ fn ext(path: &str) -> String {
+diff --git a/crates/engine/src/lib.rs b/crates/engine/src/lib.rs
+index 413cba1..68b0e76 100644
+--- a/crates/engine/src/lib.rs
++++ b/crates/engine/src/lib.rs
+@@ -8,6 +8,7 @@
+ #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+ 
+ pub mod al_keys;
++pub mod web_files;
+ pub mod annotations;
+ pub mod arc_handles;
+ pub mod background;
+diff --git a/crates/engine/src/web_files.rs b/crates/engine/src/web_files.rs
+new file mode 100644
+index 0000000..7275cf1
+--- /dev/null
++++ b/crates/engine/src/web_files.rs
+@@ -0,0 +1,37 @@
++//! FileFlowHQ Studio: files in the browser, which has no file system. Files the visitor opens
++//! are kept here by name (the web shell adds them), and every file the engine writes goes to a
++//! delivery hook the web shell installs (the page keeps saves in the browser and downloads
++//! exports). Unused natively.
++
++use std::cell::RefCell;
++use std::collections::HashMap;
++
++type Deliver = Box<dyn Fn(&str, &[u8]) -> Result<(), String>>;
++
++thread_local! {
++    static FILES: RefCell<HashMap<String, Vec<u8>>> = RefCell::default();
++    static DELIVER: RefCell<Option<Deliver>> = const { RefCell::new(None) };
++}
++
++/// Keep `bytes` as the file `name` (a file the visitor opened).
++pub fn add(name: &str, bytes: Vec<u8>) {
++    FILES.with_borrow_mut(|f| f.insert(name.to_string(), bytes));
++}
++
++/// The file `path`, if the visitor opened or saved it in this visit.
++pub fn read(path: &str) -> Option<Vec<u8>> {
++    FILES.with_borrow(|f| f.get(path).cloned())
++}
++
++/// Install where written files go (once, when the web app starts).
++pub fn set_deliver(deliver: Deliver) {
++    DELIVER.with_borrow_mut(|d| *d = Some(deliver));
++}
++
++/// Hand a written file to the host, and keep it for reading back.
++pub fn write(path: &str, bytes: &[u8]) -> Result<(), String> {
++    let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().to_string());
++    DELIVER.with_borrow(|d| d.as_ref().map_or_else(|| Err("saving isn't available here".to_string()), |deliver| deliver(&name, bytes)))?;
++    add(path, bytes.to_vec());
++    Ok(())
++}
+diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
+index 84bf334..3040bf3 100644
+--- a/crates/ui-egui/src/dialogs.rs
++++ b/crates/ui-egui/src/dialogs.rs
+@@ -1,7 +1,7 @@
+ //! Dialogs: About, Preferences, keyboard shortcuts, find & replace, rename layers, variables,
+ //! export.
+ 
+-use egui::{Align2, Color32, Context, CornerRadius, RichText, Sense, Stroke, vec2};
++use egui::{Align2, Context, CornerRadius, RichText, Sense, Stroke, vec2};
+ use figcraft_color::ColorProfile;
+ use figcraft_doc::{ExportFormat, ExportSetting, ExportSize, NodeId};
+ use figcraft_engine::cmd::file::{export_jobs, exportable_layers};
+@@ -10,8 +10,7 @@ use serde_json::json;
+ use crate::FigApp;
+ use crate::export_panel::{export_layers, save_one, suggested_name};
+ use crate::i18n::{self, tr, tr_noop, trf, trn};
+-use crate::icons::{self, Icon};
+-use crate::theme::{ACCENT, Tokens, regular, semibold};
++use crate::theme::{Tokens, regular, semibold};
+ 
+ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+ 
+@@ -77,26 +76,12 @@ pub(crate) fn tab_strip<T: Copy + PartialEq>(ui: &mut egui::Ui, t: &Tokens, tabs
+ 
+ /// About ▸ About: the logo, version, blurb and links.
+ fn about_body(ui: &mut egui::Ui, t: &Tokens) {
+-    ui.horizontal(|ui| {
+-        let (r, _) = ui.allocate_exact_size(vec2(48.0, 48.0), Sense::hover());
+-        ui.painter().rect_filled(r, CornerRadius::same(10), ACCENT);
+-        icons::paint(ui.painter(), r.shrink(10.0), Icon::Logo, Color32::WHITE);
+-        ui.vertical(|ui| {
+-            ui.label(RichText::new("FigCraft").font(semibold(18.0)));
+-            ui.label(RichText::new(trf("Version {version}", &[("version", &VERSION)])).color(t.text_secondary));
+-        });
+-    });
+-    ui.add_space(12.0);
+-    ui.label(tr(
+-        "Interface design and prototyping. A free, open-source, clean-room design tool written from scratch in Rust, part of the ArtCraft Crafting Apps.",
+-    ));
+-    ui.add_space(8.0);
+-    ui.hyperlink_to("getartcraft.com/apps/figcraft", "https://getartcraft.com/apps/figcraft");
+-    ui.hyperlink_to(tr("Join us on Discord"), "https://discord.gg/artcraft");
++    // The FileFlowHQ logo and name (every Studio editor's heading).
++    crate::ffhq_brand::start_header(ui, tr("UI Design"), tr("Part of FileFlowHQ Studio. Runs entirely in your browser."));
++    ui.label(RichText::new(trf("Version {version}", &[("version", &VERSION)])).color(t.text_secondary));
+     ui.add_space(8.0);
+-    ui.label(
+-        RichText::new(tr("Dual-licensed MIT OR Apache-2.0. Made by the ArtCraft team and community.")).color(t.text_secondary).font(regular(11.0)),
+-    );
++    ui.hyperlink_to("fileflowhq.com", "https://fileflowhq.com");
++    ui.hyperlink_to(tr("Contact FileFlowHQ"), "https://fileflowhq.com/contact");
+ }
+ 
+ /// Escape closes the topmost simple dialog (one without menus of its own), before the canvas's
+@@ -128,7 +113,7 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
+     let t = Tokens::get(ctx);
+     if app.ui.about {
+         let mut open = true;
+-        window(tr("About FigCraft"), ctx).open(&mut open).show(ctx, |ui| {
++        window(tr("About UI Design"), ctx).open(&mut open).show(ctx, |ui| {
+             ui.set_width(ABOUT_WIDTH);
+             tab_strip(ui, &t, &AboutTab::ALL, AboutTab::label, &mut app.ui.about_tab);
+             ui.add_space(12.0);
+@@ -168,7 +153,7 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
+             }
+             // Where the app registers itself as the opener of invite links (Windows).
+             if let Some(on) = app.session.invite_links_on() {
+-                if crate::widgets::checkbox(ui, on, tr("Open invite links in FigCraft")) {
++                if crate::widgets::checkbox(ui, on, tr("Open invite links in UI Design")) {
+                     app.run("collab.registerLinks", json!({"on": !on}));
+                 }
+                 crate::widgets::label(
+diff --git a/crates/ui-egui/src/home.rs b/crates/ui-egui/src/home.rs
+index ca90ed0..16cd25a 100644
+--- a/crates/ui-egui/src/home.rs
++++ b/crates/ui-egui/src/home.rs
+@@ -1,147 +1,143 @@
+-//! The home screen: new file, open, join with a code, recent files, templates.
++//! The home screen in FileFlowHQ's look: a quiet side column (the FileFlowHQ logo, the current
++//! section as a green-tinted pill), then New / Open cards, joining with a code, open files and
++//! recent files as cards on the site's background.
+ 
+-use egui::{Align2, CornerRadius, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
++use egui::{Ui, vec2};
+ use serde_json::json;
+ 
+ use crate::FigApp;
+-use crate::i18n::{tr, tr_noop};
+-use crate::icons::{self, Icon};
+-use crate::theme::{ACCENT, Tokens, regular, semibold};
+-use crate::widgets;
++use crate::ffhq_brand::{self as brand, palette};
++use crate::i18n::tr;
++use crate::theme::{regular, semibold};
++
++const NAV_W: f32 = 232.0;
+ 
+ pub fn show(app: &mut FigApp, ui: &mut Ui) {
+-    let t = Tokens::get(ui.ctx());
+-    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.panel)).show(ui, |ui| {
+-        let rect = ui.max_rect();
+-        let left = Rect::from_min_size(rect.min, vec2(240.0, rect.height()));
+-        ui.painter().line_segment([left.right_top(), left.right_bottom()], Stroke::new(1.0, t.border));
+-        // Sidebar.
+-        let mut y = left.min.y + 20.0;
+-        icons::paint(ui.painter(), Rect::from_min_size(pos2(left.min.x + 16.0, y), vec2(20.0, 20.0)), Icon::Logo, ACCENT);
+-        ui.painter().text(pos2(left.min.x + 44.0, y + 10.0), Align2::LEFT_CENTER, "FigCraft", semibold(14.0), t.text);
+-        y += 48.0;
+-        for (icon, label) in [(Icon::Home, tr_noop("Recents")), (Icon::Page, tr_noop("Drafts")), (Icon::Assets, tr_noop("Community"))] {
+-            let r = Rect::from_min_size(pos2(left.min.x + 8.0, y), vec2(224.0, 32.0));
+-            if label == "Recents" {
+-                ui.painter().rect_filled(r, CornerRadius::same(5), t.selected_row);
++    let p = palette(ui.ctx());
++    egui::Panel::left("home_nav")
++        .exact_size(NAV_W)
++        .resizable(false)
++        .frame(egui::Frame::NONE.fill(p.panel).stroke(egui::Stroke::new(1.0, p.border)).inner_margin(egui::Margin { left: 0, right: 0, top: 18, bottom: 14 }))
++        .show(ui, |ui| {
++            ui.spacing_mut().item_spacing.y = 2.0;
++            ui.horizontal(|ui| {
++                ui.add_space(20.0);
++                brand::wordmark(ui, 22.0);
++            });
++            ui.add_space(18.0);
++            let _ = brand::nav_item(ui, tr("Home"), true, semibold(13.5), NAV_W);
++            if brand::nav_item(ui, tr("New design file"), false, regular(13.5), NAV_W).clicked() {
++                app.run("file.new", json!({}));
++                app.ui.home = false;
+             }
+-            icons::paint(ui.painter(), Rect::from_min_size(pos2(r.min.x + 10.0, r.center().y - 8.0), vec2(16.0, 16.0)), icon, t.icon);
+-            ui.painter().text(pos2(r.min.x + 36.0, r.center().y), Align2::LEFT_CENTER, tr(label), regular(12.0), t.text);
+-            y += 34.0;
+-        }
+-        let main = Rect::from_min_max(pos2(left.max.x + 40.0, rect.min.y + 24.0), rect.max - vec2(40.0, 24.0));
+-        ui.painter().text(main.min, Align2::LEFT_TOP, tr("Recents"), semibold(18.0), t.text);
+-        // Action cards.
+-        let mut x = main.min.x;
+-        let cy = main.min.y + 48.0;
+-        let mut new_file = false;
+-        let mut open = false;
+-        for (icon, title, sub) in [
+-            (Icon::Plus, tr_noop("New design file"), tr_noop("Start from a blank canvas")),
+-            (Icon::Page, tr_noop("Open file"), tr_noop("Open .figcraft, .svg or images")),
+-        ] {
+-            let r = Rect::from_min_size(pos2(x, cy), vec2(260.0, 72.0));
+-            let mut resp = ui.interact(r, ui.id().with(("card", title)), Sense::click());
+-            // One line each inside the card; a long translation ends with an ellipsis, in full on hover.
+-            let text_w = r.width() - 72.0;
+-            let (title_shown, sub_shown) = (widgets::elide_font(ui, tr(title), text_w, semibold(12.0)), widgets::elide(ui, tr(sub), text_w));
+-            if title_shown != tr(title) || sub_shown != tr(sub) {
+-                resp = resp.on_hover_text(format!("{}\n{}", tr(title), tr(sub)));
++            if brand::nav_item(ui, tr("Open file…"), false, regular(13.5), NAV_W).clicked() {
++                app.open_dialog();
+             }
+-            ui.painter().rect_filled(r, CornerRadius::same(8), if resp.hovered() { t.hover } else { t.panel });
+-            ui.painter().rect_stroke(r, CornerRadius::same(8), Stroke::new(1.0, t.border), StrokeKind::Inside);
+-            let ir = Rect::from_min_size(pos2(r.min.x + 16.0, r.center().y - 16.0), vec2(32.0, 32.0));
+-            ui.painter().rect_filled(ir, CornerRadius::same(6), ACCENT);
+-            icons::paint(ui.painter(), ir.shrink(8.0), icon, egui::Color32::WHITE);
+-            ui.painter().text(pos2(r.min.x + 60.0, r.center().y - 8.0), Align2::LEFT_CENTER, title_shown, semibold(12.0), t.text);
+-            ui.painter().text(pos2(r.min.x + 60.0, r.center().y + 9.0), Align2::LEFT_CENTER, sub_shown, regular(11.0), t.text_secondary);
+-            if resp.clicked() {
+-                if title.starts_with("New") {
+-                    new_file = true;
+-                } else {
+-                    open = true;
++            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
++                if brand::nav_item(ui, tr("Contact FileFlowHQ"), false, regular(12.5), NAV_W).clicked() {
++                    ui.ctx().open_url(egui::OpenUrl::new_tab("https://fileflowhq.com/contact"));
+                 }
+-            }
+-            x += 280.0;
+-        }
+-        if new_file {
+-            app.run("file.new", json!({}));
+-            app.ui.home = false;
++            });
++        });
++    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(p.void).inner_margin(egui::Margin { left: 48, right: 48, top: 36, bottom: 24 })).show(ui, |ui| {
++        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
++            ui.set_max_width(980.0);
++            page(app, ui);
++        });
++    });
++}
++
++fn section(ui: &mut Ui, title: &str) {
++    let p = palette(ui.ctx());
++    ui.add_space(30.0);
++    ui.label(egui::RichText::new(title).font(semibold(15.0)).color(p.text));
++    ui.add_space(10.0);
++}
++
++fn page(app: &mut FigApp, ui: &mut Ui) {
++    let p = palette(ui.ctx());
++    // The FileFlowHQ logo, the editor's name and a line (every Studio editor's heading).
++    brand::start_header(ui, tr("UI Design"), tr("Design app and web interfaces, build components and click-through prototypes."));
++    ui.add_space(26.0);
++    // New / Open.
++    let gap = 12.0;
++    let w = ((ui.available_width() - gap) / 2.0).min(340.0);
++    let (mut new_file, mut open) = (false, false);
++    ui.horizontal(|ui| {
++        ui.spacing_mut().item_spacing.x = gap;
++        new_file = brand::option_card(ui, vec2(w, 76.0), "+", tr("New design file"), tr("Start from a blank canvas"), semibold(14.0), regular(11.5)).clicked();
++        open = brand::option_card(ui, vec2(w, 76.0), "OPEN", tr("Open file"), tr("Open .figcraft, .svg or images"), semibold(14.0), regular(11.5)).clicked();
++    });
++    if new_file {
++        app.run("file.new", json!({}));
++        app.ui.home = false;
++    }
++    if open {
++        app.open_dialog();
++    }
++
++    // Join a file someone shared: the join field, and what the join is doing.
++    section(ui, tr("Join with a code"));
++    brand::card(ui.ctx()).show(ui, |ui| {
++        ui.set_width((2.0 * w + gap - 40.0).max(260.0));
++        ui.label(egui::RichText::new(tr("Paste a code or invite link someone shared with you.")).font(regular(12.5)).color(p.dim));
++        ui.add_space(10.0);
++        if let Some(session) = crate::live::join_row(app, ui, 300.0) {
++            app.ui.live.home_join = Some(session);
+         }
+-        if open {
+-            app.open_dialog();
++        if let Some(session) = app.ui.live.home_join {
++            let t = crate::theme::Tokens::get(ui.ctx());
++            crate::live::join_status(app, ui, &t, session);
+         }
+-        // Join a file someone shared: the join field, and what the join is doing.
+-        let join = Rect::from_min_size(pos2(main.min.x, cy + 96.0), vec2(main.width().min(540.0), 74.0));
+-        ui.painter().text(join.min, Align2::LEFT_TOP, tr("Join with a code"), semibold(12.0), t.text_secondary);
+-        let field = Rect::from_min_max(pos2(join.min.x, join.min.y + 24.0), join.max);
+-        ui.scope_builder(egui::UiBuilder::new().max_rect(field).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
+-            if let Some(session) = crate::live::join_row(app, ui, 260.0) {
+-                app.ui.live.home_join = Some(session);
+-            }
+-            if let Some(session) = app.ui.live.home_join {
+-                crate::live::join_status(app, ui, &t, session);
+-            }
+-        });
+-        // The shared file opened in a tab of its own: show it. (A join that was left is forgotten.)
+-        match app.ui.live.home_join.map(|id| app.session.live.get(id).map(figcraft_engine::live::Live::syncing)) {
+-            Some(Some(true)) => {
+-                app.ui.live.home_join = None;
+-                app.ui.home = false;
+-            }
+-            Some(None) => app.ui.live.home_join = None,
+-            _ => {}
++    });
++    // The shared file opened in a tab of its own: show it. (A join that was left is forgotten.)
++    match app.ui.live.home_join.map(|id| app.session.live.get(id).map(figcraft_engine::live::Live::syncing)) {
++        Some(Some(true)) => {
++            app.ui.live.home_join = None;
++            app.ui.home = false;
+         }
+-        // Open documents and recent files.
+-        let mut y = join.max.y + 22.0;
+-        ui.painter().text(pos2(main.min.x, y), Align2::LEFT_TOP, tr("Open files"), semibold(12.0), t.text_secondary);
+-        y += 28.0;
++        Some(None) => app.ui.live.home_join = None,
++        _ => {}
++    }
++
++    // Open documents.
++    let list_w = 2.0 * w + gap;
++    if !app.session.docs.is_empty() {
++        section(ui, tr("Open files"));
+         let mut switch = None;
++        ui.spacing_mut().item_spacing.y = 8.0;
+         for (i, d) in app.session.docs.iter().enumerate() {
+-            let r = Rect::from_min_size(pos2(main.min.x, y), vec2(main.width().min(640.0), 36.0));
+-            let resp = ui.interact(r, ui.id().with(("open", d.uid)), Sense::click());
+-            if resp.hovered() {
+-                ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
+-            }
+-            icons::paint(ui.painter(), Rect::from_min_size(pos2(r.min.x + 8.0, r.center().y - 8.0), vec2(16.0, 16.0)), Icon::Logo, ACCENT);
+-            ui.painter().text(pos2(r.min.x + 32.0, r.center().y), Align2::LEFT_CENTER, &d.doc.name, regular(12.0), t.text);
+-            if let Some(p) = &d.path {
+-                ui.painter().text(pos2(r.max.x - 8.0, r.center().y), Align2::RIGHT_CENTER, p, regular(11.0), t.text_secondary);
+-            }
+-            if resp.clicked() {
++            let sub = d.path.clone().unwrap_or_else(|| tr("Not saved yet").to_string());
++            let id = ui.id().with(("open", d.uid));
++            let r = ui.push_id(id, |ui| brand::option_card(ui, vec2(list_w, 64.0), "UI", &d.doc.name, &sub, semibold(13.5), regular(11.5))).inner;
++            if r.clicked() {
+                 switch = Some(i);
+             }
+-            y += 38.0;
+         }
+         if let Some(i) = switch {
+             app.run("doc.switch", json!({"index": i}));
+             app.ui.home = false;
+         }
+-        y += 16.0;
+-        let recents = app.session.prefs.recent_files.clone();
+-        if !recents.is_empty() {
+-            ui.painter().text(pos2(main.min.x, y), Align2::LEFT_TOP, tr("Recent files"), semibold(12.0), t.text_secondary);
+-            y += 28.0;
+-            let mut open_path = None;
+-            for p in recents.iter().take(12) {
+-                let r = Rect::from_min_size(pos2(main.min.x, y), vec2(main.width().min(640.0), 32.0));
+-                let resp = ui.interact(r, ui.id().with(("recent", p.as_str())), Sense::click());
+-                if resp.hovered() {
+-                    ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
+-                }
+-                let name = std::path::Path::new(p).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| p.clone());
+-                ui.painter().text(pos2(r.min.x + 32.0, r.center().y), Align2::LEFT_CENTER, name, regular(12.0), t.text);
+-                ui.painter().text(pos2(r.max.x - 8.0, r.center().y), Align2::RIGHT_CENTER, p, regular(10.0), t.text_tertiary);
+-                if resp.clicked() {
+-                    open_path = Some(p.clone());
+-                }
+-                y += 34.0;
+-            }
+-            if let Some(p) = open_path
+-                && app.run("file.open", json!({"path": p})).is_some()
+-            {
+-                app.ui.home = false;
++    }
++
++    // Recent files.
++    // In the browser files aren't kept on disk, so recent paths can't be opened again.
++    let recents = if cfg!(target_arch = "wasm32") { Vec::new() } else { app.session.prefs.recent_files.clone() };
++    if !recents.is_empty() {
++        section(ui, tr("Recent files"));
++        let mut open_path = None;
++        for path in recents.iter().take(12) {
++            let name = std::path::Path::new(path).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
++            let ext = std::path::Path::new(&name).extension().map(|e| e.to_string_lossy().to_uppercase()).unwrap_or_else(|| "UI".into());
++            let r = ui.push_id(("recent", path.as_str()), |ui| brand::option_card(ui, vec2(list_w, 64.0), &ext, &name, path, semibold(13.5), regular(11.5))).inner;
++            if r.clicked() {
++                open_path = Some(path.clone());
+             }
+         }
+-    });
++        if let Some(path) = open_path
++            && app.run("file.open", json!({"path": path})).is_some()
++        {
++            app.ui.home = false;
++        }
++    }
+ }
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 142fc38..78e2600 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -6,6 +6,7 @@
+ #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+ 
+ pub mod a11y;
++pub mod ffhq_brand;
+ pub mod assets_panel;
+ pub mod bidi;
+ pub mod branch_ui;
+@@ -230,6 +231,8 @@ pub(crate) fn repaint_in(ctx: &egui::Context, secs: f64) {
+ 
+ /// UI-only state (serialisable for `ui.inspect`).
+ pub struct UiState {
++    /// FileFlowHQ Studio: light/dark follows the embedding page, so the in-editor switch is hidden.
++    pub theme_from_host: bool,
+     pub left_width: f32,
+     pub right_width: f32,
+     pub right_tab: RightTab,
+@@ -346,6 +349,7 @@ pub struct UiState {
+ impl Default for UiState {
+     fn default() -> Self {
+         Self {
++            theme_from_host: false,
+             left_width: 240.0,
+             right_width: 240.0,
+             right_tab: RightTab::Design,
+diff --git a/crates/ui-egui/src/tabs.rs b/crates/ui-egui/src/tabs.rs
+index 307c96b..42370cd 100644
+--- a/crates/ui-egui/src/tabs.rs
++++ b/crates/ui-egui/src/tabs.rs
+@@ -40,7 +40,8 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
+         } else if hresp.hovered() {
+             ui.painter().rect_filled(hr, CornerRadius::ZERO, t.hover);
+         }
+-        icons::paint(ui.painter(), Rect::from_center_size(hr.center(), vec2(16.0, 16.0)), Icon::Home, t.icon);
++        // The short FileFlowHQ logo as the Home tab, as in every Studio editor.
++        crate::ffhq_brand::paint_mark(ui, Rect::from_center_size(hr.center(), vec2(24.0, 15.0)));
+         if hresp.clicked() {
+             app.ui.home = true;
+         }
+@@ -129,15 +130,18 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
+             app.ui.home = false;
+         }
+         // Right side: theme toggle (left of the window buttons).
+-        let theme_r = Rect::from_center_size(pos2(rect.max.x - buttons_w - 24.0, rect.center().y), vec2(28.0, 28.0));
+-        let tresp = ui.interact(theme_r, ui.id().with("theme"), Sense::click()).tip(tr("Toggle light/dark theme"));
+-        if tresp.hovered() {
+-            ui.painter().rect_filled(theme_r, CornerRadius::same(5), t.hover);
+-        }
+-        icons::paint(ui.painter(), theme_r.shrink(7.0), if app.ui.dark { Icon::Sun } else { Icon::Moon }, t.icon);
+-        if tresp.clicked() {
+-            let cmd = if app.ui.dark { "view.themeLight" } else { "view.themeDark" };
+-            app.run(cmd, json!({}));
++        // FileFlowHQ Studio: light/dark is switched from the Studio bar instead.
++        if !app.ui.theme_from_host {
++            let theme_r = Rect::from_center_size(pos2(rect.max.x - buttons_w - 24.0, rect.center().y), vec2(28.0, 28.0));
++            let tresp = ui.interact(theme_r, ui.id().with("theme"), Sense::click()).tip(tr("Toggle light/dark theme"));
++            if tresp.hovered() {
++                ui.painter().rect_filled(theme_r, CornerRadius::same(5), t.hover);
++            }
++            icons::paint(ui.painter(), theme_r.shrink(7.0), if app.ui.dark { Icon::Sun } else { Icon::Moon }, t.icon);
++            if tresp.clicked() {
++                let cmd = if app.ui.dark { "view.themeLight" } else { "view.themeDark" };
++                app.run(cmd, json!({}));
++            }
+         }
+         if let Some(i) = switch {
+             app.run("doc.switch", json!({"index": i}));
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 080bce4..4683924 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -44,7 +44,8 @@ pub struct Tokens {
+     pub focus: Color32,
+ }
+ 
+-pub const ACCENT: Color32 = Color32::from_rgb(0x0D, 0x99, 0xFF);
++// FileFlowHQ green (the site's --signal in light mode).
++pub const ACCENT: Color32 = Color32::from_rgb(0x0E, 0x8F, 0x5C);
+ pub const COMPONENT: Color32 = Color32::from_rgb(0x97, 0x47, 0xFF);
+ /// Handoff status badges (white text on these, in both themes).
+ pub const DEV_READY: Color32 = Color32::from_rgb(0x14, 0xAE, 0x5C);
+@@ -57,78 +58,78 @@ impl Tokens {
+             dark: false,
+             bg: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+             panel: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+-            canvas: Color32::from_rgb(0xF5, 0xF5, 0xF5),
+-            border: Color32::from_rgb(0xE6, 0xE6, 0xE6),
+-            border_strong: Color32::from_rgb(0xD9, 0xD9, 0xD9),
+-            text: Color32::from_rgb(0x1E, 0x1E, 0x1E),
++            canvas: Color32::from_rgb(0xF4, 0xF6, 0xF5),
++            border: Color32::from_rgb(0xE6, 0xEB, 0xE8),
++            border_strong: Color32::from_rgb(0xD3, 0xDB, 0xD6),
++            text: Color32::from_rgb(0x10, 0x15, 0x1A),
+             // 4.7:1 on fields and hovered rows (#F5F5F5), 4.6:1 on selected rows: WCAG AA.
+-            text_secondary: Color32::from_rgb(0x6E, 0x6E, 0x6E),
++            text_secondary: Color32::from_rgb(0x5B, 0x66, 0x70),
+             text_tertiary: Color32::from_rgb(0xB3, 0xB3, 0xB3),
+             icon: Color32::from_rgb(0x1E, 0x1E, 0x1E),
+             icon_secondary: Color32::from_rgb(0x75, 0x75, 0x75),
+-            hover: Color32::from_rgb(0xF5, 0xF5, 0xF5),
+-            pressed: Color32::from_rgb(0xE6, 0xE6, 0xE6),
+-            field: Color32::from_rgb(0xF5, 0xF5, 0xF5),
+-            field_hover_border: Color32::from_rgb(0xE6, 0xE6, 0xE6),
++            hover: Color32::from_rgb(0xEE, 0xF2, 0xF0),
++            pressed: Color32::from_rgb(0xE2, 0xE8, 0xE5),
++            field: Color32::from_rgb(0xF4, 0xF6, 0xF5),
++            field_hover_border: Color32::from_rgb(0xD3, 0xDB, 0xD6),
+             accent: ACCENT,
+-            accent_hover: Color32::from_rgb(0x00, 0x7B, 0xE5),
++            accent_hover: Color32::from_rgb(0x0A, 0x6E, 0x47),
+             // 5.2:1 on white, 4.6:1 on selected rows: WCAG AA for text.
+-            accent_text: Color32::from_rgb(0x00, 0x6B, 0xD1),
+-            selected_row: Color32::from_rgb(0xE5, 0xF4, 0xFF),
+-            selected_row_child: Color32::from_rgb(0xF2, 0xF9, 0xFF),
++            accent_text: Color32::from_rgb(0x0A, 0x6E, 0x47),
++            selected_row: Color32::from_rgb(0xDC, 0xF1, 0xE7),
++            selected_row_child: Color32::from_rgb(0xEE, 0xF8, 0xF3),
+             component: COMPONENT,
+             component_row: Color32::from_rgb(0xF1, 0xE9, 0xFF),
+             danger: Color32::from_rgb(0xF2, 0x48, 0x22),
+             success: Color32::from_rgb(0x14, 0xAE, 0x5C),
+             warning: Color32::from_rgb(0xFF, 0xCD, 0x29),
+             guide: Color32::from_rgb(0xF2, 0x48, 0x22),
+-            tab_bar: Color32::from_rgb(0xE8, 0xE8, 0xE8),
++            tab_bar: Color32::from_rgb(0xF4, 0xF6, 0xF5),
+             tab_active: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+             shadow: Color32::from_black_alpha(40),
+             menu: Color32::from_rgb(0x1E, 0x1E, 0x1E),
+             menu_text: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+             menu_hover: ACCENT,
+             menu_dim: Color32::from_rgb(0x9A, 0x9A, 0x9A),
+-            focus: Color32::from_rgb(0x00, 0x6B, 0xD1),
++            focus: Color32::from_rgb(0x0A, 0x6E, 0x47),
+         }
+     }
+ 
+     pub fn dark() -> Self {
+         Self {
+             dark: true,
+-            bg: Color32::from_rgb(0x2C, 0x2C, 0x2C),
+-            panel: Color32::from_rgb(0x2C, 0x2C, 0x2C),
+-            canvas: Color32::from_rgb(0x1E, 0x1E, 0x1E),
+-            border: Color32::from_rgb(0x44, 0x44, 0x44),
+-            border_strong: Color32::from_rgb(0x55, 0x55, 0x55),
+-            text: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+-            text_secondary: Color32::from_rgb(0xB3, 0xB3, 0xB3),
++            bg: Color32::from_rgb(0x1A, 0x20, 0x21),
++            panel: Color32::from_rgb(0x1A, 0x20, 0x21),
++            canvas: Color32::from_rgb(0x12, 0x17, 0x18),
++            border: Color32::from_rgb(0x29, 0x32, 0x2F),
++            border_strong: Color32::from_rgb(0x35, 0x41, 0x3D),
++            text: Color32::from_rgb(0xF1, 0xF5, 0xF3),
++            text_secondary: Color32::from_rgb(0xA3, 0xAF, 0xAB),
+             text_tertiary: Color32::from_rgb(0x75, 0x75, 0x75),
+             icon: Color32::from_rgb(0xF5, 0xF5, 0xF5),
+             icon_secondary: Color32::from_rgb(0xB3, 0xB3, 0xB3),
+-            hover: Color32::from_rgb(0x38, 0x38, 0x38),
+-            pressed: Color32::from_rgb(0x44, 0x44, 0x44),
+-            field: Color32::from_rgb(0x38, 0x38, 0x38),
+-            field_hover_border: Color32::from_rgb(0x4D, 0x4D, 0x4D),
+-            accent: ACCENT,
+-            accent_hover: Color32::from_rgb(0x3D, 0xAD, 0xFF),
+-            accent_text: Color32::from_rgb(0x7C, 0xC4, 0xF8),
+-            selected_row: Color32::from_rgb(0x2A, 0x45, 0x5C),
+-            selected_row_child: Color32::from_rgb(0x2D, 0x37, 0x41),
++            hover: Color32::from_rgb(0x22, 0x2A, 0x2A),
++            pressed: Color32::from_rgb(0x29, 0x32, 0x2F),
++            field: Color32::from_rgb(0x22, 0x2A, 0x2A),
++            field_hover_border: Color32::from_rgb(0x35, 0x41, 0x3D),
++            accent: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            accent_hover: Color32::from_rgb(0x6F, 0xF0, 0xB5),
++            accent_text: Color32::from_rgb(0x6F, 0xF0, 0xB5),
++            selected_row: Color32::from_rgb(0x1F, 0x3B, 0x31),
++            selected_row_child: Color32::from_rgb(0x1A, 0x2D, 0x27),
+             component: Color32::from_rgb(0xD2, 0x7C, 0xFF),
+             component_row: Color32::from_rgb(0x3E, 0x30, 0x52),
+             danger: Color32::from_rgb(0xF2, 0x48, 0x22),
+             success: Color32::from_rgb(0x14, 0xAE, 0x5C),
+             warning: Color32::from_rgb(0xFF, 0xCD, 0x29),
+             guide: Color32::from_rgb(0xF2, 0x48, 0x22),
+-            tab_bar: Color32::from_rgb(0x1E, 0x1E, 0x1E),
+-            tab_active: Color32::from_rgb(0x2C, 0x2C, 0x2C),
++            tab_bar: Color32::from_rgb(0x12, 0x17, 0x18),
++            tab_active: Color32::from_rgb(0x1A, 0x20, 0x21),
+             shadow: Color32::from_black_alpha(90),
+-            menu: Color32::from_rgb(0x1E, 0x1E, 0x1E),
++            menu: Color32::from_rgb(0x12, 0x17, 0x18),
+             menu_text: Color32::from_rgb(0xFF, 0xFF, 0xFF),
+             menu_hover: ACCENT,
+             menu_dim: Color32::from_rgb(0x9A, 0x9A, 0x9A),
+-            focus: ACCENT,
++            focus: Color32::from_rgb(0x3B, 0xE6, 0x98),
+         }
+     }
+ 
+diff --git a/crates/ui-egui/src/toolbar.rs b/crates/ui-egui/src/toolbar.rs
+index ee0b150..e470783 100644
+--- a/crates/ui-egui/src/toolbar.rs
++++ b/crates/ui-egui/src/toolbar.rs
+@@ -190,7 +190,7 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
+     ui.painter().circle_filled(hr.center(), 16.0, t.panel);
+     ui.painter().text(hr.center(), Align2::CENTER_CENTER, "?", crate::theme::regular(15.0), t.text);
+     crate::right::menu_popup(&hresp).show(|ui| {
+-        for (l, c) in [(tr("Keyboard shortcuts"), "help.shortcuts"), (tr("Help page"), "help.page"), (tr("About FigCraft"), "help.about")] {
++        for (l, c) in [(tr("Keyboard shortcuts"), "help.shortcuts"), (tr("Help page"), "help.page"), (tr("About UI Design"), "help.about")] {
+             if crate::right::menu_item(ui, l, crate::shortcuts::shortcut(c).unwrap_or("")) {
+                 app.run(c, json!({}));
+                 ui.close();
+diff --git a/crates/ui-egui/src/windows.rs b/crates/ui-egui/src/windows.rs
+index cf754b8..e717127 100644
+--- a/crates/ui-egui/src/windows.rs
++++ b/crates/ui-egui/src/windows.rs
+@@ -112,8 +112,8 @@ pub fn take_input(app: &mut FigApp, viewport_id: ViewportId) -> Vec<egui::Event>
+ 
+ fn title_of(ds: Option<&DocState>) -> String {
+     match ds {
+-        Some(ds) => format!("{}{} – FigCraft", ds.doc.name, if ds.is_dirty() { " •" } else { "" }),
+-        None => "FigCraft".into(),
++        Some(ds) => format!("{}{} – UI Design", ds.doc.name, if ds.is_dirty() { " •" } else { "" }),
++        None => "UI Design".into(),
+     }
+ }
+ 

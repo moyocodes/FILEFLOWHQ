@@ -38,22 +38,49 @@ index ca6ad46..096455d 100644
  </html>
 diff --git a/apps/wordcraft-web/src/host.rs b/apps/wordcraft-web/src/host.rs
 new file mode 100644
-index 0000000..c280689
+index 0000000..9f393fb
 --- /dev/null
 +++ b/apps/wordcraft-web/src/host.rs
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,188 @@
 +//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
-+//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
 +//!
 +//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
-+//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
-+//!               charges for it, then hands the file to the user.
-+//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
 +//!
 +//! Opened on its own (not embedded), the editor works but can't save or export.
 +
++use std::cell::{Cell, RefCell};
++
 +use js_sys::{Array, Object, Reflect, Uint8Array};
 +use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
 +
 +/// The embedding page's window: a different window than ours, on our own origin.
 +fn parent() -> Option<web_sys::Window> {
@@ -68,6 +95,7 @@ index 0000000..c280689
 +}
 +
 +/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
 +pub fn embedded() -> bool {
 +    parent().is_some()
 +}
@@ -99,14 +127,68 @@ index 0000000..c280689
 +    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
 +}
 +
-+/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
-+pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
 +    let buffer = Uint8Array::from(bytes).buffer();
-+    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
 +}
 +
-+/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
-+pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
 +    let Some(window) = web_sys::window() else { return };
 +    let own_origin = window.location().origin().unwrap_or_default();
 +    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -119,16 +201,34 @@ index 0000000..c280689
 +        }
 +        let data = e.data();
 +        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
-+        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
-+            return;
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
 +        }
-+        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
-+            open(name, Uint8Array::new(&bytes).to_vec());
-+        }
++        wake();
 +    });
 +    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
 +        cb.forget();
 +    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
 +}
 diff --git a/apps/wordcraft-web/src/main.rs b/apps/wordcraft-web/src/main.rs
 index 2f4283d..3f1dbaf 100644
@@ -145,26 +245,47 @@ index 2f4283d..3f1dbaf 100644
  mod web;
  
 diff --git a/apps/wordcraft-web/src/web.rs b/apps/wordcraft-web/src/web.rs
-index 30ab58e..679d53c 100644
+index 30ab58e..94ca761 100644
 --- a/apps/wordcraft-web/src/web.rs
 +++ b/apps/wordcraft-web/src/web.rs
-@@ -60,18 +60,30 @@ pub fn start() {
+@@ -28,7 +28,11 @@ pub fn start() {
+         };
+         let dirty = Rc::new(Cell::new(false));
+         let saves = Rc::new(PickerSaves::default());
+-        if let Err(e) = guard_unload(dirty.clone(), saves.clone()) {
++        // Embedded in FileFlowHQ Studio, the page asks before the visitor leaves (it knows about
++        // AutoSave); on its own the editor guards itself.
++        if !crate::host::embedded()
++            && let Err(e) = guard_unload(dirty.clone(), saves.clone())
++        {
+             log::error!("no unsaved-changes guard: {e}");
+         }
+         let mut options = eframe::WebOptions::default();
+@@ -59,19 +63,37 @@ pub fn start() {
+                     let mut session = Session::new(doc);
                      session.system_region = region;
                      let mut app = WordApp::new(session, services(inbox.clone(), cc.egui_ctx.clone(), dirty, saves.clone()));
++                    // FileFlowHQ Studio: nothing is saved until the visitor saves or turns AutoSave on.
                      app.autosave = false;
++                    app.browser_autosave = crate::host::embedded();
 +                    // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme.
 +                    let _ = app.run("ui.theme", serde_json::json!({"value": if query().contains("theme=light") { "light" } else { "dark" }}));
                      // No document to show: start on File › Home, as the desktop app does (#766).
                      if !sample {
                          app.start_screen();
                      }
+-                    Ok(Box::new(WebShell { app, inbox, saves }))
 +                    // Files the FileFlowHQ page sends in open like dropped files.
 +                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
-+                    crate::host::listen(move |name, bytes| {
-+                        open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
-+                        wake.request_repaint();
-+                    });
-                     Ok(Box::new(WebShell { app, inbox, saves }))
++                    let (open_wake, wake) = (wake.clone(), wake);
++                    crate::host::listen(
++                        move |name, bytes| {
++                            open_inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
++                            open_wake.request_repaint();
++                        },
++                        move || wake.request_repaint(),
++                    );
++                    Ok(Box::new(WebShell { app, inbox, saves, autosave_shown: false }))
                  }),
              )
              .await;
@@ -180,7 +301,60 @@ index 30ab58e..679d53c 100644
              }
          }
      });
-@@ -261,239 +273,22 @@ fn guard_unload(dirty: Rc<Cell<bool>>, saves: Rc<PickerSaves>) -> Result<(), Str
+@@ -87,6 +109,8 @@ struct WebShell {
+     app: WordApp,
+     inbox: Inbox,
+     saves: Rc<PickerSaves>,
++    /// The AutoSave state the page last heard about.
++    autosave_shown: bool,
+ }
+ 
+ /// Saves the browser's save picker finishes after `download` has returned (#728). The app marks
+@@ -101,6 +125,35 @@ struct PickerSaves {
+ }
+ 
+ impl WebShell {
++    /// FileFlowHQ Studio: follow the page's theme and AutoSave switch, save when it asks or when
++    /// AutoSave is due, and tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = crate::host::take_requests();
++        if let Some(dark) = req.dark {
++            let _ = self.app.run("ui.theme", serde_json::json!({"value": if dark { "dark" } else { "light" }}));
++        }
++        if let Some(on) = req.autosave {
++            self.app.autosave = on;
++            self.autosave_shown = on;
++        } else if self.app.autosave != self.autosave_shown {
++            // The editor's own AutoSave switch: the Studio bar follows it.
++            self.autosave_shown = self.app.autosave;
++            crate::host::report_autosave(self.app.autosave);
++        }
++        let dirty = self.app.session.dirty;
++        if crate::host::should_save(req.save, dirty) {
++            let save = |app: &mut WordApp| app.run("file.save", serde_json::json!({}));
++            let r = if req.save { save(&mut self.app) } else { crate::host::autosaving(|| save(&mut self.app)) };
++            if let Err(e) = r {
++                log::warn!("save failed: {e}");
++            }
++        }
++        crate::host::report_dirty(self.app.session.dirty);
++        if self.app.autosave && self.app.session.dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1000));
++        }
++    }
++
+     /// A picker save that didn't happen leaves the document with unsaved changes.
+     fn settle_picker_saves(&mut self) {
+         let unsaved = std::mem::take(&mut *self.saves.unsaved.borrow_mut());
+@@ -139,6 +192,7 @@ impl eframe::App for WebShell {
+         }
+         self.settle_picker_saves();
+         self.app.logic(ctx);
++        self.host_requests(ctx);
+     }
+ 
+     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+@@ -261,239 +315,22 @@ fn guard_unload(dirty: Rc<Cell<bool>>, saves: Rc<PickerSaves>) -> Result<(), Str
      Ok(())
  }
  
@@ -204,7 +378,7 @@ index 30ab58e..679d53c 100644
 -            }
 -        }
 +    if crate::host::embedded() {
-+        crate::host::export(&name, bytes)
++        crate::host::export(&name, bytes, wordcraft_ui_egui::ffhq_brand::is_export())
 +    } else {
 +        Err("Saving and exporting work at fileflowhq.com/studio/word-processor".to_string())
      }
@@ -427,7 +601,7 @@ index 30ab58e..679d53c 100644
 -        Some("xml") => "application/xml",
 -        _ => "application/octet-stream",
 +    if crate::host::embedded() {
-+        crate::host::export("Print.pdf", bytes)
++        crate::host::export("Print.pdf", bytes, true)
 +    } else {
 +        Err("Printing works at fileflowhq.com/studio/word-processor".to_string())
      }
@@ -462,19 +636,206 @@ literal 0
 HcmV?d00001
 
 diff --git a/crates/ui-egui/src/backstage.rs b/crates/ui-egui/src/backstage.rs
-index bfce74d..dd335ef 100644
+index bfce74d..006f04d 100644
 --- a/crates/ui-egui/src/backstage.rs
 +++ b/crates/ui-egui/src/backstage.rs
-@@ -98,7 +98,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+@@ -3,7 +3,8 @@
+ use egui::{Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
+ use serde_json::json;
+ 
+-use crate::theme::{APP_COLOR, Tokens, medium, regular, semibold};
++use crate::ffhq_brand::{self as brand, palette};
++use crate::theme::{Tokens, medium, regular, semibold};
+ use crate::{WordApp, icons};
+ 
+ const PAGES: [(&str, &str); 9] = [
+@@ -18,66 +19,55 @@ const PAGES: [(&str, &str); 9] = [
+     ("options", "Options"),
+ ];
+ 
++/// The File view in FileFlowHQ's look: a quiet navigation column (the current page is a green
++/// tinted pill) beside the page on the site's background.
+ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+-    let t = Tokens::get(ui.ctx());
++    let p = palette(ui.ctx());
+     let mac = app.integrated_titlebar;
++    const NAV_W: f32 = 220.0;
+     egui::Panel::left("backstage_nav")
+-        .exact_size(200.0)
++        .exact_size(NAV_W)
+         // Fixed width, as in Word: without this egui shows a resize handle that does nothing (#502).
+         .resizable(false)
+-        .frame(egui::Frame::NONE.fill(APP_COLOR).inner_margin(egui::Margin { left: 0, right: 0, top: if mac { 0 } else { 12 }, bottom: 12 }))
++        .frame(egui::Frame::NONE.fill(p.panel).stroke(Stroke::new(1.0, p.border)).inner_margin(egui::Margin { left: 0, right: 0, top: if mac { 0 } else { 14 }, bottom: 14 }))
+         .show(ui, |ui| {
++            ui.spacing_mut().item_spacing.y = 2.0;
+             let back = if mac {
+                 // macOS (#222): the Backstage covers the title bar, so its top band is the title
+-                // bar: the back button sits beside the traffic lights, centred with them and as far
+-                // from them as the title bar's own controls, and the rest of the band drags the window.
+-                let (band, drag) = ui.allocate_exact_size(vec2(200.0, crate::chrome::MAC_TITLE_BAR), Sense::click_and_drag());
++                // bar: the back button sits beside the traffic lights, and the rest drags the window.
++                let (band, drag) = ui.allocate_exact_size(vec2(NAV_W, crate::chrome::MAC_TITLE_BAR), Sense::click_and_drag());
+                 if drag.drag_started() {
+                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                 }
+-                // The chevron's stroke starts at the content edge.
+                 let c = pos2(band.min.x + crate::chrome::MAC_CONTENT_LEFT + 3.0, band.center().y);
+                 let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, band.height())), ui.id().with("backstage_back"), Sense::click());
+-                icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), "chevronLeft", egui::Color32::WHITE, egui::Color32::WHITE);
++                icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), "chevronLeft", p.text, p.text);
+                 resp
+             } else {
+-                let (r, resp) = ui.allocate_exact_size(vec2(200.0, 40.0), Sense::click());
+-                icons::paint(
+-                    ui.painter(),
+-                    Rect::from_center_size(pos2(r.min.x + 26.0, r.center().y), vec2(18.0, 18.0)),
+-                    "chevronLeft",
+-                    egui::Color32::WHITE,
+-                    egui::Color32::WHITE,
+-                );
+-                resp
++                // Back to the document: a round button, then the short logo and "File".
++                let (row, _) = ui.allocate_exact_size(vec2(NAV_W, 40.0), Sense::hover());
++                let c = pos2(row.min.x + 30.0, row.center().y);
++                let circle = Rect::from_center_size(c, vec2(32.0, 32.0));
++                let resp = ui.interact(circle, ui.id().with("backstage_back"), Sense::click()).on_hover_text(tl!("Back to the document (Esc)"));
++                ui.painter().circle_filled(c, 16.0, if resp.hovered() { p.border } else { p.raised });
++                icons::paint(ui.painter(), Rect::from_center_size(c, vec2(16.0, 16.0)), "chevronLeft", p.text, p.text);
++                brand::paint_mark(ui, Rect::from_center_size(pos2(row.min.x + 70.0, row.center().y), vec2(26.0, 16.0)));
++                ui.painter().text(pos2(row.min.x + 90.0, row.center().y), Align2::LEFT_CENTER, tl!("File"), semibold(15.0), p.text);
++                resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+             };
+             // Escape in the built-in file browser closes only the browser.
+             if back.clicked() || (!app.file_dialog_open() && ui.input(|i| i.key_pressed(egui::Key::Escape))) {
+                 app.ui.backstage = false;
+                 app.canvas.want_focus = true;
+             }
+-            ui.add_space(if mac { 12.0 } else { 6.0 });
++            ui.add_space(14.0);
+             for (id, label) in PAGES {
+-                let (r, resp) = ui.allocate_exact_size(vec2(200.0, 38.0), Sense::click());
+-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(label)));
+                 let active = app.ui.backstage_page == id;
+-                if active {
+-                    ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(46));
+-                } else if resp.hovered() {
+-                    ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
+-                }
+-                ui.painter().text(
+-                    pos2(r.min.x + 22.0, r.center().y),
+-                    Align2::LEFT_CENTER,
+-                    tl!(label),
+-                    if active { semibold(14.0) } else { medium(14.0) },
+-                    egui::Color32::WHITE,
+-                );
+-                if resp.clicked() {
++                if brand::nav_item(ui, tl!(label), active, if active { semibold(14.0) } else { medium(14.0) }, NAV_W).clicked() {
+                     match id {
+                         // A document without a file goes to the Save As page (as in Word) instead
+                         // of `file.save`, which would also open the native Save As dialog.
+-                        // In the browser a save is a download, so it saves right away.
++                        // In the browser a save is kept in the browser, so it saves right away.
+                         "save" if app.session.path.is_none() && app.services.download.is_none() => {
+                             app.ui.backstage_page = "saveAs".into();
+                         }
+@@ -98,14 +88,8 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                  }
              }
              ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
 -                for (label, id) in [("About", "about"), ("Discord community", "discord")] {
+-                    let (r, resp) = ui.allocate_exact_size(vec2(200.0, 32.0), Sense::click());
+-                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(label)));
+-                    if resp.hovered() {
+-                        ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
+-                    }
+-                    ui.painter().text(pos2(r.min.x + 22.0, r.center().y), Align2::LEFT_CENTER, tl!(label), regular(13.0), egui::Color32::WHITE);
+-                    if resp.clicked() {
 +                for (label, id) in [("About", "about"), ("Contact FileFlowHQ", "discord")] {
-                     let (r, resp) = ui.allocate_exact_size(vec2(200.0, 32.0), Sense::click());
-                     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(label)));
-                     if resp.hovered() {
-@@ -200,16 +200,16 @@ fn matching_templates(query: &str) -> Vec<(&'static str, &'static str)> {
++                    if brand::nav_item(ui, tl!(label), false, regular(13.0), NAV_W).clicked() {
+                         if id == "discord" {
+                             let _ = app.run("ui.discord", json!({}));
+                         } else {
+@@ -115,23 +99,35 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+                 }
+             });
+         });
+-    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(egui::Margin::symmetric(40, 30))).show(ui, |ui| {
+-        egui::ScrollArea::vertical().show(ui, |ui| match app.ui.backstage_page.as_str() {
+-            "home" => home_page(app, ui),
+-            "new" => new_page(app, ui),
+-            "open" => open_page(app, ui),
+-            "saveAs" => save_as_page(app, ui),
+-            "info" => info_page(app, ui),
+-            "print" | "export" => export_page(app, ui),
+-            "options" => crate::options::page(app, ui),
+-            _ => home_page(app, ui),
++    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(p.void).inner_margin(egui::Margin { left: 48, right: 48, top: 36, bottom: 24 })).show(ui, |ui| {
++        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
++            ui.set_max_width(980.0);
++            match app.ui.backstage_page.as_str() {
++                "home" => home_page(app, ui),
++                "new" => new_page(app, ui),
++                "open" => open_page(app, ui),
++                "saveAs" => save_as_page(app, ui),
++                "info" => info_page(app, ui),
++                "print" | "export" => export_page(app, ui),
++                "options" => {
++                    heading(ui, "Options", "Settings for Word Processor in this browser.");
++                    brand::card(ui.ctx()).show(ui, |ui| crate::options::page(app, ui));
++                }
++                _ => home_page(app, ui),
++            }
+         });
+     });
+ }
+ 
+-fn heading(ui: &mut Ui, s: &str) {
+-    ui.label(egui::RichText::new(tl!(s)).font(semibold(26.0)));
+-    ui.add_space(16.0);
++fn heading(ui: &mut Ui, title: &str, subtitle: &str) {
++    brand::page_heading(ui, tl!(title), tl!(subtitle), semibold(28.0), regular(14.0));
++}
++
++/// A small section title inside a page.
++fn section(ui: &mut Ui, s: &str) {
++    let p = palette(ui.ctx());
++    ui.label(egui::RichText::new(tl!(s)).font(semibold(16.0)).color(p.text));
++    ui.add_space(10.0);
+ }
+ 
+ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
+@@ -140,11 +136,12 @@ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
+         // The label sits right under the thumbnail whatever row gap the gallery uses.
+         ui.spacing_mut().item_spacing.y = 0.0;
+         let (r, resp) = ui.allocate_exact_size(vec2(150.0, 194.0), Sense::click());
++        let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+         ui.painter().rect(
+             r,
+-            2.0,
++            10.0,
+             egui::Color32::WHITE,
+-            Stroke::new(if resp.hovered() { 2.0 } else { 1.0 }, if resp.hovered() { t.accent } else { t.border_strong }),
++            Stroke::new(if resp.hovered() { 2.0 } else { 1.0 }, if resp.hovered() { t.accent } else { palette(ui.ctx()).border_strong }),
+             egui::StrokeKind::Inside,
+         );
+         let ppp = ui.ctx().pixels_per_point();
+@@ -168,9 +165,12 @@ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
+             Some(h)
+         });
+         if let Some(h) = tex {
+-            ui.painter().image(h.id(), r.shrink(1.0), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), egui::Color32::WHITE);
++            // Rounded like the frame around it.
++            let img = egui::Image::from_texture(egui::load::SizedTexture::from_handle(&h)).corner_radius(9.0);
++            img.paint_at(ui, r.shrink(1.0));
+         }
+-        ui.label(egui::RichText::new(tl!(label)).font(regular(12.5)));
++        ui.add_space(8.0);
++        ui.label(egui::RichText::new(tl!(label)).font(medium(13.0)));
+         if resp.clicked() {
+             let _ = app.run("file.new", json!({"template": template}));
+             app.ui.backstage = false;
+@@ -200,16 +200,17 @@ fn matching_templates(query: &str) -> Vec<(&'static str, &'static str)> {
  fn home_page(app: &mut WordApp, ui: &mut Ui) {
      let t = Tokens::get(ui.ctx());
      let hour = wordcraft_engine::cmd::now_iso().get(11..13).and_then(|h| h.parse::<u32>().ok()).unwrap_or(9);
@@ -497,15 +858,239 @@ index bfce74d..dd335ef 100644
 +    };
 +    // The FileFlowHQ logo, the editor's name and a line (every Studio editor's heading).
 +    crate::ffhq_brand::start_header(ui, tl!("Word Processor"), &format!("{}. {}", tl!(greeting), tl!("Start a new document or open one.")));
-+    ui.add_space(22.0);
++    ui.add_space(26.0);
++    section(ui, "Start something new");
      ui.horizontal(|ui| {
          ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
          for (label, template) in TEMPLATES.into_iter().take(HOME_TEMPLATES) {
+@@ -221,17 +222,19 @@ fn home_page(app: &mut WordApp, ui: &mut Ui) {
+     if more.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+         app.ui.backstage_page = "new".into();
+     }
+-    ui.add_space(24.0);
++    ui.add_space(30.0);
+     open_list(app, ui);
+ }
+ 
+ /// New: the whole template gallery with a search box; no Recent list (that is on Home and Open).
+ fn new_page(app: &mut WordApp, ui: &mut Ui) {
+     let t = Tokens::get(ui.ctx());
+-    heading(ui, "New");
++    heading(ui, "New", "Start from a blank page or one of the templates.");
+     let id = egui::Id::new("backstage_template_search");
+     let mut query = ui.ctx().data(|d| d.get_temp::<String>(id)).unwrap_or_default();
+-    let search = ui.add(egui::TextEdit::singleline(&mut query).hint_text(tl!("Search for templates")).desired_width(360.0));
++    let search = ui.add(
++        egui::TextEdit::singleline(&mut query).hint_text(tl!("Search for templates")).desired_width(360.0).margin(vec2(12.0, 9.0)).font(regular(14.0)),
++    );
+     if search.changed() {
+         ui.ctx().data_mut(|d| d.insert_temp(id, query.clone()));
+     }
+@@ -250,23 +253,21 @@ fn new_page(app: &mut WordApp, ui: &mut Ui) {
+ }
+ 
+ fn open_list(app: &mut WordApp, ui: &mut Ui) {
+-    let t = Tokens::get(ui.ctx());
+-    ui.label(egui::RichText::new(tl!("Recent")).font(semibold(16.0)));
+-    ui.add_space(6.0);
++    let p = palette(ui.ctx());
++    section(ui, "Recent");
+     if app.ui.recent.is_empty() {
+-        ui.label(egui::RichText::new(tl!("Documents you open will show up here.")).color(t.text_dim));
++        brand::card(ui.ctx()).show(ui, |ui| {
++            ui.set_width(ui.available_width().min(640.0));
++            ui.label(egui::RichText::new(tl!("Documents you open will show up here.")).font(regular(13.5)).color(p.dim));
++        });
+     }
+-    for p in app.ui.recent.iter().take(app.ui.recent_shown()).cloned().collect::<Vec<_>>() {
+-        let name = std::path::Path::new(&p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(p.clone());
+-        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width().min(700.0), 40.0), Sense::click());
+-        if resp.hovered() {
+-            ui.painter().rect_filled(r, 4.0, t.hover);
+-        }
+-        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.min.x + 18.0, r.center().y), vec2(22.0, 22.0)), "printLayout", t.icon, t.accent);
+-        ui.painter().text(pos2(r.min.x + 40.0, r.min.y + 13.0), Align2::LEFT_CENTER, &name, medium(13.0), t.text);
+-        ui.painter().text(pos2(r.min.x + 40.0, r.min.y + 29.0), Align2::LEFT_CENTER, &p, regular(11.0), t.text_dim);
+-        if resp.clicked() {
+-            let _ = app.run("file.open", json!({"path": p}));
++    ui.spacing_mut().item_spacing.y = 8.0;
++    for path in app.ui.recent.iter().take(app.ui.recent_shown()).cloned().collect::<Vec<_>>() {
++        let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(path.clone());
++        let ext = std::path::Path::new(&name).extension().map(|e| e.to_string_lossy().to_uppercase()).unwrap_or_else(|| "DOC".into());
++        let w = ui.available_width().min(640.0);
++        if brand::option_card(ui, vec2(w, 64.0), &ext, &name, &path, medium(14.0), regular(11.5)).clicked() {
++            let _ = app.run("file.open", json!({"path": path}));
+             app.ui.backstage = false;
+             app.canvas.want_focus = true;
+         }
+@@ -274,8 +275,8 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
+ }
+ 
+ fn open_page(app: &mut WordApp, ui: &mut Ui) {
+-    heading(ui, "Open");
+-    if ui.button(egui::RichText::new(tl!("Browse…")).font(medium(14.0))).clicked() {
++    heading(ui, "Open", "Open a Word, OpenDocument, RTF, web page, Markdown or text file from your device. It opens right here: nothing is uploaded.");
++    if brand::pill_button(ui, tl!("Browse files…"), true, semibold(14.0)).clicked() {
+         let _ = app.run("ui.openFileDialog", json!({}));
+     }
+     // Linux and the BSDs (#576): the system dialog needs a file chooser portal or zenity; when it
+@@ -288,23 +289,52 @@ fn open_page(app: &mut WordApp, ui: &mut Ui) {
+     {
+         let _ = app.run("ui.fileBrowser", json!({}));
+     }
+-    ui.add_space(18.0);
++    ui.add_space(30.0);
+     open_list(app, ui);
+ }
+ 
+ /// Save As: Browse… asks where to save. It has no recent-documents list: clicking one of those
+ /// opens it, which is not what Save As is for.
+ fn save_as_page(app: &mut WordApp, ui: &mut Ui) {
+-    heading(ui, "Save As");
+-    if ui.button(egui::RichText::new(tl!("Browse…")).font(medium(14.0))).clicked() {
++    // FileFlowHQ Studio (web): a save is kept in this browser under the name typed here.
++    if app.services.download.is_some() {
++        heading(ui, "Save As", "Your document is kept in this browser under this name: find it again under Saved, in the Studio bar. To download a copy, use Export.");
++        let id = egui::Id::new("backstage_save_name");
++        let mut name = ui.ctx().data(|d| d.get_temp::<String>(id)).unwrap_or_else(|| app.default_save_name());
++        brand::card(ui.ctx()).show(ui, |ui| {
++            ui.set_width(ui.available_width().min(560.0));
++            ui.label(egui::RichText::new(tl!("File name")).font(medium(13.0)).color(palette(ui.ctx()).dim));
++            ui.add_space(6.0);
++            let field = ui.add(egui::TextEdit::singleline(&mut name).desired_width(f32::INFINITY).margin(vec2(12.0, 9.0)).font(regular(14.0)));
++            if field.changed() {
++                ui.ctx().data_mut(|d| d.insert_temp(id, name.clone()));
++            }
++            ui.add_space(14.0);
++            let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
++            if brand::pill_button(ui, tl!("Save in this browser"), true, semibold(14.0)).clicked() || enter {
++                let name = name.trim();
++                let name = if name.is_empty() { app.default_save_name() } else if name.contains('.') { name.to_string() } else { format!("{name}.docx") };
++                if app.run("file.save", json!({"path": name})).is_ok() {
++                    ui.ctx().data_mut(|d| d.remove::<String>(id));
++                    app.ui.backstage = false;
++                    app.canvas.want_focus = true;
++                }
++            }
++        });
++        return;
++    }
++    heading(ui, "Save As", "Choose where to save the document.");
++    if brand::pill_button(ui, tl!("Browse…"), true, semibold(14.0)).clicked() {
+         app.save_as_dialog();
+     }
+ }
+ 
+ fn info_page(app: &mut WordApp, ui: &mut Ui) {
+-    heading(ui, "Info");
++    heading(ui, "Info", "Properties, protection and statistics for this document.");
+     let info = app.session.run("file.info", &json!({})).unwrap_or_default();
+-    ui.columns(2, |cols| {
++    brand::card(ui.ctx()).show(ui, |ui| ui.columns(2, |cols| {
++        cols[0].spacing_mut().item_spacing.y = 8.0;
++        cols[1].spacing_mut().item_spacing.y = 8.0;
+         let ui = &mut cols[0];
+         ui.label(egui::RichText::new(tl!("Properties")).font(semibold(15.0)));
+         // The fields edit a copy of the document's properties that is read afresh every frame,
+@@ -362,31 +392,59 @@ fn info_page(app: &mut WordApp, ui: &mut Ui) {
+         }
+         let path = info.get("path").and_then(|v| v.as_str()).unwrap_or(tl!("Not saved yet"));
+         ui.label(crate::i18n::fmt(tl!("Location: {path}"), &[("path", path)]));
+-    });
++    }));
+ }
+ 
++/// Export's formats: the badge, the name, and what it is good for.
++const EXPORT_FORMATS: [(&str, &str, &str); 10] = [
++    ("pdf", "PDF document", "For sharing and printing; looks the same everywhere"),
++    ("docx", "Word document", "Opens in Microsoft Word and Google Docs"),
++    ("odt", "OpenDocument Text", "For LibreOffice and OpenOffice"),
++    ("rtf", "Rich Text Format", "Simple formatting most editors can open"),
++    ("html", "Web page", "A page you can open in any browser"),
++    ("md", "Markdown", "Plain text with light formatting"),
++    ("png", "Page image", "A picture of the current page"),
++    ("txt", "Plain text", "Just the words, no formatting"),
++    ("xml", "Word XML document", "Word's single-file XML format"),
++    ("tex", "LaTeX", "For typesetting in LaTeX"),
++];
++
+ fn export_page(app: &mut WordApp, ui: &mut Ui) {
+     if app.ui.backstage_page == "print" {
+-        heading(ui, "Print");
+-        // Print Markup (a print setting, as in Word): the comments beside each page.
+-        let mut markup = app.session.prefs.print_markup;
+-        if ui
+-            .checkbox(&mut markup, tl!("Print Markup"))
+-            .on_hover_text(tl!(
+-                "Comments beside each page and tracked changes in PDFs, prints and images; a comment list at the end of web pages, Markdown and text."
+-            ))
+-            .changed()
+-        {
+-            let _ = app.run("file.printMarkup", json!({"value": markup}));
+-        }
+-        ui.add_space(12.0);
+-        crate::print_page::show(app, ui);
++        heading(ui, "Print", "Choose the pages and layout, then print or save them as a PDF.");
++        brand::card(ui.ctx()).show(ui, |ui| {
++            // Print Markup (a print setting, as in Word): the comments beside each page.
++            let mut markup = app.session.prefs.print_markup;
++            if ui
++                .checkbox(&mut markup, tl!("Print Markup"))
++                .on_hover_text(tl!(
++                    "Comments beside each page and tracked changes in PDFs, prints and images; a comment list at the end of web pages, Markdown and text."
++                ))
++                .changed()
++            {
++                let _ = app.run("file.printMarkup", json!({"value": markup}));
++            }
++            ui.add_space(12.0);
++            crate::print_page::show(app, ui);
++        });
+         return;
+     }
+-    heading(ui, "Export");
+-    ui.label(tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."));
+-    ui.add_space(12.0);
+-    crate::print_page::export_formats(app, ui);
++    heading(ui, "Export as", "Download a copy of your document in another format. Your document stays open here.");
++    let gap = 12.0;
++    let cols = if ui.available_width() > 900.0 { 3 } else { 2 };
++    let w = ((ui.available_width() - gap * (cols as f32 - 1.0)) / cols as f32).floor();
++    for row in EXPORT_FORMATS.chunks(cols) {
++        ui.horizontal(|ui| {
++            ui.spacing_mut().item_spacing.x = gap;
++            for (ext, name, about) in row {
++                let badge = ext.to_uppercase();
++                if brand::option_card(ui, vec2(w, 76.0), &badge, tl!(name), tl!(about), semibold(14.0), regular(11.5)).clicked() {
++                    app.export_dialog(ext);
++                }
++            }
++        });
++        ui.add_space(gap);
++    }
+ }
+ 
+ #[cfg(test)]
 diff --git a/crates/ui-egui/src/chrome.rs b/crates/ui-egui/src/chrome.rs
-index 90f0fcc..1f49c21 100644
+index 90f0fcc..6b1a9af 100644
 --- a/crates/ui-egui/src/chrome.rs
 +++ b/crates/ui-egui/src/chrome.rs
-@@ -269,12 +269,12 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
+@@ -237,9 +237,11 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
+                 ui.painter().rect(r, 8.0, fill, Stroke::new(1.0, stroke), egui::StrokeKind::Inside);
+                 let knob = if on { r.max.x - 8.0 } else { r.min.x + 8.0 };
+                 ui.painter().circle_filled(pos2(knob, r.center().y), 5.0, knob_fill);
+-                let tip = block
+-                    .as_ref()
+-                    .map_or_else(|| tl!("AutoSave saves every change to the file (needs a saved document)").to_string(), |b| b.reason());
++                let tip = if app.browser_autosave {
++                    tl!("AutoSave keeps every change in this browser. Off: changes are lost when you leave unless you save.").to_string()
++                } else {
++                    block.as_ref().map_or_else(|| tl!("AutoSave saves every change to the file (needs a saved document)").to_string(), |b| b.reason())
++                };
+                 if resp.on_hover_text(tip).clicked() {
+                     match block {
+                         None => {
+@@ -269,12 +271,12 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                          icons::paint(
                              ui.painter(),
                              Rect::from_center_size(pos2(r.min.x + 13.0, r.center().y), vec2(14.0, 14.0)),
@@ -522,7 +1107,7 @@ index 90f0fcc..1f49c21 100644
                          }
                          ui.add_space(8.0);
 diff --git a/crates/ui-egui/src/dialogs.rs b/crates/ui-egui/src/dialogs.rs
-index 975ff90..dffb7a0 100644
+index 975ff90..c8c8b18 100644
 --- a/crates/ui-egui/src/dialogs.rs
 +++ b/crates/ui-egui/src/dialogs.rs
 @@ -1342,8 +1342,8 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
@@ -536,7 +1121,7 @@ index 975ff90..dffb7a0 100644
          Dialog::RecipientList { .. } => "Recipient List",
          Dialog::SelectTable { .. } => "Select Table",
          Dialog::InsertMergeField { .. } => "Insert Merge Field",
-@@ -2324,16 +2324,15 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
+@@ -2324,22 +2324,13 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                  1 => crate::credits::contributors_ui(ui),
                  2 => crate::credits::models_ui(ui),
                  _ => {
@@ -552,13 +1137,42 @@ index 975ff90..dffb7a0 100644
 -                    ui.hyperlink_to(tl!("getartcraft.com/apps/wordcraft"), "https://getartcraft.com/apps/wordcraft");
 -                    ui.hyperlink_to(tl!("Join us on Discord: discord.gg/artcraft"), "https://discord.gg/artcraft");
 -                    ui.hyperlink_to(tl!("Source code: github.com/storytold/wordcraft"), "https://github.com/storytold/wordcraft");
+-                    ui.add_space(6.0);
+-                    ui.label(
+-                        egui::RichText::new(tl!("MIT OR Apache-2.0. Copyright (c) 2026 ArtCraft Team and the WordCraft contributors."))
+-                            .small()
+-                            .weak(),
+-                    );
 +                    ui.hyperlink_to(tl!("fileflowhq.com"), "https://fileflowhq.com");
 +                    ui.hyperlink_to(tl!("Contact FileFlowHQ"), "https://fileflowhq.com/contact");
-+                    // The upstream licenses ship with the app; credit the project too.
-+                    ui.hyperlink_to(tl!("Built on WordCraft, open source: github.com/storytold/wordcraft"), "https://github.com/storytold/wordcraft");
-                     ui.add_space(6.0);
-                     ui.label(
-                         egui::RichText::new(tl!("MIT OR Apache-2.0. Copyright (c) 2026 ArtCraft Team and the WordCraft contributors."))
+                 }
+             }
+             let (ok, cancel) = buttons(ui, tl!("Close"));
+diff --git a/crates/ui-egui/src/file_dialogs.rs b/crates/ui-egui/src/file_dialogs.rs
+index 5ee9b42..52bdfee 100644
+--- a/crates/ui-egui/src/file_dialogs.rs
++++ b/crates/ui-egui/src/file_dialogs.rs
+@@ -215,7 +215,10 @@ impl WordApp {
+             }
+             AfterPick::Export { ext } => {
+                 let Some(path) = picked else { return Ok(json!({"cancelled": true})) };
+-                let r = if ext == "png" { self.run("file.exportPng", json!({"path": path})) } else { self.run("file.saveAs", json!({"path": path})) };
++                // FileFlowHQ Studio: an export downloads (a save stays in the browser).
++                let r = crate::ffhq_brand::as_export(|| {
++                    if ext == "png" { self.run("file.exportPng", json!({"path": path})) } else { self.run("file.saveAs", json!({"path": path})) }
++                });
+                 if r.is_ok() {
+                     self.status(crate::i18n::fmt(tl!("Exported {path}"), &[("path", &path)]));
+                 }
+@@ -225,7 +228,7 @@ impl WordApp {
+                 let Some(path) = picked else { return Ok(json!({"cancelled": true})) };
+                 let mut params = settings;
+                 params["path"] = json!(path);
+-                let r = self.run("file.printPdf", params);
++                let r = crate::ffhq_brand::as_export(|| self.run("file.printPdf", params));
+                 if r.is_ok() {
+                     self.status(crate::i18n::fmt(tl!("Exported {path}"), &[("path", &path)]));
+                 }
 diff --git a/crates/ui-egui/src/keytips.rs b/crates/ui-egui/src/keytips.rs
 index c50ebd4..810ce5d 100644
 --- a/crates/ui-egui/src/keytips.rs
@@ -573,14 +1187,14 @@ index c50ebd4..810ce5d 100644
              vec![m("Shading", "table.shading"), m("Borders", "table.borders"), c("Border Painter", "table.borderPainter")]
          }
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 88c7404..4ae152d 100644
+index 88c7404..8ffb686 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -22,6 +22,7 @@ macro_rules! tl {
  
  pub mod a11y;
  pub mod a11y_pane;
-+mod ffhq_brand;
++pub mod ffhq_brand;
  pub mod backstage;
  pub mod canvas;
  pub mod caret_glide;
@@ -594,7 +1208,25 @@ index 88c7404..4ae152d 100644
              author: String::new(),
              window: None,
              language: i18n::AUTO.into(),
-@@ -1102,8 +1104,9 @@ impl WordApp {
+@@ -399,6 +401,9 @@ pub struct WordApp {
+     sent_title: String,
+     pub quit_requested: bool,
+     pub autosave: bool,
++    /// FileFlowHQ Studio: AutoSave keeps the document in the browser (the web shell does the
++    /// saving), so it needs no file on disk.
++    pub browser_autosave: bool,
+     pub word_count: (u64, usize),
+     last_autosave: f64,
+     /// The tab shown before the Equation tab came up (restored when editing ends).
+@@ -491,6 +496,7 @@ impl WordApp {
+             sent_title: String::new(),
+             quit_requested: false,
+             autosave: true,
++            browser_autosave: false,
+             word_count: (0, 0),
+             last_autosave: 0.0,
+             equation_prev_tab: None,
+@@ -1102,8 +1108,9 @@ impl WordApp {
                          .into(),
                  ));
              }
@@ -605,7 +1237,37 @@ index 88c7404..4ae152d 100644
                  json!({})
              }
              "ui.caretAnimation" => {
-@@ -1537,7 +1540,7 @@ impl WordApp {
+@@ -1265,7 +1272,7 @@ impl WordApp {
+ 
+     /// The name Save suggests: the open file's own Word format (so a .docm keeps its macros),
+     /// otherwise .docx.
+-    fn default_save_name(&self) -> String {
++    pub(crate) fn default_save_name(&self) -> String {
+         let ext = self.session.path.as_ref().and_then(|p| p.extension()).map(|e| e.to_string_lossy().to_string());
+         match ext {
+             Some(e) if wordcraft_engine::io::is_word_package(&e) => format!("{}.{e}", self.title_stem()),
+@@ -1433,6 +1440,9 @@ impl WordApp {
+     /// user saved to in this session, in a format that keeps everything, and never in the browser
+     /// (a page can't write to the user's files; saving there is a download, #176).
+     pub fn autosave_block(&self) -> Option<AutoSaveBlock> {
++        if self.browser_autosave {
++            return None;
++        }
+         if self.services.download.is_some() {
+             return Some(AutoSaveBlock::Browser);
+         }
+@@ -1468,6 +1478,10 @@ impl WordApp {
+     /// AutoSave: write a saved document a couple of seconds after the last change. A failure is
+     /// shown in the status bar and turns AutoSave off for the file until the user saves it again.
+     fn autosave_tick(&mut self, now: f64) {
++        // In FileFlowHQ Studio the web shell saves (into the browser).
++        if self.browser_autosave {
++            return;
++        }
+         if self.autosaves() && self.session.dirty && now - self.last_autosave > 2500.0 && now - self.canvas.caret_visible_since > 1500.0 {
+             self.last_autosave = now;
+             if let Err(e) = self.session.run("file.save", &json!({})) {
+@@ -1537,7 +1551,7 @@ impl WordApp {
          if let Some(url) = self.canvas.open_url.take() {
              ctx.open_url(egui::OpenUrl::new_tab(url));
          }
@@ -627,10 +1289,39 @@ index d779a42..a4b53c0 100644
      ui.add_space(8.0);
      section(ui, "Start-up");
 diff --git a/crates/ui-egui/src/ribbon.rs b/crates/ui-egui/src/ribbon.rs
-index f558bd7..9b3eb58 100644
+index f558bd7..c143058 100644
 --- a/crates/ui-egui/src/ribbon.rs
 +++ b/crates/ui-egui/src/ribbon.rs
-@@ -1742,7 +1742,7 @@ fn outlining(app: &mut WordApp, ui: &mut Ui) {
+@@ -196,6 +196,10 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+         .show(ui, |ui| {
+             ui.horizontal_centered(|ui| {
+                 ui.spacing_mut().item_spacing = vec2(2.0, 0.0);
++                // The short FileFlowHQ logo right before File, as in every Studio editor.
++                ui.add_space(8.0);
++                crate::ffhq_brand::mark(ui, 16.0);
++                ui.add_space(6.0);
+                 for (tab, custom) in &tabs {
+                     let (tab, custom) = (tab.as_str(), *custom);
+                     let contextual = !custom && wordcraft_engine::ribbon::CONTEXTUAL_TABS.contains(&tab);
+@@ -226,7 +230,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+                 }
+                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                     // Share, Editing mode, Comments.
+-                    let share = tl!("Share");
++                    let share = tl!("Export");
+                     let share_w = ui.ctx().fonts_mut(|f| f.layout_no_wrap(share.to_string(), medium(12.0), t.text).size().x);
+                     let (r, resp) = ui.allocate_exact_size(vec2((share_w + 36.0).max(74.0), 24.0), Sense::click());
+                     ui.painter().rect_filled(r, 4.0, if resp.hovered() { t.accent_text } else { t.accent });
+@@ -238,7 +242,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
+                         t.on_accent,
+                     );
+                     ui.painter().text(pos2(r.min.x + 26.0, r.center().y), Align2::LEFT_CENTER, share, medium(12.0), t.on_accent);
+-                    if resp.on_hover_text(tl!("Export a copy to share (PDF, Word document)")).clicked() {
++                    if resp.on_hover_text(tl!("Download a copy: PDF, Word document and more")).clicked() {
+                         let _ = app.run("ui.backstage", json!({"value": true, "page": "export"}));
+                     }
+                     ui.add_space(6.0);
+@@ -1742,7 +1746,7 @@ fn outlining(app: &mut WordApp, ui: &mut Ui) {
  fn help(app: &mut WordApp, ui: &mut Ui) {
      group(ui, "Help", None, app, |ui, app| {
          big(ui, app, "help", "Help", "ui.dialog", json!({"name": "about"}), false);

@@ -4,6 +4,7 @@ import { useUsage } from '../context/UsageContext.jsx'
 import { useToast } from '../context/ToastContext.jsx'
 import { apiUrl } from '../utils/api'
 import { saveBlob } from '../utils/platform.js'
+import { saveFile, MAX_SAVED_FILES } from '../utils/studioStore.js'
 
 const EMAIL_KEY = 'fileflowhq_email'
 const PAYSTACK_INLINE = 'https://js.paystack.co/v2/inline.js'
@@ -47,8 +48,10 @@ const WATERMARK = `url("data:image/svg+xml,${encodeURIComponent(
 )}")`
 
 /**
- * Paid exports for a rebranded Studio editor. The editor (studio/patches/*.patch) hands every
- * save, export and print to this page as an `ffhq:export` message instead of downloading it.
+ * Saves and paid exports for a rebranded Studio editor. The editor (studio/patches/*.patch) hands
+ * every save, export and print to this page as an `ffhq:export` message instead of downloading it.
+ * A file in the editor's own format (`app.saveFormats`) is a save: it is kept in this browser
+ * (free, see the Saved menu in the Studio bar). Anything else is an export and downloads.
  * Each one spends one *paid* use from the site-wide Paystack balance (api/usage.js,
  * `paid: true`); with none left, the visitor pays in a Paystack popup (the page, and the open
  * document, stay put) and the file is released straight after.
@@ -80,13 +83,33 @@ export default function StudioExportGate({ iframeRef, app }) {
   useEffect(() => {
     const onMessage = (event) => {
       if (event.origin !== window.location.origin || event.source !== iframeRef.current?.contentWindow) return
-      const { type, name, bytes } = event.data || {}
+      const { type, name, bytes, kind } = event.data || {}
       if (type !== 'ffhq:export' || typeof name !== 'string' || !(bytes instanceof ArrayBuffer)) return
-      exportFile({ name, bytes })
+      // The editor says what it is (`save`, `autosave` or `export`); older builds don't, and then
+      // the editor's own format counts as a save.
+      const ext = name.split('.').pop().toLowerCase()
+      const save = kind ? kind !== 'export' : app.saveFormats?.includes(ext)
+      if (save) {
+        saveFile(app.id, name, bytes)
+          .then(() => kind !== 'autosave' && showToast(`${name} saved in this browser`))
+          .catch((err) =>
+            showToast(
+              err?.code === 'limit'
+                ? `${app.name} keeps up to ${MAX_SAVED_FILES} files. Remove one under Saved, or Export to download it.`
+                : `Couldn't save ${name}: this browser's storage is full or blocked`
+            )
+          )
+      } else exportFile({ name, bytes })
     }
+    // The Saved menu (Studio bar) downloads a kept file the same paid way.
+    const onDownload = (event) => event.detail?.appId === app.id && exportFile(event.detail)
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [exportFile, iframeRef])
+    window.addEventListener('ffhq:download', onDownload)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('ffhq:download', onDownload)
+    }
+  }, [app.id, app.saveFormats, exportFile, iframeRef, showToast])
 
   const pay = async (e) => {
     e.preventDefault()
@@ -165,10 +188,10 @@ export default function StudioExportGate({ iframeRef, app }) {
               <Lock className="h-5 w-5" />
             </span>
             <h2 id="studio-pay-title" className="text-[1.05rem] font-medium">
-              Save “{pending.name}”
+              Download “{pending.name}”
             </h2>
             <p className="mt-2 text-[0.85rem] leading-relaxed text-text-dim">
-              Editing in {app.name} is free. Saving, exporting and printing use credits:{' '}
+              Editing and saving in {app.name} are free. Downloading, exporting and printing use credits:{' '}
               <strong className="text-text">
                 {pricing.packUses} for {price}
               </strong>
@@ -190,7 +213,7 @@ export default function StudioExportGate({ iframeRef, app }) {
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-signal px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-70 dark:text-void"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy ? 'Waiting for Paystack…' : `Pay ${price} and save`}
+              {busy ? 'Waiting for Paystack…' : `Pay ${price} and download`}
             </button>
             <p className="mt-2 text-center text-[0.7rem] text-text-dim">Secure checkout by Paystack</p>
           </form>

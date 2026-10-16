@@ -37,22 +37,49 @@ index af72b21..b9e7c65 100644
  </html>
 diff --git a/apps/soundcraft-web/src/host.rs b/apps/soundcraft-web/src/host.rs
 new file mode 100644
-index 0000000..c280689
+index 0000000..9f393fb
 --- /dev/null
 +++ b/apps/soundcraft-web/src/host.rs
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,188 @@
 +//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
-+//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor.
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
 +//!
 +//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
-+//!               start, and `ffhq:export` `{ name, bytes }` for every save and export — the page
-+//!               charges for it, then hands the file to the user.
-+//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file (e.g. one kept across a reload).
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
 +//!
 +//! Opened on its own (not embedded), the editor works but can't save or export.
 +
++use std::cell::{Cell, RefCell};
++
 +use js_sys::{Array, Object, Reflect, Uint8Array};
 +use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
 +
 +/// The embedding page's window: a different window than ours, on our own origin.
 +fn parent() -> Option<web_sys::Window> {
@@ -67,6 +94,7 @@ index 0000000..c280689
 +}
 +
 +/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
 +pub fn embedded() -> bool {
 +    parent().is_some()
 +}
@@ -98,14 +126,68 @@ index 0000000..c280689
 +    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
 +}
 +
-+/// Hand a saved or exported file to the page (`ffhq:export`). The bytes move, not copy.
-+pub fn export(name: &str, bytes: &[u8]) -> Result<(), String> {
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
 +    let buffer = Uint8Array::from(bytes).buffer();
-+    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into())], Some(&buffer))
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
 +}
 +
-+/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends.
-+pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static) {
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
 +    let Some(window) = web_sys::window() else { return };
 +    let own_origin = window.location().origin().unwrap_or_default();
 +    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -118,16 +200,34 @@ index 0000000..c280689
 +        }
 +        let data = e.data();
 +        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
-+        if get("type").and_then(|t| t.as_string()).as_deref() != Some("pdfcraft:open") {
-+            return;
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
 +        }
-+        if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
-+            open(name, Uint8Array::new(&bytes).to_vec());
-+        }
++        wake();
 +    });
 +    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
 +        cb.forget();
 +    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
 +}
 diff --git a/apps/soundcraft-web/src/main.rs b/apps/soundcraft-web/src/main.rs
 index 6e52278..9d77b04 100644
@@ -144,10 +244,10 @@ index 6e52278..9d77b04 100644
  mod web;
  
 diff --git a/apps/soundcraft-web/src/web.rs b/apps/soundcraft-web/src/web.rs
-index 02f1e13..a9d9fb4 100644
+index 02f1e13..ef36936 100644
 --- a/apps/soundcraft-web/src/web.rs
 +++ b/apps/soundcraft-web/src/web.rs
-@@ -14,7 +14,15 @@ const LOADING_ID: &str = "soundcraft_loading";
+@@ -14,7 +14,18 @@ const LOADING_ID: &str = "soundcraft_loading";
  
  pub fn start() {
      eframe::WebLogger::init(log::LevelFilter::Info).ok();
@@ -156,7 +256,10 @@ index 02f1e13..a9d9fb4 100644
 +    // payment first. Opened on its own, the editor works but can't save or export.
 +    io::set_deliver(|name: &str, bytes: &[u8]| {
 +        if crate::host::embedded() {
-+            crate::host::export(name, bytes)
++            // A session (bundle) is a save, kept in the browser; audio, MIDI… are exports.
++            let ext = name.rsplit_once('.').map(|(_, x)| x.to_ascii_lowercase()).unwrap_or_default();
++            let export = soundcraft_ui_egui::ffhq_brand::is_export() || !SESSION_EXTS.contains(&ext.as_str());
++            crate::host::export(name, bytes, export)
 +        } else {
 +            Err("Saving and exporting work at fileflowhq.com/studio/audio-editor".to_string())
 +        }
@@ -164,7 +267,7 @@ index 02f1e13..a9d9fb4 100644
      wasm_bindgen_futures::spawn_local(async {
          let Some(document) = web_sys::window().and_then(|w| w.document()) else {
              log::error!("no document");
-@@ -40,15 +48,29 @@ pub fn start() {
+@@ -40,15 +51,33 @@ pub fn start() {
                      }
                      let engine = if query().contains("empty") { Engine::default() } else { soundcraft_engine::demo::demo_engine() };
                      let player = soundcraft_playback::Player::new(Arc::new(engine.session().clone()));
@@ -177,10 +280,14 @@ index 02f1e13..a9d9fb4 100644
 +                    let inbox: Inbox = Rc::default();
 +                    // Files the FileFlowHQ page sends in open like dropped files.
 +                    let (open_inbox, wake) = (inbox.clone(), cc.egui_ctx.clone());
-+                    crate::host::listen(move |name, bytes| {
-+                        open_inbox.borrow_mut().push((Purpose::of(&name), name, bytes));
-+                        wake.request_repaint();
-+                    });
++                    let open_wake = wake.clone();
++                    crate::host::listen(
++                        move |name, bytes| {
++                            open_inbox.borrow_mut().push((Purpose::of(&name), name, bytes));
++                            open_wake.request_repaint();
++                        },
++                        move || wake.request_repaint(),
++                    );
 +                    Ok(Box::new(WebShell { app, inbox }))
                  }),
              )
@@ -197,7 +304,7 @@ index 02f1e13..a9d9fb4 100644
              }
          }
      });
-@@ -95,7 +117,7 @@ impl Purpose {
+@@ -95,7 +124,7 @@ impl Purpose {
  
      fn filter(self) -> (&'static str, &'static [&'static str]) {
          match self {
@@ -206,7 +313,46 @@ index 02f1e13..a9d9fb4 100644
              Self::Audio => ("Audio", AUDIO_EXTS),
              Self::Midi => ("MIDI", MIDI_EXTS),
          }
-@@ -200,40 +222,3 @@ impl eframe::App for WebShell {
+@@ -112,6 +141,30 @@ struct WebShell {
+ }
+ 
+ impl WebShell {
++    /// FileFlowHQ Studio: follow the page's theme, save when it asks or when AutoSave is due, and
++    /// tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = crate::host::take_requests();
++        if let Some(dark) = req.dark {
++            let _ = self.app.run("ui.theme", json!({"mode": if dark { "dark" } else { "light" }}));
++        }
++        let dirty = self.app.engine.is_dirty();
++        if crate::host::should_save(req.save, dirty) {
++            // The session as a bundle, kept in the browser under its name.
++            let stem = self.app.engine.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem()).map_or_else(|| "Session".to_string(), |s| s.to_string_lossy().to_string());
++            let path = format!("{stem}.{}", io::BUNDLE_EXTENSION);
++            let mut save = |app: &mut SoundApp| app.run("session.save_as", json!({"path": path, "replace": true}));
++            let r = if req.save { save(&mut self.app) } else { crate::host::autosaving(|| save(&mut self.app)) };
++            if let Err(e) = r {
++                log::warn!("save failed: {e:?}");
++            }
++        }
++        crate::host::report_dirty(self.app.engine.is_dirty());
++        if dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++        }
++    }
++
+     /// File > Open Session… / Import > Audio… / MIDI… would show a text box for a path, which the
+     /// browser can't read (#63, #64). Show the browser's file picker instead.
+     fn take_path_prompt(&mut self, ctx: &egui::Context) {
+@@ -188,6 +241,7 @@ impl eframe::App for WebShell {
+             self.handle(purpose, &name, &bytes);
+         }
+         self.app.logic(ctx);
++        self.host_requests(ctx);
+         // A prompt opened during this frame becomes a picker on the next one.
+         self.take_path_prompt(ctx);
+     }
+@@ -200,40 +254,3 @@ impl eframe::App for WebShell {
          self.app.ui(ui);
      }
  }
@@ -977,19 +1123,19 @@ zv8Oc5pEvVV%(TfvJ9Oz4?2LHAt&fFDzbrGeXcw$O<LC3LUBe}EzrUHQ@^NqALf%D5
 yQ->pc?{}ygEC(3gGQwN><*LN!$?sKaRsRnPbIUY>`PAD00000<MNUMnLSTZ%wM`fR
 
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 5c4a751..f434bfe 100644
+index 5c4a751..cf66a26 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -4,6 +4,7 @@
  //! executing commands. It can be replaced without touching anything below it.
  #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
  
-+mod ffhq_brand;
++pub mod ffhq_brand;
  pub mod control;
  pub mod credits;
  pub mod dialogs;
 diff --git a/crates/ui-egui/src/menus.rs b/crates/ui-egui/src/menus.rs
-index 32a74a4..c3dfd70 100644
+index 32a74a4..71a77a5 100644
 --- a/crates/ui-egui/src/menus.rs
 +++ b/crates/ui-egui/src/menus.rs
 @@ -22,7 +22,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
@@ -1001,19 +1147,22 @@ index 32a74a4..c3dfd70 100644
      ("window.close", "Close Window", "Window > Close Window", Some("Cmd+W")),
      ("window.hide_floating", "Hide All Floating Windows", "Window > Hide All Floating Windows", Some("Cmd+Ctrl+W")),
      ("window.midi_editor", "MIDI Editor", "Window > MIDI Editor", None),
-@@ -212,8 +212,8 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
+@@ -212,8 +212,11 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
          ui,
          |ui| {
              egui::MenuBar::new().ui(ui, |ui| {
 -                ui.menu_button("SoundCraft", |ui| {
 -                    if ui.button("About SoundCraft").clicked() {
++                // The short FileFlowHQ logo first, as in every Studio editor (shared component).
++                crate::ffhq_brand::mark(ui, 14.0);
++                ui.add_space(4.0);
 +                ui.menu_button("Audio Studio", |ui| {
 +                    if ui.button("About Audio Studio").clicked() {
                          app.ui.show_about = true;
                      }
                      if ui.button("Session Info").clicked() {
 diff --git a/crates/ui-egui/src/panels.rs b/crates/ui-egui/src/panels.rs
-index d2bee38..1e26652 100644
+index d2bee38..efea167 100644
 --- a/crates/ui-egui/src/panels.rs
 +++ b/crates/ui-egui/src/panels.rs
 @@ -491,7 +491,7 @@ fn about(app: &mut SoundApp, ctx: &egui::Context) {
@@ -1025,7 +1174,7 @@ index d2bee38..1e26652 100644
          let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(0);
          ui.horizontal(|ui| {
              for (i, l) in (0u8..).zip(["About", "Contributors", "Models"]) {
-@@ -506,12 +506,13 @@ fn about(app: &mut SoundApp, ctx: &egui::Context) {
+@@ -506,12 +506,11 @@ fn about(app: &mut SoundApp, ctx: &egui::Context) {
              1 => crate::credits::contributors_ui(ui),
              2 => crate::credits::models_ui(ui),
              _ => {
@@ -1037,8 +1186,6 @@ index d2bee38..1e26652 100644
 -                ui.label("Dual-licensed MIT OR Apache-2.0. Made with Rust and egui.");
 -                ui.hyperlink_to("getartcraft.com/apps/soundcraft", "https://getartcraft.com/apps/soundcraft");
 -                ui.hyperlink_to("Join us on Discord", "https://discord.gg/artcraft");
-+                // The upstream licenses ship with the app; credit the project too.
-+                ui.hyperlink_to("Built on SoundCraft, open source (MIT / Apache-2.0)", "https://github.com/storytold/soundcraft");
 +                ui.hyperlink_to("fileflowhq.com", "https://fileflowhq.com");
 +                ui.hyperlink_to("Contact FileFlowHQ", "https://fileflowhq.com/contact");
              }

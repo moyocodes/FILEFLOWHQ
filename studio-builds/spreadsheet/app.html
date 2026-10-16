@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Spreadsheet — FileFlowHQ Studio</title>
+  <link rel="icon" href="./fileflowhq-d22f90cb7f0819ea.png" integrity="sha384-LvqCN4dQ6vOXATN8cndedzQbziSrWy4sFDrUAnGgImIiTkS6ffRg2xHX9Z3pQnig"/>
+  
+<script type="module">
+import init, * as bindings from './gridcraft-web-ad64668be7417891.js';
+const wasm = await init({ module_or_path: './gridcraft-web-ad64668be7417891_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  <style>
+    /* Transparent until the app paints: the embedding page shows its own loader behind it. */
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #gridcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #gridcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
+  </style>
+<link rel="modulepreload" href="./gridcraft-web-ad64668be7417891.js" crossorigin="anonymous" integrity="sha384-nQfiVh10Dr6o9BkeUifSlqr4pLvQFewWTUiS+VmqGj9U0ZSNj6YvhWglQGrsp9eH"><link rel="preload" href="./gridcraft-web-ad64668be7417891_bg.wasm" crossorigin="anonymous" integrity="sha384-XQKMDqVwangLSLOSwrjNaPzfOwGC5GrBTlfBUYzvY0V5RFOxL7N/SBXaYRr95fJw" as="fetch" type="application/wasm"></head>
+<body>
+  <canvas id="gridcraft_canvas"></canvas>
+  <div id="gridcraft_loading">Loading Spreadsheet&hellip;</div>
+</body>
+</html>

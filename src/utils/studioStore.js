@@ -47,3 +47,44 @@ export async function keptDocuments(appId) {
     return []
   }
 }
+
+/**
+ * Files the visitor saved in editor `appId` (Save keeps them in this browser; only Export
+ * downloads). [{ name, bytes: ArrayBuffer, at }], newest first.
+ */
+export async function savedFiles(appId) {
+  try {
+    const entry = await run('readonly', (store) => store.get(`saved:${appId}`))
+    return Array.isArray(entry) ? entry.sort((a, b) => b.at - a.at) : []
+  } catch {
+    return []
+  }
+}
+
+/** How many files each editor keeps in the browser. */
+export const MAX_SAVED_FILES = 5
+
+/**
+ * Keep `bytes` as `name` in editor `appId`, replacing an earlier save of the same name. A new
+ * name when MAX_SAVED_FILES are already kept is refused (`error.code === 'limit'`).
+ */
+export async function saveFile(appId, name, bytes) {
+  const all = await savedFiles(appId)
+  if (all.length >= MAX_SAVED_FILES && !all.some((f) => f.name === name)) {
+    throw Object.assign(new Error('too many saved files'), { code: 'limit' })
+  }
+  const files = all.filter((f) => f.name !== name)
+  await run('readwrite', (store) => store.put([{ name, bytes, at: Date.now() }, ...files], `saved:${appId}`))
+  window.dispatchEvent(new CustomEvent('ffhq:saved-changed', { detail: appId }))
+}
+
+/** Forget the saved file `name` of editor `appId`. */
+export async function removeSavedFile(appId, name) {
+  try {
+    const files = (await savedFiles(appId)).filter((f) => f.name !== name)
+    await run('readwrite', (store) => store.put(files, `saved:${appId}`))
+  } catch {
+    // storage unavailable: nothing to remove
+  }
+  window.dispatchEvent(new CustomEvent('ffhq:saved-changed', { detail: appId }))
+}

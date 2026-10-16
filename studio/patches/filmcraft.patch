@@ -1,0 +1,1015 @@
+diff --git a/apps/filmcraft-web/src/host.rs b/apps/filmcraft-web/src/host.rs
+new file mode 100644
+index 0000000..bb3c757
+--- /dev/null
++++ b/apps/filmcraft-web/src/host.rs
+@@ -0,0 +1,194 @@
++//! FileFlowHQ host bridge: the editor talks to the fileflowhq.com page that embeds it (same
++//! origin, in an iframe). Shared by every FileFlowHQ-branded Studio editor: the source of truth is
++//! `file-convert-hub/studio/brand/host.rs`; each editor's web shell has a copy as `src/host.rs`.
++//!
++//! To the page:  `pdfcraft:ready` once running, `pdfcraft:failed` `{ error }` if it couldn't
++//!               start, `ffhq:export` `{ name, bytes, kind }` for every file the editor writes
++//!               (`kind`: `save` and `autosave` are kept in the browser, `export` downloads and
++//!               is paid for), `ffhq:dirty` `{ dirty }` when unsaved changes come or go, and
++//!               `ffhq:autosave` `{ on }` when the editor's own AutoSave switch changes.
++//! From the page: `pdfcraft:open` `{ name, bytes }` opens a file, `ffhq:theme` `{ theme }` switches
++//!               light/dark, `ffhq:autosave` `{ on }` turns AutoSave on or off, and `ffhq:save`
++//!               saves now.
++//!
++//! Opened on its own (not embedded), the editor works but can't save or export.
++
++use std::cell::{Cell, RefCell};
++
++use js_sys::{Array, Object, Reflect, Uint8Array};
++use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
++
++/// What the page asked for since the last [`take_requests`].
++#[derive(Default)]
++pub struct Requests {
++    /// `Some(true)` for dark.
++    pub dark: Option<bool>,
++    pub autosave: Option<bool>,
++    pub save: bool,
++}
++
++thread_local! {
++    static REQUESTS: RefCell<Requests> = RefCell::default();
++    static DIRTY: Cell<Option<bool>> = const { Cell::new(None) };
++    static AUTOSAVING: Cell<bool> = const { Cell::new(false) };
++    /// When AutoSave last saved (ms), and whether it is on.
++    static AUTOSAVE: Cell<(bool, f64)> = const { Cell::new((false, 0.0)) };
++    /// When the visitor last typed, clicked or scrolled (ms): AutoSave waits for a pause, so it
++    /// never interrupts typing (a save commits the text being edited).
++    static LAST_INPUT: Cell<f64> = const { Cell::new(0.0) };
++}
++
++/// The embedding page's window: a different window than ours, on our own origin.
++fn parent() -> Option<web_sys::Window> {
++    let window = web_sys::window()?;
++    let parent = window.parent().ok().flatten()?;
++    if Object::is(&parent, &window) {
++        return None;
++    }
++    // Reading another origin's location throws: that page isn't ours.
++    let theirs = parent.location().origin().ok()?;
++    (theirs == window.location().origin().ok()?).then_some(parent)
++}
++
++/// Whether a FileFlowHQ page embeds the editor.
++#[allow(dead_code)] // not every editor asks
++pub fn embedded() -> bool {
++    parent().is_some()
++}
++
++fn message(fields: &[(&str, JsValue)]) -> Option<Object> {
++    let o = Object::new();
++    for (k, v) in fields {
++        Reflect::set(&o, &JsValue::from_str(k), v).ok()?;
++    }
++    Some(o)
++}
++
++fn post(fields: &[(&str, JsValue)], transfer: Option<&JsValue>) -> Result<(), String> {
++    let parent = parent().ok_or("not embedded in fileflowhq.com")?;
++    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).ok_or("no origin")?;
++    let m = message(fields).ok_or("couldn't build the message")?;
++    match transfer {
++        Some(t) => parent.post_message_with_transfer(&m, &origin, &Array::of1(t)),
++        None => parent.post_message(&m, &origin),
++    }
++    .map_err(|e| format!("{e:?}"))
++}
++
++pub fn post_ready() {
++    let _ = post(&[("type", "pdfcraft:ready".into())], None);
++}
++
++pub fn post_failed(error: &str) {
++    let _ = post(&[("type", "pdfcraft:failed".into()), ("error", error.into())], None);
++}
++
++/// Hand a file the editor wrote to the page (`ffhq:export`). `export` is true for File › Export
++/// and printing (downloaded, paid); otherwise it is a save, kept in the browser. The bytes move.
++pub fn export(name: &str, bytes: &[u8], export: bool) -> Result<(), String> {
++    let kind = if export {
++        "export"
++    } else if AUTOSAVING.get() {
++        "autosave"
++    } else {
++        "save"
++    };
++    let buffer = Uint8Array::from(bytes).buffer();
++    post(&[("type", "ffhq:export".into()), ("name", name.into()), ("bytes", buffer.clone().into()), ("kind", kind.into())], Some(&buffer))
++}
++
++/// Tell the page whether there are unsaved changes (sent only when that changes).
++pub fn report_dirty(dirty: bool) {
++    if DIRTY.replace(Some(dirty)) != Some(dirty) {
++        let _ = post(&[("type", "ffhq:dirty".into()), ("dirty", dirty.into())], None);
++    }
++}
++
++/// Tell the page the editor's own AutoSave switch changed.
++#[allow(dead_code)] // only editors with their own switch
++pub fn report_autosave(on: bool) {
++    AUTOSAVE.set((on, AUTOSAVE.get().1));
++    let _ = post(&[("type", "ffhq:autosave".into()), ("on", on.into())], None);
++}
++
++/// What the page asked for since the last call (call once per frame).
++pub fn take_requests() -> Requests {
++    let r = REQUESTS.take();
++    if let Some(on) = r.autosave {
++        AUTOSAVE.set((on, AUTOSAVE.get().1));
++    }
++    r
++}
++
++/// Whether to save now: the page asked (`save`), or AutoSave is on, there are unsaved changes, the
++/// last AutoSave was a few seconds ago and the visitor has paused (no typing or clicking for 3 s).
++/// Run the save inside [`autosaving`] when this says so.
++pub fn should_save(requested: bool, dirty: bool) -> bool {
++    let (on, last) = AUTOSAVE.get();
++    let now = js_sys::Date::now();
++    let paused = now - LAST_INPUT.get() > 3000.0;
++    if requested || (on && dirty && paused && now - last > 4000.0) {
++        AUTOSAVE.set((on, now));
++        return true;
++    }
++    false
++}
++
++/// Run `save` as an AutoSave (the page keeps it quietly).
++pub fn autosaving<R>(save: impl FnOnce() -> R) -> R {
++    AUTOSAVING.set(true);
++    let r = save();
++    AUTOSAVING.set(false);
++    r
++}
++
++/// Calls `open(name, bytes)` for every `pdfcraft:open` the page sends, keeps the other requests for
++/// [`take_requests`], and calls `wake` after any of them (to repaint).
++pub fn listen(mut open: impl FnMut(String, Vec<u8>) + 'static, wake: impl Fn() + 'static) {
++    let Some(window) = web_sys::window() else { return };
++    let own_origin = window.location().origin().unwrap_or_default();
++    let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
++        let from_parent = match (parent(), e.source()) {
++            (Some(p), Some(src)) => Object::is(&p, &src),
++            _ => false,
++        };
++        if !from_parent || e.origin() != own_origin {
++            return;
++        }
++        let data = e.data();
++        let get = |k: &str| Reflect::get(&data, &JsValue::from_str(k)).ok();
++        match get("type").and_then(|t| t.as_string()).as_deref() {
++            Some("pdfcraft:open") => {
++                if let (Some(name), Some(bytes)) = (get("name").and_then(|n| n.as_string()), get("bytes")) {
++                    open(name, Uint8Array::new(&bytes).to_vec());
++                }
++            }
++            Some("ffhq:theme") => {
++                let dark = get("theme").and_then(|t| t.as_string()).as_deref() != Some("light");
++                REQUESTS.with_borrow_mut(|r| r.dark = Some(dark));
++            }
++            Some("ffhq:autosave") => {
++                let on = get("on").and_then(|v| v.as_bool()).unwrap_or(false);
++                REQUESTS.with_borrow_mut(|r| r.autosave = Some(on));
++            }
++            Some("ffhq:save") => REQUESTS.with_borrow_mut(|r| r.save = true),
++            _ => return,
++        }
++        wake();
++    });
++    if window.add_event_listener_with_callback("message", cb.as_ref().unchecked_ref()).is_ok() {
++        cb.forget();
++    }
++    // Typing, clicking and scrolling hold AutoSave back (see `should_save`).
++    let input = Closure::<dyn FnMut()>::new(|| LAST_INPUT.set(js_sys::Date::now()));
++    for event in ["keydown", "pointerdown", "pointerup", "wheel", "compositionupdate"] {
++        let _ = window.add_event_listener_with_callback(event, input.as_ref().unchecked_ref());
++    }
++    input.forget();
++}
++
++/// Whether AutoSave is on (the Studio bar's switch, or the editor's own).
++#[allow(dead_code)] // only editors that gate their own background saving on it
++pub fn autosave_on() -> bool {
++    AUTOSAVE.get().0
++}
+diff --git a/apps/filmcraft-web/src/lib.rs b/apps/filmcraft-web/src/lib.rs
+index 21512cc..af93340 100644
+--- a/apps/filmcraft-web/src/lib.rs
++++ b/apps/filmcraft-web/src/lib.rs
+@@ -22,6 +22,7 @@ pub mod api;
+ pub mod audio;
+ pub mod download_pacing;
+ pub mod fs;
++pub mod host;
+ pub mod import;
+ pub mod opfs;
+ pub mod recovery;
+@@ -89,6 +90,35 @@ pub struct WebApp {
+     pub autosave: recovery::Autosave,
+ }
+ 
++impl WebApp {
++    /// FileFlowHQ Studio: follow the page's theme, save when it asks or when AutoSave is due, and
++    /// tell it about unsaved changes.
++    fn host_requests(&mut self, ctx: &egui::Context) {
++        let req = host::take_requests();
++        if let Some(dark) = req.dark {
++            self.app.set_theme(ctx, if dark { filmcraft_ui_egui::theme::ThemeKind::Dark } else { filmcraft_ui_egui::theme::ThemeKind::Light });
++        }
++        let s = &self.app.session;
++        let dirty = s.revision != s.saved_revision;
++        if host::should_save(req.save, dirty) {
++            let path = self.app.session.path.clone().unwrap_or_else(|| {
++                let name = self.app.session.project.name.trim();
++                format!("/{}.fcproj", if name.is_empty() { "Project" } else { name })
++            });
++            let save = |app: &mut filmcraft_ui_egui::FilmcraftApp| app.session.execute("file.save", json!({"path": path}));
++            let r = if req.save { save(&mut self.app) } else { host::autosaving(|| save(&mut self.app)) };
++            if let Err(e) = r {
++                log::warn!("save failed: {e}");
++            }
++        }
++        let s = &self.app.session;
++        host::report_dirty(s.revision != s.saved_revision);
++        if dirty {
++            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
++        }
++    }
++}
++
+ impl eframe::App for WebApp {
+     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+         self.app.raw_input_hook(ctx, raw_input);
+@@ -108,7 +138,11 @@ impl eframe::App for WebApp {
+         if let Some(a) = &self.audio {
+             a.pump();
+         }
+-        self.autosave.tick(&self.app.session, ctx);
++        // Crash recovery (snapshots in the browser) only with AutoSave on, when embedded.
++        if !host::embedded() || host::autosave_on() {
++            self.autosave.tick(&self.app.session, ctx);
++        }
++        self.host_requests(ctx);
+     }
+ 
+     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+@@ -138,7 +172,9 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
+ 
+     // Media kept in OPFS by earlier sessions come back under their paths (recovery).
+     let restored = if opfs::available() && !query_flag("fresh") { recovery::restore_media().await } else { 0 };
+-    let recovered = if query_flag("fresh") || query_flag("norecover") { None } else { recovery::load_snapshot().await };
++    // FileFlowHQ Studio: embedded, the page reopens what the visitor saved; nothing is kept
++    // without Save or AutoSave, so the crash-recovery snapshot isn't reopened.
++    let recovered = if query_flag("fresh") || query_flag("norecover") || host::embedded() { None } else { recovery::load_snapshot().await };
+     webcodecs::probe().await;
+ 
+     api::install()?;
+@@ -162,9 +198,17 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
+                 set_context(cc.egui_ctx.clone());
+                 let ctx = cc.egui_ctx.clone();
+                 fs::set_on_data(move || ctx.request_repaint());
++                // FileFlowHQ Studio: a project (.fcproj) is a save, kept in the browser; rendered
++                // video, audio, stills… are exports, downloaded through the page (paid).
+                 fs::set_on_write(|path, data| {
+-                    if let Err(e) = fs::download(path, data) {
+-                        log::warn!("download {path}: {e:?}");
++                    let name = path.rsplit('/').next().unwrap_or(path);
++                    if host::embedded() {
++                        let export = !name.to_ascii_lowercase().ends_with(".fcproj");
++                        if let Err(e) = host::export(name, data, export) {
++                            log::warn!("export {name}: {e}");
++                        }
++                    } else {
++                        log::warn!("saving and exporting work at fileflowhq.com/studio/video-editor");
+                     }
+                 });
+                 webcodecs::install();
+@@ -181,7 +225,7 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
+                         }
+                         Err(e) => log::warn!("recovery failed: {e}"),
+                     }
+-                } else if demo {
++                } else if demo && !host::embedded() {
+                     let _ = session.execute("file.openDemoProject", json!({}));
+                 }
+                 let mut app = FilmcraftApp::new(session);
+@@ -214,10 +258,26 @@ pub async fn start(canvas_id: String) -> Result<(), JsValue> {
+                 }
+                 set_info("audio", json!(audio.is_some()));
+                 set_info("restoredMedia", json!(restored));
++                // `?theme=light|dark`: the embedding fileflowhq.com page passes its own theme.
++                let light = web_sys::window().and_then(|w| w.location().search().ok()).is_some_and(|q| q.contains("theme=light"));
++                app.set_theme(&cc.egui_ctx, if light { filmcraft_ui_egui::theme::ThemeKind::Light } else { filmcraft_ui_egui::theme::ThemeKind::Dark });
++                // Files the FileFlowHQ page sends in open like dropped ones.
++                let wake = cc.egui_ctx.clone();
++                host::listen(
++                    |name, bytes| {
++                        let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes.as_slice()));
++                        match web_sys::File::new_with_u8_array_sequence(&parts, &name) {
++                            Ok(file) => import::take_files(vec![file]),
++                            Err(e) => log::warn!("couldn't open {name}: {e:?}"),
++                        }
++                    },
++                    move || wake.request_repaint(),
++                );
+                 Ok(Box::new(WebApp { app, audio, autosave: recovery::Autosave::default() }))
+             }),
+         )
+         .await?;
++    host::post_ready();
+     set_info("startupMs", json!(t0.elapsed().as_secs_f64() * 1000.0));
+     // keep the runner alive for the page's lifetime
+     std::mem::forget(runner);
+diff --git a/apps/filmcraft-web/web/favicon.png b/apps/filmcraft-web/web/favicon.png
+index 3c217317bffd21c7d1183d7b339617588f0effde..bd8a8a0a676ab5cd0fe19d8a7d3517cb3770886d 100644
+GIT binary patch
+literal 1026
+zcmV+d1pWJoP)<h;3K|Lk000e1NJLTq002M$002M;1^@s6s%dfF00009a7bBm001mY
+z001mY0i`{bsQ>^2v`IukRCt{2o6Sp9Q5eS0PCf6P_sra3VsiXS8zcM(Q_LI`3Jk+V
+z5|-nlFG?t*TG*mREi5Pyp<3jqY3<te7qqHCMOqkcqNQd~Ei*`4oH*A>ygB3Caqhk6
+z%!~(~ojA|)J74dG^Acil=(>)8*awKufw4Kt*mq!T4H)B+wHEg>2Z$4Z81?)89%9$<
+zcs$jBI0cBm6bNfg!YksW$Kwg_Jb6h;5k(vU#{NhTl)>r%#9=~6VY;&(ricp)1h7jp
+zl+wMH!c)c?;(Lncln|G|>#a{c^DGC$Z-PK64JON92#E92O**d+;(Xh>^wBu*c%EqJ
+z|D|7@<)?jGqKH3DTLHv9uYfUEAuu+&xx&kyBF8Qvt{4@gQQpcnBM(9^iP!c#Pc=@A
+zj|lljWNAiJem@-j5wDkrdfTL{xF^Cjzt7~2GWJcZfK?{}h#!r79h0iorBPmb{#YV^
+zzsXKQ`5UXP)9-7S9=_yU!tjQ61fc3}kMvp1aOQI#Kx>Mb&uIXyi=#XgZL^ex*nQ}E
+zLVGxt22Ijy_ia%iQX@S)H~~QBEs$<_PzAuz&rf;Hi-C+4ingcikEj5k@!gQ49?}9(
+zb?0<Ky2(z|ikn^A&Pwge>nQ;=y}z#xfcn>i2~CC{^d<ZUHB$o_?_H%<Kz+UgsJPL^
+z4?MYK(!po_JKh4DRrl(a`T)Rg`MkWm|Ae8++uaEPG|vxj{7ovAUFk4tjjREn*;xlH
+z$9Va`$?RGInq2@K2oG5Uz@hM91%Q5NKX3W;I3r~mzU*qJV-rMD0yrGDZx1Up^Xdaw
+zj`8wq&dt1K02mDLU}ux95_QG4;lIR;>(1%$;L0JW`*_2fdnPr195w|$vM|Cc2TyIN
+zxVy!b@Sw^qkkgf*whO?wy8<Gq4!p}9dAbF@#CYk&<I=)|Q~)CU1-aot8URJYgA@P?
+zg$LIGC>9=E1)yMfa1DT>;UNyd*#{E3PucJw9!NO;L`GrJ_!F7@ek28=%|yNtSsD`n
+zq6!$1B8{;#BoGK_;@PNdGp-A9MP&c?Sb8!K0Zf=WMHFd)b4#lQj8&R?21Iw20><3Z
+zqr@#UjLj%u&S^~(LJAT#4N*#ifVilDNoRz(T%_xvq+MfTh}JTr#Vq&2FM`ikN30A@
+z(*hLnt#s4&X?nYMxn!e2bXR40jUYbs9wy!MR)!!a8jP|E#Jbn<EmvJ8Bd}gE_KNx$
+w7@HMeQcizLTb<>&mswye28d@jDm)A0FUpHkZm>lTrT_o{07*qoM6N<$f-6kbmjD0&
+
+literal 17152
+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
+Hu0mjfUKCry
+
+diff --git a/apps/filmcraft-web/web/index.html b/apps/filmcraft-web/web/index.html
+index 088de3d..82cb9e2 100644
+--- a/apps/filmcraft-web/web/index.html
++++ b/apps/filmcraft-web/web/index.html
+@@ -4,10 +4,10 @@
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta name="color-scheme" content="dark">
+-  <title>FilmCraft</title>
++  <title>Video Editor — FileFlowHQ Studio</title>
+   <link rel="icon" href="favicon.png" type="image/png">
+   <style>
+-    html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1c1f; }
++    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+     canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+     #loading {
+       position: absolute; inset: 0; display: flex; flex-direction: column; gap: 14px;
+@@ -24,15 +24,15 @@
+     #fatal .box { max-width: min(78ch, calc(100vw - 32px)); padding: 20px 24px; background: #26272b; border-radius: 8px; }
+     #fatal h1 { margin: 0 0 8px; font-size: 17px; color: #ff8a7a; }
+     #fatal pre { max-height: 40vh; overflow: auto; white-space: pre-wrap; font-size: 12px; color: #c9c9cc; }
+-    #fatal button { font: inherit; padding: 6px 14px; border: 0; border-radius: 6px; background: #3b6fe0; color: #fff; cursor: pointer; }
++    #fatal button { font: inherit; padding: 6px 14px; border: 0; border-radius: 6px; background: #0e8f5c; color: #fff; cursor: pointer; }
+   </style>
+ </head>
+ <body>
+   <canvas id="filmcraft_canvas"></canvas>
+-  <div id="loading"><img src="favicon.png" alt=""><div id="status">Loading FilmCraft…</div></div>
++  <div id="loading"><img src="favicon.png" alt=""><div id="status">Loading Video Editor…</div></div>
+   <div id="fatal" role="alertdialog" aria-labelledby="fatal-title">
+     <div class="box">
+-      <h1 id="fatal-title">FilmCraft stopped working</h1>
++      <h1 id="fatal-title">Video Editor stopped working</h1>
+       <div>Unsaved changes are kept in the browser every few seconds and come back when you reload.</div>
+       <pre id="fatal-msg"></pre>
+       <button id="fatal-reload" type="button">Reload</button>
+@@ -86,7 +86,7 @@
+         location.replace(location.pathname + "?" + params.toString().replace(/=(&|$)/g, "$1") + location.hash);
+       } else {
+         const s = document.getElementById("status");
+-        if (s) { s.className = "err"; s.textContent = "FilmCraft failed to start:\n" + text; }
++        if (s) { s.className = "err"; s.textContent = "Video Editor failed to start:\n" + text; }
+       }
+       throw e;
+     }
+diff --git a/crates/ui-egui/src/brand.rs b/crates/ui-egui/src/brand.rs
+index 4c41d08..53ce89c 100644
+--- a/crates/ui-egui/src/brand.rs
++++ b/crates/ui-egui/src/brand.rs
+@@ -1,33 +1,7 @@
+-//! The ArtCraft wordmark (first-party trademark, used with permission; see `docs/brand/` and
+-//! AGENTS.md §1.8), decoded once and kept as a texture.
+-
+-const LOGO_LIGHT_INK: &[u8] = include_bytes!("../../../docs/brand/artcraft-logo-white.png");
+-const LOGO_DARK_INK: &[u8] = include_bytes!("../../../docs/brand/artcraft-logo.png");
+-
+-/// The wordmark for a dark (`dark = true`) or light UI: light ink on dark themes. Its aspect
+-/// ratio is width / height of the returned texture.
+-pub fn wordmark(ctx: &egui::Context, dark: bool) -> Option<egui::TextureHandle> {
+-    let id = egui::Id::new(("artcraft-wordmark", dark));
+-    if let Some(t) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+-        return Some(t);
+-    }
+-    let bytes = if dark { LOGO_LIGHT_INK } else { LOGO_DARK_INK };
+-    let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).ok()?;
+-    // Large enough to stay sharp at 2x for the sizes we draw (≤ 320 pt wide).
+-    let img = img.resize(1024, 1024, image::imageops::FilterType::Lanczos3).to_rgba8();
+-    let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+-    let tex = ctx.load_texture("artcraft-wordmark", color, egui::TextureOptions::LINEAR);
+-    ctx.data_mut(|d| d.insert_temp(id, tex.clone()));
+-    Some(tex)
+-}
++//! The FileFlowHQ wordmark (FileFlowHQ Studio build): the shared brand component (`ffhq_brand`).
+ 
+ /// Draw the wordmark `height` points tall with its left edge at `left_center` (vertically centred).
+ /// Returns the drawn rect.
+ pub fn paint_wordmark(ui: &egui::Ui, left_center: egui::Pos2, height: f32, dark: bool) -> Option<egui::Rect> {
+-    let tex = wordmark(ui.ctx(), dark)?;
+-    let [w, h] = tex.size();
+-    let width = height * w as f32 / h.max(1) as f32;
+-    let r = egui::Rect::from_min_size(egui::pos2(left_center.x, left_center.y - height / 2.0), egui::vec2(width, height));
+-    ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+-    Some(r)
++    Some(crate::ffhq_brand::paint_wordmark(ui, left_center, height, dark))
+ }
+diff --git a/crates/ui-egui/src/header.rs b/crates/ui-egui/src/header.rs
+index 5b8f23c..c1790b3 100644
+--- a/crates/ui-egui/src/header.rs
++++ b/crates/ui-egui/src/header.rs
+@@ -122,14 +122,15 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+     p.galley_with_override_text_color(pos2(wr.min.x + 4.0, rect.center().y - wg.size().y / 2.0), wg, if wresp.hovered() { t.text } else { t.text_dim });
+     // Community: a labelled Discord button, always one click away.
+     {
+-        let label = "Discord";
++        // FileFlowHQ Studio: Export (downloads the finished video) instead of the Discord button.
++        let label = tl!("Export");
+         let g = p.layout_no_wrap(label.to_string(), Tokens::ui(12.0), Color32::WHITE);
+         let w = g.size().x + 34.0;
+         let r = Rect::from_min_size(pos2(wr.min.x - w - 14.0, rect.center().y - 12.0), vec2(w, 24.0));
+-        let resp = ui.interact(r, egui::Id::new("hdr-discord"), Sense::click()).on_hover_text(tl!("Join the ArtCraft Discord (discord.gg/artcraft)"));
+-        app.auto.add("header.discord", r, "Join the ArtCraft Discord");
++        let resp = ui.interact(r, egui::Id::new("hdr-discord"), Sense::click()).on_hover_text(tl!("Export the video (MP4 and more)"));
++        app.auto.add("header.discord", r, "Export");
+         ui.painter().rect_filled(r, 12.0, if resp.hovered() { t.accent_hover } else { t.accent });
+-        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.min.x + 14.0, r.center().y), vec2(14.0, 14.0)), Icon::Chat, Color32::WHITE);
++        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.min.x + 14.0, r.center().y), vec2(14.0, 14.0)), Icon::Export, Color32::WHITE);
+         ui.painter().galley(pos2(r.min.x + 25.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
+         // Localized menus and user titles can be wider than English. Use the actual gap.
+         let left = left_end + 12.0;
+@@ -149,7 +150,8 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+         }
+ 
+         if resp.clicked() {
+-            crate::links::open(app, ui.ctx(), crate::links::DISCORD);
++            let ctx = ui.ctx().clone();
++            let _ = crate::menus::invoke(app, &ctx, "mode.export", serde_json::json!({}));
+         }
+     }
+     let popup_id = egui::Id::new("workspaces-popup");
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 9a6393b..88467e1 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -29,6 +29,7 @@ macro_rules! tlf {
+     };
+ }
+ 
++pub mod ffhq_brand;
+ pub mod automation;
+ pub mod brand;
+ pub mod calc;
+diff --git a/crates/ui-egui/src/links.rs b/crates/ui-egui/src/links.rs
+index 6d980e6..7f7034e 100644
+--- a/crates/ui-egui/src/links.rs
++++ b/crates/ui-egui/src/links.rs
+@@ -7,11 +7,11 @@
+ pub const APP: &str = "filmcraft";
+ 
+ /// The ArtCraft community Discord.
+-pub const DISCORD: &str = "https://discord.gg/artcraft";
++pub const DISCORD: &str = "https://fileflowhq.com/contact";
+ /// The ArtCraft website.
+-pub const WEBSITE: &str = "https://getartcraft.com";
++pub const WEBSITE: &str = "https://fileflowhq.com";
+ /// FilmCraft's page on the ArtCraft website.
+-pub const APP_PAGE: &str = "https://getartcraft.com/apps/filmcraft";
++pub const APP_PAGE: &str = "https://fileflowhq.com/studio/video-editor";
+ /// FilmCraft's source repository.
+ pub const GITHUB: &str = "https://github.com/storytold/filmcraft";
+ /// New issue on FilmCraft's repository.
+@@ -19,9 +19,9 @@ pub const ISSUES: &str = "https://github.com/storytold/filmcraft/issues";
+ 
+ /// (command id, label, url) for every link, in menu order.
+ pub const ALL: [(&str, &str, &str); 5] = [
+-    ("help.discord", "Join the ArtCraft Discord…", DISCORD),
+-    ("help.website", "ArtCraft Website", WEBSITE),
+-    ("help.appPage", "FilmCraft on getartcraft.com", APP_PAGE),
++    ("help.discord", "Contact FileFlowHQ…", DISCORD),
++    ("help.website", "fileflowhq.com", WEBSITE),
++    ("help.appPage", "Video Editor on fileflowhq.com", APP_PAGE),
+     ("help.github", "FilmCraft on GitHub", GITHUB),
+     ("help.reportIssue", "Report an Issue…", ISSUES),
+ ];
+diff --git a/crates/ui-egui/src/menus.rs b/crates/ui-egui/src/menus.rs
+index 04d79ac..c3521b7 100644
+--- a/crates/ui-egui/src/menus.rs
++++ b/crates/ui-egui/src/menus.rs
+@@ -134,14 +134,13 @@ pub const UI_COMMANDS: &[UiCommand] = &[
+     uic!("mode.import", "Import", [], None),
+     uic!("mode.edit", "Edit", [], None),
+     uic!("mode.export", "Export", ["File", "Export"], Some("Cmd+M")),
+-    uic!("help.discord", "Join the ArtCraft Discord…", ["Help"], None),
++    uic!("help.discord", "Contact FileFlowHQ…", ["Help"], None),
+     uic!("help.website", "ArtCraft Website", ["Help"], None),
+-    uic!("help.appPage", "FilmCraft on getartcraft.com", ["Help"], None),
+-    uic!("help.github", "FilmCraft on GitHub", ["Help"], None),
++    uic!("help.appPage", "Video Editor on fileflowhq.com", ["Help"], None),
+     uic!("help.reportIssue", "Report an Issue…", ["Help"], None),
+     uic!("help.revealLogFiles", "Reveal Log Files…", ["Help"], None),
+     uic!("help.systemCompatibilityReport", "System Compatibility Report…", ["Help"], None),
+-    uic!("app.about", "About FilmCraft", ["Help"], None),
++    uic!("app.about", "About Video Editor", ["Help"], None),
+     uic!("app.keyboardShortcuts", "Keyboard Shortcuts…", ["Edit"], Some("Cmd+Alt+K")),
+     uic!("app.settings.general", "General…", ["Edit", "Preferences"], Some("Cmd+,")),
+     uic!("app.settings.appearance", "Appearance…", ["Edit", "Preferences"], None),
+@@ -842,6 +841,9 @@ pub fn menu_bar(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+     let ctx = ui.ctx().clone();
+     let mut clicked: Option<String> = None;
+     egui::MenuBar::new().config(egui::containers::menu::MenuConfig::new().style(crate::theme::menu_style)).ui(ui, |ui| {
++        // The short FileFlowHQ logo right before File, as in every Studio editor.
++        crate::ffhq_brand::mark(ui, 14.0);
++        ui.add_space(4.0);
+         for top in MENUS {
+             let mine: Vec<&MenuItem> = items.iter().filter(|i| i.path.first().map(String::as_str) == Some(top)).collect();
+             let r = ui.menu_button(app.ui.language.tr(top), |ui| {
+diff --git a/crates/ui-egui/src/panels/dialogs.rs b/crates/ui-egui/src/panels/dialogs.rs
+index 333c7f0..2c330de 100644
+--- a/crates/ui-egui/src/panels/dialogs.rs
++++ b/crates/ui-egui/src/panels/dialogs.rs
+@@ -32,7 +32,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+     let mut open = true;
+     match d {
+         Dialog::About => {
+-            egui::Window::new(tl!("About FilmCraft"))
++            egui::Window::new(tl!("About Video Editor"))
+                 .id(egui::Id::new("About FilmCraft"))
+                 .open(&mut open)
+                 .collapsible(false)
+@@ -457,9 +457,9 @@ fn about_tab(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+     let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 30.0), egui::Sense::hover());
+     crate::brand::paint_wordmark(ui, egui::pos2(r.min.x, r.center().y), 20.0, app.ui.dark);
+     ui.add_space(6.0);
+-    ui.heading("FilmCraft");
++    ui.heading(tl!("Video Editor"));
+     ui.label(tlf!("Version {version}", version = env!("CARGO_PKG_VERSION")));
+-    ui.label(tl!("A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family."));
++    ui.label(tl!("Part of FileFlowHQ Studio. Runs entirely in your browser."));
+     ui.add_space(10.0);
+     let mut link = |ui: &mut egui::Ui, id: &str, icon: Icon, label: &str, url: &str, primary: bool| {
+         let size = egui::vec2(ui.available_width(), if primary { 36.0 } else { 28.0 });
+@@ -488,12 +488,7 @@ fn about_tab(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+             links::open(app, ui.ctx(), url);
+         }
+     };
+-    link(ui, "discord", Icon::Chat, tl!("Join the ArtCraft Discord"), links::DISCORD, true);
++    link(ui, "website", Icon::Globe, "fileflowhq.com", links::WEBSITE, true);
+     ui.add_space(6.0);
+-    link(ui, "website", Icon::Globe, "getartcraft.com", links::WEBSITE, false);
+-    link(ui, "appPage", Icon::Globe, tl!("FilmCraft on getartcraft.com"), links::APP_PAGE, false);
+-    link(ui, "github", Icon::Code, tl!("Source code on GitHub"), links::GITHUB, false);
+-    link(ui, "reportIssue", Icon::Code, tl!("Report an issue"), links::ISSUES, false);
+-    ui.add_space(10.0);
+-    ui.label(egui::RichText::new(tl!("MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).")).small().color(t.text_dim));
++    link(ui, "discord", Icon::Chat, tl!("Contact FileFlowHQ"), links::DISCORD, false);
+ }
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 21a5001..9327676 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -154,29 +154,29 @@ impl Tokens {
+         // Measured from Premiere 26 "Darkest" (plan/premiere/02-ui-ux.md §1).
+         let dark = Tokens {
+             kind,
+-            app_bg: Color32::from_rgb(0, 0, 0),
+-            header_bg: Color32::from_rgb(0x1d, 0x1d, 0x1d),
+-            panel_bg: Color32::from_rgb(0x1d, 0x1d, 0x1d),
+-            tab_bg: Color32::from_rgb(0x1d, 0x1d, 0x1d),
+-            tab_text: Color32::from_rgb(0xb0, 0xb0, 0xb0),
+-            tab_text_active: Color32::from_rgb(0xd1, 0xd1, 0xd1),
+-            focus: Color32::from_rgb(0x57, 0x94, 0xec),
+-            accent: Color32::from_rgb(0x2f, 0x6b, 0xdf),
+-            accent_hover: Color32::from_rgb(0x3f, 0x7c, 0xe8),
+-            text: Color32::from_rgb(0xd1, 0xd1, 0xd1),
+-            text_dim: Color32::from_rgb(0xb0, 0xb0, 0xb0),
++            app_bg: Color32::from_rgb(0x0E, 0x12, 0x13),
++            header_bg: Color32::from_rgb(0x12, 0x17, 0x18),
++            panel_bg: Color32::from_rgb(0x1A, 0x20, 0x21),
++            tab_bg: Color32::from_rgb(0x1A, 0x20, 0x21),
++            tab_text: Color32::from_rgb(0xA3, 0xAF, 0xAB),
++            tab_text_active: Color32::from_rgb(0xF1, 0xF5, 0xF3),
++            focus: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            accent: Color32::from_rgb(0x0E, 0x8F, 0x5C),
++            accent_hover: Color32::from_rgb(0x12, 0xA8, 0x6C),
++            text: Color32::from_rgb(0xF1, 0xF5, 0xF3),
++            text_dim: Color32::from_rgb(0xA3, 0xAF, 0xAB),
+             text_faint: Color32::from_rgb(0x6e, 0x6e, 0x6e),
+-            icon: Color32::from_rgb(0xb0, 0xb0, 0xb0),
+-            icon_active: Color32::from_rgb(0xd1, 0xd1, 0xd1),
+-            hover: Color32::from_rgb(0x2c, 0x2c, 0x2c),
+-            pressed: Color32::from_rgb(0x4b, 0x4b, 0x4b),
+-            field_bg: Color32::from_rgb(0x0e, 0x0e, 0x0e),
+-            field_border: Color32::from_rgb(0x30, 0x30, 0x30),
+-            separator: Color32::from_rgb(0x30, 0x30, 0x30),
+-            row_alt: Color32::from_rgb(0x21, 0x21, 0x21),
+-            row_selected: Color32::from_rgb(0x33, 0x33, 0x33),
+-            hot_text: Color32::from_rgb(0x40, 0x96, 0xf3),
+-            pill_active_bg: Color32::from_rgb(0x3a, 0x3a, 0x3a),
++            icon: Color32::from_rgb(0xA3, 0xAF, 0xAB),
++            icon_active: Color32::from_rgb(0xF1, 0xF5, 0xF3),
++            hover: Color32::from_rgb(0x22, 0x2A, 0x2A),
++            pressed: Color32::from_rgb(0x35, 0x41, 0x3D),
++            field_bg: Color32::from_rgb(0x0E, 0x12, 0x13),
++            field_border: Color32::from_rgb(0x35, 0x41, 0x3D),
++            separator: Color32::from_rgb(0x29, 0x32, 0x2F),
++            row_alt: Color32::from_rgb(0x16, 0x1C, 0x1D),
++            row_selected: Color32::from_rgb(0x1F, 0x3B, 0x31),
++            hot_text: Color32::from_rgb(0x3B, 0xE6, 0x98),
++            pill_active_bg: Color32::from_rgb(0x29, 0x32, 0x2F),
+             clip_bar_bg: Color32::from_rgb(58, 58, 70),
+             control_surface: Color32::from_rgb(0x24, 0x24, 0x24),
+             control_well: Color32::from_rgb(0x10, 0x10, 0x10),
+@@ -260,23 +260,23 @@ impl Tokens {
+                 ..dark
+             },
+             ThemeKind::Light => Tokens {
+-                app_bg: Color32::from_rgb(180, 180, 180),
+-                header_bg: Color32::from_rgb(214, 214, 214),
+-                panel_bg: Color32::from_rgb(232, 232, 232),
+-                tab_bg: Color32::from_rgb(232, 232, 232),
+-                tab_text: Color32::from_rgb(90, 90, 90),
+-                tab_text_active: Color32::from_rgb(20, 20, 20),
+-                text: Color32::from_rgb(34, 34, 34),
+-                text_dim: Color32::from_rgb(90, 90, 90),
++                app_bg: Color32::from_rgb(0xE9, 0xED, 0xEB),
++                header_bg: Color32::from_rgb(0xF4, 0xF6, 0xF5),
++                panel_bg: Color32::from_rgb(0xFF, 0xFF, 0xFF),
++                tab_bg: Color32::from_rgb(0xFF, 0xFF, 0xFF),
++                tab_text: Color32::from_rgb(0x5B, 0x66, 0x70),
++                tab_text_active: Color32::from_rgb(0x10, 0x15, 0x1A),
++                text: Color32::from_rgb(0x10, 0x15, 0x1A),
++                text_dim: Color32::from_rgb(0x5B, 0x66, 0x70),
+                 text_faint: Color32::from_rgb(140, 140, 140),
+                 icon: Color32::from_rgb(60, 60, 60),
+-                hover: Color32::from_rgb(210, 210, 210),
+-                pressed: Color32::from_rgb(196, 196, 196),
++                hover: Color32::from_rgb(0xEE, 0xF2, 0xF0),
++                pressed: Color32::from_rgb(0xE2, 0xE8, 0xE5),
+                 field_bg: Color32::from_rgb(250, 250, 250),
+-                field_border: Color32::from_rgb(170, 170, 170),
+-                separator: Color32::from_rgb(200, 200, 200),
+-                row_alt: Color32::from_rgb(224, 224, 224),
+-                row_selected: Color32::from_rgb(170, 200, 240),
++                field_border: Color32::from_rgb(0xD3, 0xDB, 0xD6),
++                separator: Color32::from_rgb(0xE6, 0xEB, 0xE8),
++                row_alt: Color32::from_rgb(0xF4, 0xF6, 0xF5),
++                row_selected: Color32::from_rgb(0xDC, 0xF1, 0xE7),
+                 pill_active_bg: Color32::from_rgb(196, 196, 196),
+                 clip_bar_bg: Color32::from_rgb(190, 203, 224),
+                 control_surface: Color32::from_rgb(218, 218, 218),
