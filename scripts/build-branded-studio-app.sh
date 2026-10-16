@@ -10,6 +10,8 @@
 # and copies the result (index.html renamed to app.html, plus the upstream LICENSE/NOTICE
 # files the licenses require us to keep) into studio-builds/<id>/.
 #
+# CJK/Arabic/Thai fonts come from studio/craft-fonts/ (in this repo; override with CRAFT_FONTS_DIR).
+#
 # Needs: rustup (wasm32-unknown-unknown target) and trunk (`brew install trunk`); FilmCraft
 # needs the wasm-bindgen CLI instead (see its docs/web.md).
 set -euo pipefail
@@ -40,7 +42,7 @@ if [ -d "$SRC/xtask" ] && [ -d "$SRC/apps/$REPO-web/web" ]; then
   (cd "$SRC" && cargo xtask web)
   cp -R "$SRC/target/web/dist/." "$OUT/"
 else
-  (cd "$SRC/apps/$REPO-web" && CRAFT_FONTS_DIR=${CRAFT_FONTS_DIR:-$(dirname "$SRC")/craft-fonts} trunk build --release)
+  (cd "$SRC/apps/$REPO-web" && CRAFT_FONTS_DIR=${CRAFT_FONTS_DIR:-$ROOT/studio/craft-fonts} trunk build --release)
   cp -R "$SRC/dist/web/." "$OUT/"
 fi
 mv "$OUT/index.html" "$OUT/app.html"
